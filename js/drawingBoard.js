@@ -1,21 +1,58 @@
 /** @module {"owns":"magicCanvas drawing board, workspace drawing mode", "related":["canvasDocument.js","drawingToolbarMenu.js","layoutStorage.js"]} */
 import { DRAWING_ICONS } from './icons.js';
-import { ColorPicker, PALETTE_UNIFIED, resolveNoteColor } from './colorPicker.js';
+import {
+    ColorPicker,
+    PALETTE_UNIFIED,
+    resolveNoteColor
+} from './colorPicker.js';
 import { DrawingToolbarMenu } from './drawingToolbarMenu.js';
 import { CanvasViewport } from './canvasViewport.js';
 import {
-    readDocument, writeDocument, getActiveStrokes, getActiveTexts, setActiveStrokes, setActiveTexts,
-    getActiveImages, setActiveImages,
-    getActiveBackground, setActiveBackground, getActiveBackgroundColor, setActiveBackgroundColor,
-    getPageDimensions, addPage, nextPage, prevPage, switchCanvasMode,
-    expandInfiniteBounds, shrinkInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS,
+    readDocument,
+    writeDocument,
+    getActiveStrokes,
+    getActiveTexts,
+    setActiveStrokes,
+    setActiveTexts,
+    getActiveImages,
+    setActiveImages,
+    getActiveBackground,
+    setActiveBackground,
+    getActiveBackgroundColor,
+    setActiveBackgroundColor,
+    getPageDimensions,
+    addPage,
+    nextPage,
+    prevPage,
+    switchCanvasMode,
+    expandInfiniteBounds,
+    shrinkInfiniteBounds,
+    STORAGE_KEY,
+    createId,
+    CANVAS_MODES,
+    BACKGROUNDS,
     PAGE_FORMATS
 } from './canvasDocument.js';
-import { BRUSH_STYLES, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
 import {
-    WIDTH_MIN, WIDTH_MAX, DEFAULT_WIDTH, HIGHLIGHTER_WIDTH, SAVE_DEBOUNCE_MS,
-    RESIZE_HANDLE_SIZE, RESIZE_HANDLE_HIT, POINT_SPACING, THIN_MIN_DIST, THIN_COLLINEAR_EPS,
-    defaultWidthForStyle, pointSpacingForStyle, isDragShape
+    BRUSH_STYLES,
+    drawBrushStroke,
+    drawShapeStroke,
+    drawTextObject
+} from './canvasBrushes.js';
+import {
+    WIDTH_MIN,
+    WIDTH_MAX,
+    DEFAULT_WIDTH,
+    HIGHLIGHTER_WIDTH,
+    SAVE_DEBOUNCE_MS,
+    RESIZE_HANDLE_SIZE,
+    RESIZE_HANDLE_HIT,
+    POINT_SPACING,
+    THIN_MIN_DIST,
+    THIN_COLLINEAR_EPS,
+    defaultWidthForStyle,
+    pointSpacingForStyle,
+    isDragShape
 } from './drawingBoardCore.js';
 import { renderBackground } from './canvasBackgrounds.js';
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
@@ -24,7 +61,7 @@ import * as CropSession from './drawingBoardCrop.js';
 import * as SelectSession from './drawingBoardSelection.js';
 import * as ToolbarSession from './drawingBoardToolbar.js';
 import * as ClipboardSession from './drawingBoardClipboard.js';
-import { getStrokesBounds } from './lassoGeometry.js';
+
 import {
     loadImage,
     clearImageCache,
@@ -60,7 +97,11 @@ import {
     writePrefs
 } from './drawingBoard/prefs.js';
 
-import { DrawingHistory, wireHistoryToolbar } from './drawingBoard/history.js';
+import {
+    DrawingHistory,
+    wireHistoryToolbar
+} from './drawingBoard/history.js';
+import * as InputSession from './drawingBoard/input.js';
 
 export const DrawingBoard = {
     active: false,
@@ -419,7 +460,6 @@ export const DrawingBoard = {
      * Returns { kind: 'bend', connector, point: {x,y} } or null.
      */
     flowConnectorBendHit(conn, x, y, tol) { return FlowSession.flowConnectorBendHit(this, conn, x, y, tol); },
-
 
     /** Live bend-drag state while pointer moves over a connector. */
     flowBendDrag: null,
@@ -890,7 +930,6 @@ export const DrawingBoard = {
         }
     },
 
-
     updatePointerWidthLabel() { return ToolbarSession.updatePointerWidthLabel(this); },
 
     updateBrushSizeControls() { return ToolbarSession.updateBrushSizeControls(this); },
@@ -906,319 +945,11 @@ export const DrawingBoard = {
 
     toggleColorRollout(anchor) { return ToolbarSession.toggleColorRollout(this, anchor); },
 
-    onPointerDown(e) {
-        if (!this.active || e.button > 0) return;
-        if (CanvasViewport.panning || CanvasViewport.spaceHeld || CanvasViewport.handMode || this.activeTool === 'pan') return;
-        if (e.pointerType === 'touch' && this.penPointerActive) return;
-        if (e.pointerType === 'pen') this.penPointerActive = true;
+    onPointerDown(e) { return InputSession.onPointerDown(this, e); },
 
-        const { x, y } = this.clientToCanvas(e.clientX, e.clientY);
-        this.expandInfiniteIfNeeded(x, y);
+    onPointerMove(e) { return InputSession.onPointerMove(this, e); },
 
-        this.canvas.setPointerCapture(e.pointerId);
-
-        // Crop tool: drag the live frame edges/corners, or slide its window
-        if (this.activeTool === 'crop') {
-            this.onCropPointerDown(x, y);
-            return;
-        }
-
-        // Connector endpoint grab: when exactly one connector is selected and the
-        // pointer lands on one of its endpoints, start dragging that endpoint so
-        // the origin/terminus can be re-attached to a different port. Takes
-        // priority over the lasso drag that would otherwise start for any click
-        // inside the connector's bounding box.
-        if (this.isFlowchartMode && this.selectedStrokes.size === 1) {
-            const only = this.getSelectedStrokesArray()[0];
-            if (only && only.flowchartKind === 'connector') {
-                const hitEnd = this.hitFlowEndpoint(only, x, y);
-                if (hitEnd) {
-                    this.startFlowEndpointDrag(only, hitEnd, x, y);
-                    return;
-                }
-            }
-        }
-
-        // Resize handles take priority when something is selected
-        if (this.selectedStrokes.size > 0) {
-            const handle = this.hitResizeHandle(x, y);
-            if (handle) {
-                this.startResize(handle, x, y);
-                return;
-            }
-            const bounds = getStrokesBounds(this.getSelectedStrokesArray());
-            if (x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY) {
-                this.startLassoDrag(x, y);
-                return;
-            }
-        }
-
-        // Rectangle marquee (lasso mode or pointer select tool)
-        if (this.isLassoActive || this.activeTool === 'pointer') {
-            // In flowchart mode a click picks the shape/connector under the cursor so
-            // labels and reroutes have a target; dragging still falls through to marquee.
-            if (this.isFlowchartMode && !this.isLassoActive) {
-                const hit = this.flowHit(x, y);
-                if (hit) {
-                    this.selectedStrokes.clear();
-                    this.selectedStrokes.add(hit);
-                    this.startLassoDrag(x, y);
-                    this.renderToolbar();
-                    return;
-                }
-                if (this.selectedStrokes.size) {
-                    this.selectedStrokes.clear();
-                    this.renderToolbar();
-                }
-            }
-            // Keep prior selection visible until endBoxSelect commits the replacement
-            this.beginBoxSelect(x, y);
-            return;
-        }
-
-        if (this.activeTool === 'text') {
-            if (this.isFlowchartMode) {
-                // Flowchart text edits the selected shape instead of dropping a loose note.
-                const target = this.flowHit(x, y);
-                if (target) { this.flowEditLabel(target); return; }
-                showAppToast('Click a shape to add text');
-                return;
-            }
-            this.placeTextBox(x, y);
-            return;
-        }
-
-        if (this.isFlowConnector(this.activeTool)) {
-            const anchor = this.flowResolveEndpoint(x, y, null);
-            const from = anchor
-                ? { shapeId: anchor.shapeId, port: anchor.port }
-                : null;
-            const snapped = this.flowSnapPoint(x, y, e.shiftKey);
-            this.flowConnect = {
-                x: snapped.x, y: snapped.y,
-                from,
-                fromPt: anchor ? { x: anchor.point.x, y: anchor.point.y } : snapped,
-                hover: null
-            };
-            return;
-        }
-
-        if (this.activeTool === 'eraser') {
-            // Every press starts a fresh gesture; eraseAt pushes history itself,
-            // and only once something is actually removed.
-            this.eraseHistoryPushed = false;
-            this.eraseAt(x, y);
-            this.redraw();
-            return;
-        }
-
-        if (this.activeTool === 'brush') {
-            const brush = this.currentBrush();
-            this.pushLayerHistory();
-            this.draftStroke = {
-                id: createId('stroke'),
-                tool: 'brush',
-                style: this.activeStyle,
-                color: brush.color,
-                width: brush.width,
-                points: [{ x, y, p: readPressure(e), tiltX: e.tiltX || 0, tiltY: e.tiltY || 0 }]
-            };
-            return;
-        }
-
-        if (isDragShape(this.activeTool)) {
-            const brush = this.currentBrush();
-            const anchor = this.flowSnapPoint(x, y, e.shiftKey);
-            const preview = {
-                id: createId('stroke'),
-                tool: this.activeTool,
-                style: this.activeStyle,
-                color: brush.color,
-                width: brush.width,
-                x0: anchor.x, y0: anchor.y, x1: anchor.x, y1: anchor.y
-            };
-            if (this.isFlowShape(this.activeTool)) {
-                preview.flowchartKind = 'shape';
-                // Flowchart strokes use the diagram's own color/width so a palette
-                // change repaints every shape and connector consistently.
-                preview.color = this.flowchartColor();
-                preview.width = this.flowchartWidth();
-                // No label yet: drawFlowchartLabel skips empty labels, so text only
-                // appears once the user actually types something.
-                preview.label = null;
-            }
-            this.shapePreview = preview;
-        }
-    },
-
-    onPointerMove(e) {
-        if (!this.active || CanvasViewport.panning) return;
-        if (e.pointerType === 'touch' && this.penPointerActive) return;
-        const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
-
-        // Resize selected images via grab handles
-        if (this.resizeHandle && this.resizeStart) {
-            const pt = this.clientToCanvas(e.clientX, e.clientY);
-            this.applyResize(pt.x, pt.y);
-            return;
-        }
-
-        // Live crop frame drag
-        if (this.cropState?.mode) {
-            const cropPt = this.clientToCanvas(e.clientX, e.clientY);
-            this.moveCropGesture(cropPt.x, cropPt.y);
-            return;
-        }
-
-        // Drag selected items (used by both pointer and lasso modes)
-        if (this.isDraggingLasso && this.lassoDragStart) {
-            const pt = this.clientToCanvas(e.clientX, e.clientY);
-            const dx = pt.x - this.lassoDragStart.x;
-            const dy = pt.y - this.lassoDragStart.y;
-            this.dragLassoSelection(dx, dy);
-            this.lassoDragStart = { x: pt.x, y: pt.y };
-            return;
-        }
-
-        // Hover cursor: crop session has priority while the crop tool is active
-        if (!this.isBoxSelecting && !this.draftStroke && !this.shapePreview && !this.cropState?.mode
-            && (this.activeTool === 'pointer' || this.activeTool === 'crop' || this.isLassoActive || this.selectedStrokes.size > 0)) {
-            const pt = this.clientToCanvas(e.clientX, e.clientY);
-            this.updateHoverCursor(pt.x, pt.y);
-        }
-
-        // Rectangle marquee update
-        if (this.isBoxSelecting && this.boxSelectStart) {
-            const pt = this.clientToCanvas(e.clientX, e.clientY);
-            this.updateBoxSelect(pt.x, pt.y);
-            this.requestRedraw();
-            return;
-        }
-
-        if (this.draftStroke) {
-            const minDist = pointSpacingForStyle(this.draftStroke.style || this.activeStyle);
-            const minDist2 = minDist * minDist;
-            let added = false;
-            events.forEach((ev) => {
-                const pt = this.clientToCanvas(ev.clientX, ev.clientY);
-                this.expandInfiniteIfNeeded(pt.x, pt.y);
-                const last = this.draftStroke.points[this.draftStroke.points.length - 1];
-                if (last && dist2(last, pt) < minDist2) return;
-                this.draftStroke.points.push({
-                    x: pt.x, y: pt.y, p: readPressure(ev), tiltX: ev.tiltX || 0, tiltY: ev.tiltY || 0
-                });
-                added = true;
-            });
-            if (added) this.requestRedraw();
-            return;
-        }
-        // Live connector endpoint drag
-        if (this.flowEndpointDrag) {
-            const pt = this.clientToCanvas(e.clientX, e.clientY);
-            this.applyFlowEndpointDrag(pt.x, pt.y);
-            return;
-        }
-
-        if (this.flowConnect) {
-            const pt = this.clientToCanvas(e.clientX, e.clientY);
-            const snapped = this.flowSnapPoint(pt.x, pt.y, e.shiftKey);
-            this.flowConnect.x = snapped.x;
-            this.flowConnect.y = snapped.y;
-            const anchor = this.flowResolveEndpoint(snapped.x, snapped.y, this.flowConnect.from?.shapeId);
-            this.flowConnect.hover = anchor
-                ? { shapeId: anchor.shapeId, port: anchor.port, x: anchor.point.x, y: anchor.point.y }
-                : null;
-            this.requestRedraw();
-            return;
-        }
-        if (this.shapePreview) {
-            const pt = this.clientToCanvas(e.clientX, e.clientY);
-            const snapped = this.flowSnapPoint(pt.x, pt.y, e.shiftKey);
-            this.shapePreview.x1 = snapped.x;
-            this.shapePreview.y1 = snapped.y;
-            this.requestRedraw();
-            return;
-        }
-        if (this.activeTool === 'eraser' && (e.buttons & 1)) {
-            const pt = this.clientToCanvas(e.clientX, e.clientY);
-            this.eraseAt(pt.x, pt.y);
-            this.requestRedraw();
-        }
-    },
-
-    onPointerUp(e) {
-        if (e.pointerType === 'pen') this.penPointerActive = false;
-        try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-
-        // End a live crop gesture (persisted only when the frame moved)
-        if (this.cropState?.mode) {
-            this.endCropGesture();
-            return;
-        }
-
-        // Commit the flowchart connector drag
-        if (this.flowConnect) {
-            this.commitFlowConnect();
-            return;
-        }
-
-        // Finish connector endpoint drag
-        if (this.flowEndpointDrag) {
-            this.finishFlowEndpointDrag();
-            return;
-        }
-
-        // Finish resize
-        if (this.resizeHandle) {
-            this.finishResize();
-            this.redraw();
-            return;
-        }
-
-        // Finish rectangle marquee
-        if (this.isBoxSelecting) {
-            this.endBoxSelect();
-            this.redraw();
-            return;
-        }
-
-        // Finish dragging selection
-        if (this.isDraggingLasso) {
-            this.finishLassoDrag();
-            this.redraw();
-            return;
-        }
-
-        if (this.draftStroke) {
-            if (this.draftStroke.points.length >= 1) {
-                const style = this.draftStroke.style || this.activeStyle;
-                const spacing = pointSpacingForStyle(style);
-                this.draftStroke.points = thinStrokePoints(
-                    this.draftStroke.points,
-                    Math.max(THIN_MIN_DIST, spacing * 0.75)
-                );
-                const s = this.strokes();
-                s.push(this.draftStroke);
-                this.setStrokes(s);
-                this.scheduleSave();
-            }
-            this.draftStroke = null;
-            this.redraw();
-            return;
-        }
-        if (this.shapePreview) {
-            const s = this.shapePreview;
-            if (Math.hypot(s.x1 - s.x0, s.y1 - s.y0) > 2) {
-                this.pushLayerHistory();
-                const strokes = this.strokes();
-                strokes.push({ ...s });
-                this.setStrokes(strokes);
-                this.scheduleSave();
-            }
-            this.shapePreview = null;
-            this.redraw();
-        }
-    },
+    onPointerUp(e) { return InputSession.onPointerUp(this, e); },
 
     // Pointer / lasso shared rectangle marquee methods
 
@@ -1249,7 +980,6 @@ export const DrawingBoard = {
 
     /** Topmost image (last painted) under the pointer, or null. */
     findTopmostImageAt(x, y) { return SelectSession.findTopmostImageAt(this, x, y); },
-
 
     cropBoxBounds(box) { return CropSession.cropBoxBounds(this, box); },
 
@@ -1443,7 +1173,6 @@ export const DrawingBoard = {
         return (idx + 1) + ' / ' + this.doc.pages.length;
     },
 
-
     currentToolEcho() { return ToolbarSession.currentToolEcho(this); },
 
     updateToolEcho() { return ToolbarSession.updateToolEcho(this); },
@@ -1520,7 +1249,6 @@ export const DrawingBoard = {
         this.scheduleSave();
     },
 
-
     pointerSelected() { return ToolbarSession.pointerSelected(this); },
 
     pointerTriggerIcon() { return ToolbarSession.pointerTriggerIcon(this); },
@@ -1563,68 +1291,7 @@ export const DrawingBoard = {
      */
     updateFlowLabelControls() { return ToolbarSession.updateFlowLabelControls(this); },
 
-    handleKeydown(e) {
-        if (!this.active) return false;
-        // The note UndoManager listens on document too. If it already claimed the
-        // chord, undoing here as well would swallow two steps per Ctrl+Z.
-        if (e.defaultPrevented) return false;
-        // Never touch canvas history while a text box (or any field) is being
-        // edited — Ctrl+Z there must undo typing, not delete strokes.
-        const typing = ClipboardSession.isTextEditingTarget();
-        if (e.ctrlKey || e.metaKey) {
-            if (!typing && e.key === 'z' && !e.shiftKey) { e.preventDefault(); this.undo(); return true; }
-            if (!typing && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); this.redo(); return true; }
-            if (e.key === 'c') return ClipboardSession.handleCopyKey(this, e);
-            if (e.key === 'x') return ClipboardSession.handleCutKey(this, e);
-            // Ctrl+V arms only — never preventDefault (would suppress the paste event itself).
-            if (e.key === 'v') return ClipboardSession.handlePasteKey(this, e);
-        }
-        if (e.key === 'Delete' || e.key === 'Backspace') {
-            return ClipboardSession.handleDeleteKey(this, e);
-        }
-
-        // Escape: revert an in-flight crop drag first, else drop the crop session
-        if (e.key === 'Escape') {
-            if (this.flowEndpointDrag) { this.flowEndpointDrag = null; this.redraw(); return true; }
-            if (this.flowConnect) { this.flowConnect = null; this.redraw(); return true; }
-            if (this.flowLabelEl) return false;
-            if (this.revertCropGesture()) return true;
-            if (this.clearCropSession()) { this.redraw(); return true; }
-            if (this.resizeHandle) {
-                this.finishResize();
-                this.redraw();
-                return true;
-            }
-            if (this.isDraggingLasso) {
-                this.finishLassoDrag();
-                this.redraw();
-                return true;
-            }
-            if (this.isBoxSelecting) {
-                this.isBoxSelecting = false;
-                this.boxSelectStart = null;
-                this.boxSelectCurrent = null;
-                this.redraw();
-                return true;
-            }
-            // Two-step Escape: clear selection first; exit marquee mode only when empty
-            if (this.selectedStrokes.size > 0) {
-                this.selectedStrokes.clear();
-                this.isDraggingLasso = false;
-                this.lassoDragStart = null;
-                this.lassoDragMoved = false;
-                this.lassoHistoryPushed = false;
-                this.redraw();
-                return true;
-            }
-            if (this.isLassoActive) {
-                this.clearLassoSelection();
-                return true;
-            }
-        }
-        
-        return false;
-    },
+    handleKeydown(e) { return InputSession.handleKeydown(this, e); },
 
     // Marquee (lasso button) methods — rectangle select mode
     toggleLassoMode() { return SelectSession.toggleLassoMode(this); },
