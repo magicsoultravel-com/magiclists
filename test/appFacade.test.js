@@ -64,14 +64,9 @@ const STATE_SEAMS = new Set(['isDrawingMode', 'stateWorkspaceMode']);
 
 // Ratchet: bodies still living in the facade while the split lands, one slice
 // per commit. Every entry here is a body the facade still owns - when a slice
-// moves, this list must shrink in the same commit, and Commit 3 empties it.
-const PENDING = new Set([
-    'renderControlBar', 'renderQuickActions', 'renderQuickActionsHeaderIcons', 'updateFabVisibility',
-    'onMagicFocusEnter', 'applyDesktopDockAfterFocusEnter', 'applyDesktopDockAfterFocusLeave', 'onMagicFocusLeave',
-    'exitDrawingForFocus', 'switchWorkspaceMode', 'applyWorkspaceMode', 'enterNoteCanvasMode',
-    'enterFlowchartMode', 'exitNoteCanvasMode', 'migrateBoardOverlayFromFreeform', 'toggleBoardOverlay',
-    'toggleFileCabinet', 'updateViewToggleState', 'updateDesktopZoomVisibility', 'updateLayoutResetVisibility'
-]);
+// moves, this list must shrink in the same commit. It is empty because the
+// split is done; it stays as the place to park a body if one ever moves back.
+const PENDING = new Set([]);
 
 const facadeSource = readFileSync(FACADE, 'utf8');
 const facadeAst = parse(facadeSource, { ecmaVersion: 'latest', sourceType: 'module' });

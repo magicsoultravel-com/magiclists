@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T21:17:04.875Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T21:19:55.877Z
 
 ## CSS load order
 
@@ -55,9 +55,11 @@ alwaysApply: true
 | --- | --- | --- | --- | --- |
 | js/api.js | item CRUD and matrix_database localStorage persistence | noteModel.js, layoutStorage.js, sync.js | — | — |
 | js/app.js | application orchestration, event bus listeners, workspace init | api.js, ui.js, layoutStorage.js | item:mutation_requested, item:selected_for_edit, board:visibility_changed, calendar:add_note | — |
+| js/app/drawingMode.js | the workspace-mode switches - notes board, file cabinet, note-canvas and flowchart - plus leaving drawing when the focus editor opens and migrating a freeform overlay layout on the way out | ../app.js, state.js, listeners.js, ../drawingBoard.js | board:visibility_changed, workspace:mode_changed | — |
 | js/app/listeners.js | every DOM/window listener the Application binds - the boot wiring in setupCoreListeners plus the undo, popout-claim, cross-tab-sync, quick-action, scribble, drawing and layout-reset setups, each moved together with the handlers it registers | ../app.js, state.js, services.js, drawingMode.js | item:selected_for_edit, board:visibility_changed, editor:reveal_on_board, category:hide_requested, category:renamed, desktop:changed | — |
 | js/app/services.js | the Application service calls - auth session checks, the repair log, the category store load/alias/sync pipeline, the workspace counter, the backup and export commands with the backup panel that exposes them, and the category/login commands | ../app.js, state.js, listeners.js, backup.js | category:renamed, category:hide_requested | — |
 | js/app/state.js | the cached workspace state the Application sessions share - user, items, categories, hidden categories, workspace mode and view settings; the one mutable store behind every session | ../app.js, listeners.js, services.js, drawingMode.js | — | — |
+| js/app/viewChrome.js | the view chrome - the control bar, the quick-actions header, FAB and zoom/layout-reset visibility, the board-overlay and file-cabinet toggles, and the desktop dock sync around MagicFocus enter/leave | ../app.js, state.js, listeners.js, drawingMode.js | board:visibility_changed, desktop:changed | — |
 | js/appDocuments.js | multi-document element lookup for module popouts | sidebarModulePopout.js, sidebarModules.js | — | — |
 | js/backup.js | local backup export/import, encrypted packages, notes content/layout streams | cloudBackup.js, api.js, backupDelta.js | — | — |
 | js/backupClaim.js | cross-tab scheduled-backup claim/lease coordination | scheduledBackup.js, backup.js, mediaBackup.js | — | — |
