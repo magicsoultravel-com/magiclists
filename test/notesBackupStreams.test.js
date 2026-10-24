@@ -94,12 +94,15 @@ describe('backup streams · package scoping', () => {
 
     it('content packages carry links; board/canvas packages never do', async () => {
         writeLinksPayload({
-            version: 1,
+            version: 2,
             updatedAt: 10,
-            links: [{ id: 'link_a', url: 'https://example.com/A', title: 'A' }]
+            folders: [{ id: 'folder_work', name: 'Work' }],
+            links: [{ id: 'link_a', url: 'https://example.com/A', title: 'A', folderId: 'folder_work' }]
         });
         const content = await buildBackupPackage({ include: 'content' });
         assert.deepEqual(content.links.links.map((link) => link.url), ['https://example.com/A']);
+        assert.deepEqual(content.links.folders.map((folder) => folder.name), ['Work']);
+        assert.equal(content.links.links[0].folderId, 'folder_work');
 
         const board = await buildBoardBackupPackage();
         assert.equal('links' in board, false);
@@ -217,9 +220,10 @@ describe('backup streams · incremental notes payload', () => {
     it('exports and applies links-only patches through the notes stream', async () => {
         const base = await buildNotesExportPayload({ incremental: true });
         writeLinksPayload({
-            version: 1,
+            version: 2,
             updatedAt: 20,
-            links: [{ id: 'link_a', url: 'https://example.com/A', title: 'A' }]
+            folders: [{ id: 'folder_work', name: 'Work' }],
+            links: [{ id: 'link_a', url: 'https://example.com/A', title: 'A', folderId: 'folder_work' }]
         });
 
         const patch = await buildNotesExportPayload({ incremental: true, snapshot: base.nextSnapshot });
@@ -228,10 +232,13 @@ describe('backup streams · incremental notes payload', () => {
         assert.equal(parsed.kind, NOTES_PATCH_KIND);
         assert.equal(parsed.matrix_database.items.length, 0);
         assert.deepEqual(parsed.links.links.map((link) => link.id), ['link_a']);
+        assert.deepEqual(parsed.links.folders.map((folder) => folder.id), ['folder_work']);
 
         localStorage.removeItem('matrix_links');
         await applyBackupToStorage(parsed);
         assert.deepEqual(readLinks().links.map((link) => link.url), ['https://example.com/A']);
+        assert.deepEqual(readLinks().folders.map((folder) => folder.name), ['Work']);
+        assert.equal(readLinks().links[0].folderId, 'folder_work');
 
         const rebased = await buildNotesExportPayload({ incremental: false });
         const again = await buildNotesExportPayload({ incremental: true, snapshot: rebased.nextSnapshot });
@@ -277,13 +284,16 @@ describe('backup streams · board payload', () => {
     it('leaves links alone on a board-only restore', async () => {
         const payload = await buildBoardExportPayload();
         writeLinksPayload({
-            version: 1,
+            version: 2,
             updatedAt: 30,
-            links: [{ id: 'link_live', url: 'https://example.com/Live', title: 'Live' }]
+            folders: [{ id: 'folder_work', name: 'Work' }],
+            links: [{ id: 'link_live', url: 'https://example.com/Live', title: 'Live', folderId: 'folder_work' }]
         });
 
         await applyBackupToStorage(parseBackupPackage(payload.text));
         assert.deepEqual(readLinks().links.map((link) => link.id), ['link_live']);
+        assert.deepEqual(readLinks().folders.map((folder) => folder.name), ['Work']);
+        assert.equal(readLinks().links[0].folderId, 'folder_work');
     });
 });
 

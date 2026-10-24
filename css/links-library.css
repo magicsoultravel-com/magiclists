@@ -1,4 +1,4 @@
-/** @css {"owns":"Links manager floating panel with tile/list views, manual drag ordering, favicon refresh and detail editor","js":["linksOverlay.js","linksModel.js"],"notes":"shared layered thumbnail base lives in sidebar-links.css"} */
+/** @css {"owns":"Links manager floating panel with folder drill-in, tile/list views, drag reorder/move, favicon refresh and detail editor","js":["linksOverlay.js","linksModel.js"],"notes":"shared layered thumbnail base lives in sidebar-links.css"} */
 
 .links-panel {
     position: fixed;
@@ -91,8 +91,11 @@
 
 .links-panel__title {
     margin: 0;
+    overflow: hidden;
     font-size: calc(0.68rem * var(--note-font-scale, 1));
     font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .links-panel__summary {
@@ -162,6 +165,138 @@
     min-height: 0;
     padding-right: 0.15rem;
     overflow: auto;
+}
+
+.links-panel [hidden] {
+    display: none !important;
+}
+
+.links-panel__folder {
+    position: relative;
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--text-main, #eee) 12%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--text-main, #eee) 4%, transparent);
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.links-panel__folder:hover,
+.links-panel__folder:focus-within {
+    border-color: color-mix(in srgb, var(--accent, #3b82f6) 48%, transparent);
+    background: color-mix(in srgb, var(--accent, #3b82f6) 7%, transparent);
+}
+
+.links-panel__folder.is-drop-target {
+    border-color: var(--accent, #3b82f6);
+    background: color-mix(in srgb, var(--accent, #3b82f6) 18%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #3b82f6) 55%, transparent);
+}
+
+.links-panel__folder-open {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+    padding: 0.38rem 0.45rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.links-panel__folder-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--accent, #3b82f6) 13%, transparent);
+    color: color-mix(in srgb, var(--accent, #3b82f6) 72%, var(--text-main, #eee));
+}
+
+.links-panel__folder-icon svg {
+    width: 15px;
+    height: 15px;
+}
+
+.links-panel__folder-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.08rem;
+    min-width: 0;
+}
+
+.links-panel__folder-name {
+    overflow: hidden;
+    font-size: calc(0.58rem * var(--note-font-scale, 1));
+    font-weight: 600;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.links-panel__folder-meta {
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: calc(0.48rem * var(--note-font-scale, 1));
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.links-panel__folder-actions {
+    display: inline-flex;
+    gap: 0.05rem;
+    margin-right: 0.3rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.links-panel__folder:hover .links-panel__folder-actions,
+.links-panel__folder:focus-within .links-panel__folder-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.links-panel__folder-actions .card-act {
+    width: 16px;
+    height: 16px;
+    line-height: 0;
+}
+
+.links-panel__folder-actions .card-act svg {
+    width: 10px;
+    height: 10px;
+}
+
+.links-panel__folder--back {
+    width: 100%;
+    padding: 0.38rem 0.45rem;
+    border-style: dashed;
+    background: color-mix(in srgb, var(--text-main, #eee) 2%, transparent);
+    color: var(--text-muted);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    gap: 0.45rem;
+}
+
+.links-panel__folder--back .links-panel__folder-icon {
+    background: color-mix(in srgb, var(--text-main, #eee) 8%, transparent);
+    color: var(--text-muted);
+}
+
+.links-panel__folder--back .links-panel__folder-name {
+    color: var(--text-main, #eee);
 }
 
 .links-panel__empty {
@@ -430,7 +565,8 @@
     font-size: calc(0.52rem * var(--note-font-scale, 1));
 }
 
-.links-panel__field input {
+.links-panel__field input,
+.links-panel__field select {
     width: 100%;
     min-width: 0;
     padding: 0.32rem 0.45rem;
@@ -441,7 +577,17 @@
     font-size: calc(0.58rem * var(--note-font-scale, 1));
 }
 
-.links-panel__field input:focus {
+.links-panel__field select {
+    cursor: pointer;
+}
+
+.links-panel__field select option {
+    background: var(--surface-elevated, var(--bg-card, #1a1a1e));
+    color: var(--text-main, #eee);
+}
+
+.links-panel__field input:focus,
+.links-panel__field select:focus {
     outline: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 55%, transparent);
     outline-offset: 1px;
 }

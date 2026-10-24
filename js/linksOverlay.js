@@ -1,5 +1,5 @@
 /**
- * @module {"owns":"Links manager floating panel: add/edit/delete, manual drag ordering, favicon refresh, tile/list views, opt-in thum.io screenshots","related":["linksStore.js","linksModel.js","sidebarLinks.js","desktopFloatChrome.js"],"events":["links:changed","links:previews_changed","links:manage_requested"]}
+ * @module {"owns":"Links manager floating panel: folders, add/edit/delete, drag reorder/move, favicon refresh, tile/list views, opt-in thum.io screenshots","related":["linksStore.js","linksModel.js","sidebarLinks.js","desktopFloatChrome.js"],"events":["links:changed","links:previews_changed","links:manage_requested"]}
  */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { ACTION_ICONS, CARD_ICONS, FORMAT_ICONS } from './icons.js';
@@ -7,14 +7,18 @@ import { bindFloatResize, mountFloatChrome } from './desktopFloatChrome.js';
 import { raiseDesktopElement } from './desktopStack.js';
 import { showAppToast } from './toast.js';
 import {
+    LINK_FOLDER_NAME_MAX,
     LINK_TITLE_MAX,
     LINK_URL_MAX,
     bindLinkThumbFallbacks,
     buildLinkThumbHtml,
+    countLinksInFolder,
     linkDisplayTitle,
     linkHostLabel,
     linkUrlLabel,
+    linksInFolder,
     normalizeLinkSort,
+    sortFolders,
     sortLinks
 } from './linksModel.js';
 import {
@@ -24,9 +28,13 @@ import {
     LINKS_STORAGE_KEY,
     addLink,
     clearAllLinks,
+    createFolder,
+    moveLinkToFolder,
     readLinks,
     readPreviewIds,
+    removeFolder,
     removeLink,
+    renameFolder,
     reorderLinks,
     setLinkPreviewEnabled,
     updateLink
@@ -56,6 +64,7 @@ const VIEW_ICONS = Object.freeze({
 
 let panel = null;
 let selectedId = null;
+let currentFolderId = null;
 let currentSort = 'date-desc';
 let currentView = 'tiles';
 let floatChromeBound = false;
@@ -335,13 +344,13 @@ function formatSavedDate(ts) {
 
 function buildTileHtml(link, previewIds, isSelected, faviconTokens = {}) {
     const title = linkDisplayTitle(link);
-    const isManual = currentSort === 'manual';
-    const dragTitle = isManual ? 'Drag to reorder' : 'Switch sort to Manual to reorder';
+    const dragTitle = currentSort === 'manual'
+        ? 'Drag to reorder or move to a folder'
+        : 'Drag to move to a folder';
     return `<div class="links-panel__tile${isSelected ? ' is-selected' : ''}" data-link-id="${escapeAttr(link.id)}">
-        <span class="card-act links-panel__tile-grip${isManual ? '' : ' is-disabled'}" data-link-drag-grip
-            draggable="${isManual ? 'true' : 'false'}" role="button" tabindex="-1"
-            title="${escapeAttr(dragTitle)}" aria-label="${escapeAttr(dragTitle)}"
-            aria-disabled="${isManual ? 'false' : 'true'}">${CARD_ICONS.drag}</span>
+        <span class="card-act links-panel__tile-grip" data-link-drag-grip
+            draggable="true" role="button" tabindex="-1"
+            title="${escapeAttr(dragTitle)}" aria-label="${escapeAttr(dragTitle)}">${CARD_ICONS.drag}</span>
         <button type="button" class="links-panel__tile-select" data-link-select
             title="Select ${escapeAttr(title)}" aria-pressed="${isSelected ? 'true' : 'false'}">
             ${buildLinkThumbHtml(link, {
@@ -378,15 +387,54 @@ function syncViewChrome() {
     btn.classList.toggle('is-tiles', currentView !== 'list');
 }
 
+function buildFolderTileHtml(folder, linkCount) {
+    const name = escapeHTML(folder.name);
+    const count = `${linkCount} link${linkCount === 1 ? '' : 's'}`;
+    return `<div class="links-panel__folder" data-folder-id="${escapeAttr(folder.id)}">
+        <button type="button" class="links-panel__folder-open" data-folder-open
+            title="Open ${escapeAttr(folder.name)}" aria-label="Open folder ${escapeAttr(folder.name)}">
+            <span class="links-panel__folder-icon" aria-hidden="true">${CARD_ICONS.folder}</span>
+            <span class="links-panel__folder-text">
+                <span class="links-panel__folder-name">${name}</span>
+                <span class="links-panel__folder-meta">${count}</span>
+            </span>
+        </button>
+        <span class="links-panel__folder-actions">
+            <button type="button" class="card-act" data-folder-rename
+                title="Rename folder" aria-label="Rename ${escapeAttr(folder.name)}">${CARD_ICONS.edit}</button>
+            <button type="button" class="card-act" data-folder-delete
+                title="Delete folder" aria-label="Delete ${escapeAttr(folder.name)}">${CARD_ICONS.delete}</button>
+        </span>
+    </div>`;
+}
+
+function buildBackTileHtml(folder) {
+    const name = escapeHTML(folder?.name || 'folder');
+    return `<button type="button" class="links-panel__folder links-panel__folder--back" data-folder-back
+        title="Back to all links (drop a link here to move it out of ${escapeAttr(folder?.name || 'this folder')})">
+        <span class="links-panel__folder-icon" aria-hidden="true">${CARD_ICONS.popin}</span>
+        <span class="links-panel__folder-text">
+            <span class="links-panel__folder-name">All links</span>
+            <span class="links-panel__folder-meta">Back from ${name} · drop here to move out</span>
+        </span>
+    </button>`;
+}
+
 function clearDropMarkers() {
-    panel?.querySelectorAll('.links-panel__tile.is-drop-before, .links-panel__tile.is-drop-after').forEach((tile) => {
-        tile.classList.remove('is-drop-before', 'is-drop-after');
+    panel?.querySelectorAll(
+        '.links-panel__tile.is-drop-before, .links-panel__tile.is-drop-after, '
+        + '.links-panel__folder.is-drop-target'
+    ).forEach((tile) => {
+        tile.classList.remove('is-drop-before', 'is-drop-after', 'is-drop-target');
     });
 }
 
 function clearTileDragState() {
-    panel?.querySelectorAll('.links-panel__tile.is-dragging, .links-panel__tile.is-drop-before, .links-panel__tile.is-drop-after').forEach((tile) => {
-        tile.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after');
+    panel?.querySelectorAll(
+        '.links-panel__tile.is-dragging, .links-panel__tile.is-drop-before, '
+        + '.links-panel__tile.is-drop-after, .links-panel__folder.is-drop-target'
+    ).forEach((tile) => {
+        tile.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after', 'is-drop-target');
     });
     draggedLinkId = null;
 }
@@ -407,7 +455,7 @@ function bindTileDrag() {
     grid.addEventListener('dragstart', (e) => {
         const grip = e.target.closest?.('[data-link-drag-grip]');
         const tile = grip?.closest('.links-panel__tile');
-        if (!grip || !tile || currentSort !== 'manual') {
+        if (!grip || !tile) {
             e.preventDefault();
             draggedLinkId = null;
             return;
@@ -422,9 +470,24 @@ function bindTileDrag() {
     });
 
     grid.addEventListener('dragover', (e) => {
-        if (!draggedLinkId || currentSort !== 'manual') return;
+        if (!draggedLinkId) return;
+        const folderCard = e.target.closest?.('[data-folder-id], [data-folder-back]');
+        if (folderCard && grid.contains(folderCard)) {
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+            clearDropMarkers();
+            folderCard.classList.add('is-drop-target');
+            return;
+        }
+        if (currentSort !== 'manual') {
+            clearDropMarkers();
+            return;
+        }
         const tile = e.target.closest?.('.links-panel__tile');
-        if (!tile || !grid.contains(tile)) return;
+        if (!tile || !grid.contains(tile)) {
+            clearDropMarkers();
+            return;
+        }
         e.preventDefault();
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
         clearDropMarkers();
@@ -433,7 +496,31 @@ function bindTileDrag() {
     });
 
     grid.addEventListener('drop', (e) => {
-        if (!draggedLinkId || currentSort !== 'manual') {
+        const draggedId = draggedLinkId;
+        const folderCard = e.target.closest?.('[data-folder-id], [data-folder-back]');
+        if (draggedId && folderCard && grid.contains(folderCard)) {
+            e.preventDefault();
+            const folderId = folderCard.dataset.folderId || null;
+            clearTileDragState();
+            const result = moveLinkToFolder(draggedId, folderId);
+            if (!result.ok) {
+                showAppToast(result.error);
+                return;
+            }
+            if (!result.changed) {
+                showAppToast('Link is already there');
+                return;
+            }
+            if (folderId) {
+                const folder = readLinks().folders.find((entry) => entry.id === folderId);
+                showAppToast(`Moved to ${folder?.name || 'folder'}`);
+            } else {
+                showAppToast('Moved to All links');
+            }
+            return;
+        }
+
+        if (!draggedId || currentSort !== 'manual') {
             clearTileDragState();
             return;
         }
@@ -443,13 +530,12 @@ function bindTileDrag() {
             return;
         }
         e.preventDefault();
-        const draggedId = draggedLinkId;
         const targetId = tile.dataset.linkId;
         const before = isDropBefore(e, tile);
         clearTileDragState();
         if (!draggedId || !targetId || draggedId === targetId) return;
 
-        const ids = readLinks().links.map((link) => link.id);
+        const ids = linksInFolder(readLinks().links, currentFolderId).map((link) => link.id);
         const fromIndex = ids.indexOf(draggedId);
         if (fromIndex < 0 || !ids.includes(targetId)) return;
         ids.splice(fromIndex, 1);
@@ -458,7 +544,7 @@ function bindTileDrag() {
         if (!before) targetIndex += 1;
         ids.splice(targetIndex, 0, draggedId);
 
-        const result = reorderLinks(ids);
+        const result = reorderLinks(ids, { folderId: currentFolderId });
         if (!result.ok) {
             showAppToast(result.error);
             LinksOverlay.refresh();
@@ -471,7 +557,7 @@ function bindTileDrag() {
 }
 
 
-function buildDetailHtml(link, previewIds, faviconTokens = {}) {
+function buildDetailHtml(link, previewIds, faviconTokens = {}, folders = []) {
     if (!link) {
         return '<p class="links-panel__detail-empty">Select a link to edit it.</p>';
     }
@@ -479,6 +565,7 @@ function buildDetailHtml(link, previewIds, faviconTokens = {}) {
     const host = linkHostLabel(link);
     const previewOn = previewIds.has(link.id);
     const previewLabel = previewOn ? 'Remove screenshot preview' : 'Load screenshot preview';
+    const folderId = link.folderId || '';
     return `<div class="links-panel__detail-head">
         <h3 class="links-panel__detail-title">Link details</h3>
         <a class="btn btn--compact links-panel__detail-open" href="${escapeAttr(link.url)}"
@@ -501,6 +588,13 @@ function buildDetailHtml(link, previewIds, faviconTokens = {}) {
             <span>URL</span>
             <input type="text" data-link-edit-url value="${escapeAttr(link.url)}" maxlength="${LINK_URL_MAX}"
                 inputmode="url" spellcheck="false" autocomplete="off">
+        </label>
+        <label class="links-panel__field">
+            <span>Folder</span>
+            <select data-link-edit-folder>
+                <option value=""${folderId ? '' : ' selected'}>All links (top level)</option>
+                ${folders.map((folder) => `<option value="${escapeAttr(folder.id)}"${folder.id === folderId ? ' selected' : ''}>${escapeHTML(folder.name)}</option>`).join('')}
+            </select>
         </label>
         <div class="links-panel__detail-actions">
             <button type="submit" class="btn btn--compact" data-link-save>${CARD_ICONS.save} Save</button>
@@ -584,6 +678,11 @@ export const LinksOverlay = {
                 <h2 class="links-panel__title" data-links-title>Links</h2>
                 <p class="links-panel__summary" data-links-summary></p>
                 <div class="links-panel__controls">
+                    <button type="button" class="btn btn--compact" data-links-new-folder
+                        title="Create folder" aria-label="Create folder">${ACTION_ICONS.plus} Folder</button>
+                    <button type="button" class="btn btn--compact" data-links-back
+                        title="Back to all links" aria-label="Back to all links" hidden>
+                        ${CARD_ICONS.popin} All links</button>
                     <label class="links-panel__sort">
                         <span class="links-panel__sort-label">Sort</span>
                         <select class="links-panel__sort-select" data-links-sort aria-label="Sort links">
@@ -617,7 +716,7 @@ export const LinksOverlay = {
                         title="Add link" aria-label="Add link">${ACTION_ICONS.plus} Add</button>
                 </form>
                 <button type="button" class="btn btn--compact btn--icon links-panel__clear" data-links-clear
-                    title="Clear all links" aria-label="Clear all links" disabled>${CARD_ICONS.delete}</button>`;
+                    title="Clear all links and folders" aria-label="Clear all links and folders" disabled>${CARD_ICONS.delete}</button>`;
         }
     },
 
@@ -647,6 +746,14 @@ export const LinksOverlay = {
             this.clearAll();
         });
 
+        panel.querySelector('[data-links-new-folder]')?.addEventListener('click', () => {
+            this.createFolderPrompt();
+        });
+
+        panel.querySelector('[data-links-back]')?.addEventListener('click', () => {
+            this.openFolder(null);
+        });
+
         panel.addEventListener('submit', (e) => {
             const form = e.target.closest?.('[data-link-edit-form]');
             if (!form) return;
@@ -655,6 +762,37 @@ export const LinksOverlay = {
         });
 
         panel.addEventListener('click', (e) => {
+            const folderOpen = e.target.closest?.('[data-folder-open]');
+            if (folderOpen) {
+                e.preventDefault();
+                const id = folderOpen.closest('[data-folder-id]')?.dataset.folderId;
+                if (id) this.openFolder(id);
+                return;
+            }
+
+            const folderBack = e.target.closest?.('[data-folder-back]');
+            if (folderBack) {
+                e.preventDefault();
+                this.openFolder(null);
+                return;
+            }
+
+            const folderRename = e.target.closest?.('[data-folder-rename]');
+            if (folderRename) {
+                e.preventDefault();
+                const id = folderRename.closest('[data-folder-id]')?.dataset.folderId;
+                if (id) this.renameFolderPrompt(id);
+                return;
+            }
+
+            const folderDelete = e.target.closest?.('[data-folder-delete]');
+            if (folderDelete) {
+                e.preventDefault();
+                const id = folderDelete.closest('[data-folder-id]')?.dataset.folderId;
+                if (id) this.deleteFolderPrompt(id);
+                return;
+            }
+
             const refreshFavicon = e.target.closest?.('[data-link-refresh-favicon]');
             if (refreshFavicon) {
                 e.preventDefault();
@@ -711,8 +849,15 @@ export const LinksOverlay = {
 
     refresh() {
         if (!panel) return;
-        const allLinks = readLinks().links;
-        const links = sortLinks(allLinks, currentSort);
+        const payload = readLinks();
+        const folders = payload.folders;
+        if (currentFolderId && !folders.some((folder) => folder.id === currentFolderId)) {
+            currentFolderId = null;
+        }
+        const currentFolder = folders.find((folder) => folder.id === currentFolderId) || null;
+        const allLinks = payload.links;
+        const links = sortLinks(linksInFolder(allLinks, currentFolderId), currentSort);
+        const visibleFolders = currentFolder ? [] : sortFolders(folders, currentSort);
         const previewIds = new Set(readPreviewIds());
         const faviconTokens = readFaviconTokens();
         if (currentSort !== 'manual') clearTileDragState();
@@ -721,31 +866,55 @@ export const LinksOverlay = {
         }
 
         const titleEl = panel.querySelector('[data-links-title]');
-        if (titleEl) titleEl.textContent = links.length ? `Links (${links.length})` : 'Links';
+        if (titleEl) {
+            titleEl.textContent = currentFolder
+                ? `${currentFolder.name} (${links.length})`
+                : (allLinks.length ? `Links (${allLinks.length})` : 'Links');
+        }
         const summaryEl = panel.querySelector('[data-links-summary]');
         if (summaryEl) {
-            const previewCount = [...previewIds].filter((id) => links.some((link) => link.id === id)).length;
-            summaryEl.textContent = `${links.length} saved · ${previewCount} screenshot preview${previewCount === 1 ? '' : 's'} on this device`;
+            const previewCount = [...previewIds].filter((id) => allLinks.some((link) => link.id === id)).length;
+            const previewLabel = `screenshot preview${previewCount === 1 ? '' : 's'} on this device`;
+            if (currentFolder) {
+                summaryEl.textContent = `${links.length} link${links.length === 1 ? '' : 's'} in this folder · ${previewCount} ${previewLabel}`;
+            } else {
+                summaryEl.textContent = `${allLinks.length} saved · ${folders.length} folder${folders.length === 1 ? '' : 's'} · ${previewCount} ${previewLabel}`;
+            }
         }
         const sortSelect = panel.querySelector('[data-links-sort]');
         if (sortSelect && sortSelect.value !== currentSort) sortSelect.value = currentSort;
+        const backBtn = panel.querySelector('[data-links-back]');
+        if (backBtn) backBtn.hidden = !currentFolder;
+        const newFolderBtn = panel.querySelector('[data-links-new-folder]');
+        if (newFolderBtn) newFolderBtn.hidden = !!currentFolder;
         syncViewChrome();
 
         const grid = panel.querySelector('[data-links-grid]');
         if (grid) {
-            grid.innerHTML = links.length
-                ? links.map((link) => buildTileHtml(link, previewIds, link.id === selectedId, faviconTokens)).join('')
-                : '<p class="links-panel__empty">No links yet. Add a URL below to get started.</p>';
+            const cards = currentFolder
+                ? buildBackTileHtml(currentFolder)
+                : visibleFolders.map((folder) => (
+                    buildFolderTileHtml(folder, countLinksInFolder(allLinks, folder.id))
+                )).join('');
+            const linkTiles = links.map((link) => (
+                buildTileHtml(link, previewIds, link.id === selectedId, faviconTokens)
+            )).join('');
+            const emptyText = currentFolder
+                ? 'This folder is empty. Add a link below or drag one here.'
+                : (folders.length
+                    ? 'No links at the top level. Open a folder or add a link below.'
+                    : 'No links yet. Add a URL below to get started.');
+            grid.innerHTML = `${cards}${linkTiles}${links.length ? '' : `<p class="links-panel__empty">${emptyText}</p>`}`;
         }
 
         const selected = links.find((link) => link.id === selectedId) || null;
         const detail = panel.querySelector('[data-links-detail]');
-        if (detail) detail.innerHTML = buildDetailHtml(selected, previewIds, faviconTokens);
+        if (detail) detail.innerHTML = buildDetailHtml(selected, previewIds, faviconTokens, folders);
 
         bindLinkThumbFallbacks(panel);
 
         const clearBtn = panel.querySelector('[data-links-clear]');
-        if (clearBtn) clearBtn.disabled = links.length === 0;
+        if (clearBtn) clearBtn.disabled = allLinks.length === 0 && folders.length === 0;
     },
 
     submitAdd() {
@@ -753,7 +922,8 @@ export const LinksOverlay = {
         const titleInput = panel?.querySelector('[data-links-add-title]');
         const result = addLink({
             url: urlInput?.value || '',
-            title: titleInput?.value || ''
+            title: titleInput?.value || '',
+            folderId: currentFolderId
         });
         if (!result.ok) {
             alert(result.error);
@@ -774,10 +944,13 @@ export const LinksOverlay = {
         const id = form.dataset.linkId;
         const urlInput = form.querySelector('[data-link-edit-url]');
         const titleInput = form.querySelector('[data-link-edit-title]');
-        const result = updateLink(id, {
+        const folderSelect = form.querySelector('[data-link-edit-folder]');
+        const patch = {
             url: urlInput?.value || '',
             title: titleInput?.value || ''
-        });
+        };
+        if (folderSelect) patch.folderId = folderSelect.value || null;
+        const result = updateLink(id, patch);
         if (!result.ok) {
             alert(result.error);
             urlInput?.focus();
@@ -785,6 +958,65 @@ export const LinksOverlay = {
             return;
         }
         showAppToast(result.unchanged ? 'No changes' : 'Link updated');
+        this.refresh();
+    },
+
+    createFolderPrompt() {
+        if (currentFolderId) return;
+        const raw = prompt(`New folder name (max ${LINK_FOLDER_NAME_MAX} characters):`);
+        if (raw === null) return;
+        const result = createFolder(raw);
+        if (!result.ok) {
+            alert(result.error);
+            return;
+        }
+        this.refresh();
+        showAppToast('Folder created');
+    },
+
+    renameFolderPrompt(id) {
+        const folder = readLinks().folders.find((entry) => entry.id === id);
+        if (!folder) return;
+        const raw = prompt('Rename folder:', folder.name);
+        if (raw === null) return;
+        const result = renameFolder(id, raw);
+        if (!result.ok) {
+            alert(result.error);
+            return;
+        }
+        this.refresh();
+        showAppToast(result.unchanged ? 'No changes' : 'Folder renamed');
+    },
+
+    deleteFolderPrompt(id) {
+        const payload = readLinks();
+        const folder = payload.folders.find((entry) => entry.id === id);
+        if (!folder) return;
+        const count = countLinksInFolder(payload.links, id);
+        const moved = count
+            ? `\n\n${count} link${count === 1 ? '' : 's'} will move to All links.`
+            : '';
+        if (!confirm(`Delete folder "${folder.name}"?${moved}`)) return;
+        const result = removeFolder(id);
+        if (!result.ok) {
+            showAppToast(result.error);
+            return;
+        }
+        if (currentFolderId === id) currentFolderId = null;
+        this.refresh();
+        showAppToast(result.movedLinks
+            ? `Folder deleted · ${result.movedLinks} link${result.movedLinks === 1 ? '' : 's'} moved to All links`
+            : 'Folder deleted');
+    },
+
+    openFolder(id) {
+        const next = id || null;
+        if (next && !readLinks().folders.some((folder) => folder.id === next)) {
+            currentFolderId = null;
+        } else {
+            currentFolderId = next;
+        }
+        selectedId = null;
         this.refresh();
     },
 
@@ -803,18 +1035,25 @@ export const LinksOverlay = {
     },
 
     clearAll() {
-        const links = readLinks().links;
-        if (!links.length) return;
-        if (!confirm(`Delete all ${links.length} saved link${links.length === 1 ? '' : 's'}?`)) return;
+        const payload = readLinks();
+        if (!payload.links.length && !payload.folders.length) return;
+        const linkCount = payload.links.length;
+        const folderCount = payload.folders.length;
+        const parts = [];
+        if (linkCount) parts.push(`${linkCount} saved link${linkCount === 1 ? '' : 's'}`);
+        if (folderCount) parts.push(`${folderCount} folder${folderCount === 1 ? '' : 's'}`);
+        if (!confirm(`Delete all ${parts.join(' and ')}?`)) return;
         const removed = clearAllLinks();
-        if (!removed) {
+        const after = readLinks();
+        if (after.links.length || after.folders.length) {
             showAppToast('Could not clear links');
             return;
         }
         selectedId = null;
+        currentFolderId = null;
         clearFaviconTokens();
         this.refresh();
-        showAppToast(`${removed} link${removed === 1 ? '' : 's'} cleared`);
+        showAppToast(`${removed} link${removed === 1 ? '' : 's'} and ${folderCount} folder${folderCount === 1 ? '' : 's'} cleared`);
     },
 
     refreshFavicon(id) {
@@ -850,7 +1089,11 @@ export const LinksOverlay = {
     open(opts = {}) {
         if (!panel) return;
         applySavedGeometry();
-        if (opts.selectLinkId) selectedId = opts.selectLinkId;
+        if (opts.selectLinkId) {
+            selectedId = opts.selectLinkId;
+            const link = readLinks().links.find((entry) => entry.id === opts.selectLinkId);
+            currentFolderId = link?.folderId || null;
+        }
         panel.classList.remove('is-hidden');
         panel.classList.add('is-open');
         bringPanelFront();
@@ -868,6 +1111,7 @@ export const LinksOverlay = {
         panel.classList.remove('is-open');
         panel.classList.add('is-hidden');
         selectedId = null;
+        currentFolderId = null;
     }
 };
 

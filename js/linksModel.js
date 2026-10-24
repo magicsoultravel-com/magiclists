@@ -1,14 +1,16 @@
 /**
- * @module {"owns":"pure link URL normalization, dedup keys, display/thumb helpers, favicon cache-busting and manual/name/date sorting","related":["linksStore.js","linksOverlay.js","sidebarLinks.js","backupDelta.js"],"notes":"DOM-free except bindLinkThumbFallbacks; no storage access"}
+ * @module {"owns":"pure link URL normalization, dedup keys, folder records/grouping, display/thumb helpers, favicon cache-busting and manual/name/date sorting","related":["linksStore.js","linksOverlay.js","sidebarLinks.js","backupDelta.js"],"notes":"DOM-free except bindLinkThumbFallbacks; no storage access"}
  */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 
 /** Persisted link collection schema version. */
-export const LINKS_SCHEMA_VERSION = 1;
+export const LINKS_SCHEMA_VERSION = 2;
 /** Maximum stored URL length (characters). */
 export const LINK_URL_MAX = 2048;
 /** Maximum stored title length (characters). */
 export const LINK_TITLE_MAX = 120;
+/** Maximum stored folder name length (characters). */
+export const LINK_FOLDER_NAME_MAX = 60;
 /** Sidebar renders at most this many tiles; the manager always shows all. */
 export const LINKS_SIDEBAR_LIMIT = 60;
 
@@ -89,12 +91,92 @@ export function createLinkId(now = Date.now()) {
     return `link_${now}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** @param {number} [now] */
+export function createFolderId(now = Date.now()) {
+    return `folder_${now}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/** Collapse whitespace and clamp a user-entered folder name. */
+export function normalizeFolderName(raw) {
+    return String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0, LINK_FOLDER_NAME_MAX);
+}
+
+/** Case-insensitive key used to reject duplicate folder names. */
+export function folderNameKey(raw) {
+    return normalizeFolderName(raw).toLocaleLowerCase();
+}
+
+/**
+ * Coerce one stored/imported folder into the canonical shape.
+ *
+ * @param {object} record
+ * @param {{ now?: number }} [opts]
+ * @returns {{ id: string, name: string, createdAt: number, updatedAt: number } | null}
+ */
+export function normalizeFolderRecord(record, opts = {}) {
+    if (!record || typeof record !== 'object') return null;
+    const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+    const name = normalizeFolderName(record.name);
+    if (!name) return null;
+
+    const rawId = typeof record.id === 'string' ? record.id.trim() : '';
+    const id = rawId && rawId.length <= 80 ? rawId : createFolderId(now);
+    const createdAt = Number(record.createdAt);
+    const updatedAt = Number(record.updatedAt);
+
+    return {
+        id,
+        name,
+        createdAt: Number.isFinite(createdAt) && createdAt > 0 ? createdAt : now,
+        updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : now
+    };
+}
+
+/**
+ * Normalize a folder array. Duplicate names (case-insensitive) are dropped
+ * first-wins; duplicate ids are regenerated so every folder stays addressable.
+ *
+ * @param {unknown} raw
+ * @param {{ now?: number }} [opts]
+ * @returns {Array<{ id: string, name: string, createdAt: number, updatedAt: number }>}
+ */
+export function normalizeFolders(raw, opts = {}) {
+    if (!Array.isArray(raw)) return [];
+    const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+    const folders = [];
+    const seenIds = new Set();
+    const seenNames = new Set();
+
+    for (const entry of raw) {
+        const folder = normalizeFolderRecord(entry, { now });
+        if (!folder) continue;
+        const nameKey = folderNameKey(folder.name);
+        if (!nameKey || seenNames.has(nameKey)) continue;
+        if (seenIds.has(folder.id)) folder.id = createFolderId(now);
+        seenNames.add(nameKey);
+        seenIds.add(folder.id);
+        folders.push(folder);
+    }
+
+    return folders;
+}
+
+/** Find a folder whose name collides with `name`, ignoring `excludeId`. */
+export function findFolderByName(folders, name, excludeId = null) {
+    const key = folderNameKey(name);
+    if (!key) return null;
+    return (Array.isArray(folders) ? folders : []).find((folder) => (
+        folder.id !== excludeId && folderNameKey(folder.name) === key
+    )) || null;
+}
+
+
 /**
  * Coerce one stored/imported record into the canonical shape.
  *
  * @param {object} record
  * @param {{ now?: number }} [opts]
- * @returns {{ id: string, url: string, title: string, createdAt: number, updatedAt: number } | null}
+ * @returns {{ id: string, url: string, title: string, folderId: string|null, createdAt: number, updatedAt: number } | null}
  */
 export function normalizeLinkRecord(record, opts = {}) {
     if (!record || typeof record !== 'object') return null;
@@ -104,6 +186,8 @@ export function normalizeLinkRecord(record, opts = {}) {
 
     const rawId = typeof record.id === 'string' ? record.id.trim() : '';
     const id = rawId && rawId.length <= 80 ? rawId : createLinkId(now);
+    const rawFolderId = typeof record.folderId === 'string' ? record.folderId.trim() : '';
+    const folderId = rawFolderId && rawFolderId.length <= 80 ? rawFolderId : null;
     const createdAt = Number(record.createdAt);
     const updatedAt = Number(record.updatedAt);
 
@@ -111,25 +195,29 @@ export function normalizeLinkRecord(record, opts = {}) {
         id,
         url: normalized.url,
         title: String(record.title ?? '').trim().slice(0, LINK_TITLE_MAX),
+        folderId,
         createdAt: Number.isFinite(createdAt) && createdAt > 0 ? createdAt : now,
         updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : now
     };
 }
 
 /**
- * Normalize a stored payload (`{ version, updatedAt, links }`), a raw links
- * array, or a backup section. Duplicate dedup keys are dropped (first wins);
- * duplicate ids are regenerated so the list remains addressable.
+ * Normalize a stored payload (`{ version, updatedAt, folders, links }`), a raw
+ * links array, or a backup section. Duplicate dedup keys are dropped (first
+ * wins); duplicate ids are regenerated so the list remains addressable. Links
+ * pointing at a missing folder fall back to the root level.
  *
  * @param {unknown} raw
  * @param {{ now?: number }} [opts]
- * @returns {{ version: number, updatedAt: number, links: Array<object> }}
+ * @returns {{ version: number, updatedAt: number, folders: Array<object>, links: Array<object> }}
  */
 export function normalizeLinksPayload(raw, opts = {}) {
     const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
     const source = Array.isArray(raw)
         ? raw
         : (Array.isArray(raw?.links) ? raw.links : []);
+    const folders = normalizeFolders(raw?.folders, { now });
+    const folderIds = new Set(folders.map((folder) => folder.id));
     const links = [];
     const seenKeys = new Set();
     const seenIds = new Set();
@@ -137,6 +225,7 @@ export function normalizeLinksPayload(raw, opts = {}) {
     for (const entry of source) {
         const link = normalizeLinkRecord(entry, { now });
         if (!link) continue;
+        if (link.folderId && !folderIds.has(link.folderId)) link.folderId = null;
         const key = buildLinkUrlKey(link.url);
         if (!key || seenKeys.has(key)) continue;
         if (seenIds.has(link.id)) link.id = createLinkId(now);
@@ -149,6 +238,7 @@ export function normalizeLinksPayload(raw, opts = {}) {
     return {
         version: LINKS_SCHEMA_VERSION,
         updatedAt: Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0 ? rawUpdatedAt : 0,
+        folders,
         links
     };
 }
@@ -293,3 +383,45 @@ export function sortLinks(links, mode) {
     return list;
 }
 
+/**
+ * Sort folders with the same modes the links use. Always returns a copy.
+ * @param {Array<object>} [folders]
+ * @param {string} [mode]
+ */
+export function sortFolders(folders, mode) {
+    const list = Array.isArray(folders) ? folders.slice() : [];
+    const sortMode = normalizeLinkSort(mode);
+    if (sortMode === 'manual') return list;
+    const [field, dir] = sortMode.split('-');
+    const factor = dir === 'desc' ? -1 : 1;
+
+    list.sort((a, b) => {
+        if (field === 'date') {
+            const at = Number(a?.createdAt || 0);
+            const bt = Number(b?.createdAt || 0);
+            if (at !== bt) return (at - bt) * factor;
+        }
+        const nameCompare = String(a?.name || '').localeCompare(
+            String(b?.name || ''),
+            undefined,
+            { sensitivity: 'base' }
+        );
+        if (nameCompare !== 0) return nameCompare * (field === 'name' ? factor : 1);
+        return String(a?.id || '').localeCompare(String(b?.id || ''));
+    });
+
+    return list;
+}
+
+/** Links that live directly in `folderId`; null/'' means the root level. */
+export function linksInFolder(links, folderId = null) {
+    const target = typeof folderId === 'string' && folderId ? folderId : null;
+    return (Array.isArray(links) ? links : []).filter((link) => (
+        (typeof link?.folderId === 'string' && link.folderId ? link.folderId : null) === target
+    ));
+}
+
+/** Number of links directly inside `folderId` (root when null). */
+export function countLinksInFolder(links, folderId = null) {
+    return linksInFolder(links, folderId).length;
+}

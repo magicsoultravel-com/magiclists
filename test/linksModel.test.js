@@ -6,21 +6,30 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    LINK_FOLDER_NAME_MAX,
     LINK_SCREENSHOT_SERVICE,
     LINK_TITLE_MAX,
+    LINKS_SCHEMA_VERSION,
     LINKS_SIDEBAR_LIMIT,
     buildLinkThumbHtml,
     buildLinkUrlKey,
+    countLinksInFolder,
+    createFolderId,
+    findFolderByName,
     linkDisplayTitle,
     linkFaviconUrl,
     linkHostLabel,
     linkLetter,
     linkScreenshotUrl,
     linkUrlLabel,
+    linksInFolder,
+    normalizeFolderName,
+    normalizeFolders,
     normalizeLinkRecord,
     normalizeLinkSort,
     normalizeLinkUrl,
     normalizeLinksPayload,
+    sortFolders,
     sortLinks
 } from '../js/linksModel.js';
 
@@ -96,13 +105,69 @@ describe('linksModel · record and payload normalization', () => {
                 { id: 'link_c', url: 'not a url at all', title: 'Invalid' }
             ]
         });
-        assert.equal(payload.version, 1);
+        assert.equal(payload.version, LINKS_SCHEMA_VERSION);
         assert.equal(payload.updatedAt, 50);
+        assert.deepEqual(payload.folders, []);
         assert.deepEqual(payload.links.map((link) => link.url), [
             'https://example.com/A',
             'https://example.com/B'
         ]);
         assert.notEqual(payload.links[0].id, payload.links[1].id);
+    });
+});
+
+describe('linksModel · folders', () => {
+    it('normalizes names, ids and duplicate folder records', () => {
+        assert.equal(normalizeFolderName('  Work   Stuff  '), 'Work Stuff');
+        assert.equal(normalizeFolderName('x'.repeat(LINK_FOLDER_NAME_MAX + 5)).length, LINK_FOLDER_NAME_MAX);
+        assert.match(createFolderId(1234), /^folder_1234_/);
+
+        const folders = normalizeFolders([
+            { id: 'folder_a', name: ' Work ', createdAt: 5, updatedAt: 6 },
+            { id: 'folder_a', name: 'Home' },
+            { id: 'folder_b', name: 'work' },
+            { id: 'folder_c', name: '   ' }
+        ], { now: 100 });
+        assert.deepEqual(folders.map((folder) => folder.name), ['Work', 'Home']);
+        assert.equal(folders[0].createdAt, 5);
+        assert.notEqual(folders[0].id, folders[1].id);
+        assert.equal(folders[1].createdAt, 100);
+    });
+
+    it('keeps known folder ids and roots orphaned links', () => {
+        const payload = normalizeLinksPayload({
+            version: 1,
+            updatedAt: 50,
+            folders: [{ id: 'folder_a', name: 'Work' }, { id: 'folder_b', name: 'Home' }],
+            links: [
+                { id: 'link_a', url: 'example.com/A', folderId: 'folder_a' },
+                { id: 'link_b', url: 'example.com/B', folderId: 'folder_missing' },
+                { id: 'link_c', url: 'example.com/C' }
+            ]
+        });
+        assert.equal(payload.version, LINKS_SCHEMA_VERSION);
+        assert.deepEqual(payload.links.map((link) => link.folderId), ['folder_a', null, null]);
+        assert.equal(linksInFolder(payload.links, 'folder_a').length, 1);
+        assert.equal(countLinksInFolder(payload.links, null), 2);
+
+        const raw = normalizeLinksPayload([
+            { id: 'link_d', url: 'example.com/D', folderId: 'folder_ghost' }
+        ]);
+        assert.equal(raw.links[0].folderId, null);
+    });
+
+    it('sorts folders and finds name collisions case-insensitively', () => {
+        const folders = [
+            { id: 'folder_b', name: 'beta', createdAt: 20 },
+            { id: 'folder_a', name: 'Alpha', createdAt: 10 }
+        ];
+        assert.deepEqual(sortFolders(folders, 'manual').map((folder) => folder.id), ['folder_b', 'folder_a']);
+        assert.deepEqual(sortFolders(folders, 'name-asc').map((folder) => folder.name), ['Alpha', 'beta']);
+        assert.deepEqual(sortFolders(folders, 'name-desc').map((folder) => folder.name), ['beta', 'Alpha']);
+        assert.deepEqual(sortFolders(folders, 'date-asc').map((folder) => folder.name), ['Alpha', 'beta']);
+        assert.equal(findFolderByName(folders, ' ALPHA ')?.id, 'folder_a');
+        assert.equal(findFolderByName(folders, 'alpha', 'folder_a'), null);
+        assert.equal(findFolderByName(folders, 'missing'), null);
     });
 });
 

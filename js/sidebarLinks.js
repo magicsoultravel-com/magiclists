@@ -1,5 +1,5 @@
 /**
- * @module {"owns":"Links sidebar module tile/list rendering, hover quick actions and manage/view shortcuts","related":["linksStore.js","linksModel.js","linksOverlay.js","sidebarModules.js","sidebarPrefs.js"],"events":["links:changed","links:manage_requested"]}
+ * @module {"owns":"Links sidebar folder groups, tile/list rendering, hover quick actions and manage/view shortcuts","related":["linksStore.js","linksModel.js","linksOverlay.js","sidebarModules.js","sidebarPrefs.js"],"events":["links:changed","links:manage_requested"]}
  */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { CARD_ICONS } from './icons.js';
@@ -10,14 +10,18 @@ import {
     bindLinkThumbFallbacks,
     buildLinkThumbHtml,
     linkDisplayTitle,
-    linkHostLabel
+    linkHostLabel,
+    linksInFolder
 } from './linksModel.js';
 import { LINKS_CHANGED_EVENT, readLinks } from './linksStore.js';
 import { isSidebarModuleEnabled } from './sidebarModulePrefs.js';
 import {
+    LINKS_SIDEBAR_EXPANDED_KEY,
     LINKS_VIEW_LIST,
     LINKS_VIEW_TILES,
+    readLinksSidebarExpanded,
     readLinksSidebarView,
+    writeLinksSidebarExpanded,
     writeLinksSidebarView
 } from './sidebarPrefs.js';
 
@@ -26,6 +30,7 @@ let list = null;
 let more = null;
 let viewToggle = null;
 let bound = false;
+let expandedFolderIds = new Set();
 
 function buildTileHtml(link, view) {
     const title = linkDisplayTitle(link);
@@ -53,6 +58,28 @@ function buildTileHtml(link, view) {
     </div>`;
 }
 
+function buildFolderGroupHtml(folder, folderLinks, view) {
+    const expanded = expandedFolderIds.has(folder.id);
+    const count = folderLinks.length;
+    const meta = `${count} link${count === 1 ? '' : 's'}`;
+    const linksHtml = folderLinks.map((link) => buildTileHtml(link, view)).join('');
+    return `<div class="sidebar-links__folder-group${expanded ? ' is-expanded' : ''}"
+        data-folder-id="${escapeAttr(folder.id)}">
+        <button type="button" class="sidebar-links__folder-tile" data-folder-toggle
+            aria-expanded="${expanded ? 'true' : 'false'}"
+            title="${escapeAttr(`${folder.name} — ${meta}`)}"
+            aria-label="${escapeAttr(`${folder.name}, ${meta}`)}">
+            <span class="sidebar-links__folder-chevron" aria-hidden="true">${CARD_ICONS.chevronDown}</span>
+            <span class="sidebar-links__folder-icon" aria-hidden="true">${CARD_ICONS.folder}</span>
+            <span class="sidebar-links__folder-name">${escapeHTML(folder.name)}</span>
+            <span class="sidebar-links__folder-count">${count}</span>
+        </button>
+        <div class="sidebar-links__folder-drawer">
+            ${linksHtml || '<p class="sidebar-links__folder-empty">No links in this folder.</p>'}
+        </div>
+    </div>`;
+}
+
 function applyViewChrome() {
     const view = readLinksSidebarView();
     if (root) root.dataset.linksView = view;
@@ -69,6 +96,14 @@ function toggleView() {
     SidebarLinks.refresh();
 }
 
+function toggleFolder(id) {
+    if (!id) return;
+    if (expandedFolderIds.has(id)) expandedFolderIds.delete(id);
+    else expandedFolderIds.add(id);
+    writeLinksSidebarExpanded(expandedFolderIds);
+    SidebarLinks.refresh();
+}
+
 function openManager(focusAdd = false) {
     window.dispatchEvent(new CustomEvent('links:manage_requested', { detail: { focusAdd } }));
 }
@@ -78,6 +113,14 @@ function bindEvents() {
     bound = true;
 
     root.addEventListener('click', (e) => {
+        const folderToggle = e.target.closest?.('[data-folder-toggle]');
+        if (folderToggle) {
+            e.preventDefault();
+            const id = folderToggle.closest('[data-folder-id]')?.dataset.folderId;
+            toggleFolder(id);
+            return;
+        }
+
         const copyBtn = e.target.closest?.('[data-link-copy]');
         if (copyBtn) {
             e.preventDefault();
@@ -115,6 +158,12 @@ function bindEvents() {
     window.addEventListener(LINKS_CHANGED_EVENT, () => {
         SidebarLinks.refresh();
     });
+
+    window.addEventListener('storage', (e) => {
+        if (e.key !== LINKS_SIDEBAR_EXPANDED_KEY) return;
+        expandedFolderIds = new Set(readLinksSidebarExpanded());
+        SidebarLinks.refresh();
+    });
 }
 
 export const SidebarLinks = {
@@ -124,6 +173,7 @@ export const SidebarLinks = {
         list = root.querySelector('[data-links-list]');
         more = root.querySelector('[data-links-more]');
         viewToggle = root.querySelector('[data-links-view-toggle]');
+        expandedFolderIds = new Set(readLinksSidebarExpanded());
         bindEvents();
         this.refresh();
     },
@@ -134,20 +184,36 @@ export const SidebarLinks = {
            hook refreshes once when it is re-enabled. */
         if (!isSidebarModuleEnabled('links')) return;
         applyViewChrome();
-        const links = readLinks().links;
-        const visible = links.slice(0, LINKS_SIDEBAR_LIMIT);
+        const payload = readLinks();
+        const links = payload.links;
+        const folders = payload.folders;
+        const folderIds = new Set(folders.map((folder) => folder.id));
+        let pruned = false;
+        for (const id of [...expandedFolderIds]) {
+            if (folderIds.has(id)) continue;
+            expandedFolderIds.delete(id);
+            pruned = true;
+        }
+        if (pruned) writeLinksSidebarExpanded(expandedFolderIds);
+
+        const rootLinks = linksInFolder(links, null);
+        const visibleRootLinks = rootLinks.slice(0, LINKS_SIDEBAR_LIMIT);
 
         /* Attribute state, not classes: view and empty layout both branch from
            data-* so the list-view flex rule cannot override an is-hidden class. */
-        root.dataset.linksEmpty = links.length ? 'false' : 'true';
+        root.dataset.linksEmpty = folders.length || rootLinks.length ? 'false' : 'true';
         const view = readLinksSidebarView();
-        list.innerHTML = visible.map((link) => buildTileHtml(link, view)).join('');
+        const folderHtml = folders.map((folder) => (
+            buildFolderGroupHtml(folder, linksInFolder(links, folder.id), view)
+        )).join('');
+        const rootHtml = visibleRootLinks.map((link) => buildTileHtml(link, view)).join('');
+        list.innerHTML = folderHtml + rootHtml;
         bindLinkThumbFallbacks(list);
 
         if (more) {
-            const hiddenCount = Math.max(0, links.length - visible.length);
+            const hiddenCount = Math.max(0, rootLinks.length - visibleRootLinks.length);
             more.innerHTML = hiddenCount
-                ? `<button type="button" class="sidebar-links__more" data-links-more>+${hiddenCount} more in Links</button>`
+                ? `<button type="button" class="sidebar-links__more" data-links-more>+${hiddenCount} more at top level</button>`
                 : '';
         }
     },

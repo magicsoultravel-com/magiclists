@@ -6,6 +6,7 @@ export const MODULE_DOCKS_KEY = 'matrix_sidebar_module_docks';
 export const SIDEBAR_WIDTH_KEY = 'matrix_sidebar_width';
 export const SIDEBAR_DETACHED_KEY = 'matrix_sidebar_detached';
 export const LINKS_SIDEBAR_VIEW_KEY = 'matrix_links_sidebar_view';
+export const LINKS_SIDEBAR_EXPANDED_KEY = 'matrix_links_sidebar_expanded';
 export const LINKS_VIEW_TILES = 'tiles';
 export const LINKS_VIEW_LIST = 'list';
 
@@ -274,6 +275,43 @@ export function readLinksSidebarView() {
 
 export function writeLinksSidebarView(view) {
     localStorage.setItem(LINKS_SIDEBAR_VIEW_KEY, normalizeLinksSidebarView(view));
+}
+
+/** Device-local expanded folder ids for the sidebar Links module. */
+export function readLinksSidebarExpanded() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(LINKS_SIDEBAR_EXPANDED_KEY) || '[]');
+        if (!Array.isArray(parsed)) return [];
+        const seen = new Set();
+        const ids = [];
+        for (const value of parsed) {
+            if (typeof value !== 'string' || !value || seen.has(value)) continue;
+            seen.add(value);
+            ids.push(value);
+        }
+        return ids;
+    } catch {
+        return [];
+    }
+}
+
+export function writeLinksSidebarExpanded(ids) {
+    try {
+        const seen = new Set();
+        const values = [];
+        for (const value of ids || []) {
+            if (typeof value !== 'string' || !value || seen.has(value)) continue;
+            seen.add(value);
+            values.push(value);
+        }
+        if (!values.length) {
+            localStorage.removeItem(LINKS_SIDEBAR_EXPANDED_KEY);
+            return;
+        }
+        localStorage.setItem(LINKS_SIDEBAR_EXPANDED_KEY, JSON.stringify(values));
+    } catch (error) {
+        console.warn('[sidebarPrefs] could not persist expanded links folders', error);
+    }
 }
 
 export function readSidebarPrefs() {

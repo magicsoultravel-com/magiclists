@@ -1,8 +1,12 @@
 /**
- * @module {"owns":"links localStorage CRUD, manual reorder, dedup rejection, device-local preview ids, link change events","related":["linksModel.js","backup.js","sync.js","sidebarLinks.js","linksOverlay.js"],"events":["links:changed","links:previews_changed"]}
+ * @module {"owns":"links localStorage CRUD, folder CRUD/moves, scoped manual reorder, dedup rejection, device-local preview ids, link change events","related":["linksModel.js","backup.js","sync.js","sidebarLinks.js","linksOverlay.js"],"events":["links:changed","links:previews_changed"]}
  */
 import {
     LINKS_SCHEMA_VERSION,
+    createFolderId,
+    findFolderByName,
+    normalizeFolderName,
+    normalizeFolderRecord,
     normalizeLinkRecord,
     normalizeLinkUrl,
     normalizeLinksPayload
@@ -30,7 +34,29 @@ function parseStored(key) {
 }
 
 function emptyPayload() {
-    return { version: LINKS_SCHEMA_VERSION, updatedAt: 0, links: [] };
+    return { version: LINKS_SCHEMA_VERSION, updatedAt: 0, folders: [], links: [] };
+}
+
+/**
+ * Validate a requested folder assignment. `undefined`, `null`, and '' mean
+ * the root level; any other value must reference a folder in the payload.
+ * @returns {{ ok: true, folderId: string|null } | { ok: false, error: string }}
+ */
+function resolveFolderTarget(payload, folderId) {
+    if (folderId === undefined || folderId === null || folderId === '') {
+        return { ok: true, folderId: null };
+    }
+    if (typeof folderId !== 'string') {
+        return { ok: false, error: 'That folder no longer exists.' };
+    }
+    const folder = payload.folders.find((candidate) => candidate.id === folderId);
+    if (!folder) return { ok: false, error: 'That folder no longer exists.' };
+    return { ok: true, folderId: folder.id };
+}
+
+function inFolderScope(link, folderId) {
+    const current = typeof link?.folderId === 'string' && link.folderId ? link.folderId : null;
+    return current === (folderId || null);
 }
 
 /** Read + normalize the saved links collection. Never throws. */
@@ -46,7 +72,11 @@ function persistPayload(payload) {
     } catch {
         return false;
     }
-    emit(LINKS_CHANGED_EVENT, { links: payload.links, updatedAt: payload.updatedAt });
+    emit(LINKS_CHANGED_EVENT, {
+        links: payload.links,
+        folders: payload.folders,
+        updatedAt: payload.updatedAt
+    });
     return true;
 }
 
@@ -65,6 +95,7 @@ export function writeLinksPayload(raw, opts = {}) {
     const payload = {
         version: LINKS_SCHEMA_VERSION,
         updatedAt: opts.touch === false ? normalized.updatedAt : now,
+        folders: normalized.folders,
         links: normalized.links
     };
     if (!persistPayload(payload)) return false;
@@ -73,8 +104,8 @@ export function writeLinksPayload(raw, opts = {}) {
 }
 
 /**
- * Add a link at the top of the list.
- * @param {{ url: string, title?: string }} input
+ * Add a link at the top of its folder (or the root list).
+ * @param {{ url: string, title?: string, folderId?: string|null }} input
  * @param {{ now?: number }} [opts]
  * @returns {{ ok: true, link: object } | { ok: false, error: string }}
  */
@@ -88,9 +119,13 @@ export function addLink(input, opts = {}) {
         return { ok: false, error: 'That link is already saved.' };
     }
 
+    const target = resolveFolderTarget(payload, input?.folderId);
+    if (!target.ok) return { ok: false, error: target.error };
+
     const link = normalizeLinkRecord({
         url: normalized.url,
         title: input?.title,
+        folderId: target.folderId,
         createdAt: now,
         updatedAt: now
     }, { now });
@@ -99,6 +134,7 @@ export function addLink(input, opts = {}) {
     const next = {
         version: LINKS_SCHEMA_VERSION,
         updatedAt: now,
+        folders: payload.folders,
         links: [link, ...payload.links]
     };
     if (!persistPayload(next)) {
@@ -108,11 +144,11 @@ export function addLink(input, opts = {}) {
 }
 
 /**
- * Update a link's title and/or URL. URL edits are re-validated and checked
- * against every other link's dedup key.
+ * Update a link's title, URL, and/or folder. URL edits are re-validated and
+ * checked against every other link's dedup key.
  *
  * @param {string} id
- * @param {{ title?: string, url?: string }} patch
+ * @param {{ title?: string, url?: string, folderId?: string|null }} patch
  * @param {{ now?: number }} [opts]
  * @returns {{ ok: true, link: object, unchanged?: boolean } | { ok: false, error: string }}
  */
@@ -133,15 +169,27 @@ export function updateLink(id, patch = {}, opts = {}) {
     });
     if (duplicate) return { ok: false, error: 'That link is already saved.' };
 
+    let folderId = existing.folderId || null;
+    if (patch.folderId !== undefined) {
+        const target = resolveFolderTarget(payload, patch.folderId);
+        if (!target.ok) return { ok: false, error: target.error };
+        folderId = target.folderId;
+    }
+
     const nextLink = normalizeLinkRecord({
         ...existing,
         url: normalized.url,
         title: patch.title !== undefined ? patch.title : existing.title,
+        folderId,
         updatedAt: now
     }, { now });
     if (!nextLink) return { ok: false, error: 'Enter a valid http(s) URL.' };
 
-    if (nextLink.url === existing.url && nextLink.title === existing.title) {
+    if (
+        nextLink.url === existing.url
+        && nextLink.title === existing.title
+        && nextLink.folderId === (existing.folderId || null)
+    ) {
         return { ok: true, link: existing, unchanged: true };
     }
 
@@ -157,24 +205,27 @@ export function updateLink(id, patch = {}, opts = {}) {
 }
 
 /**
- * Persist a manual order for the full collection. This only reorders the
- * existing records: per-link createdAt/updatedAt values are never touched, so
- * Date sorts keep their real chronology.
+ * Persist a manual order for one level (the root list or a single folder).
+ * This only reorders the existing records: per-link createdAt/updatedAt values
+ * are never touched, so Date sorts keep their real chronology.
  *
- * The caller must pass the complete set of current ids. Partial orders are
- * rejected rather than merged, because a reorder can originate from a stale
- * snapshot after another tab changed the collection.
+ * The caller must pass the complete set of current ids for that level. Partial
+ * orders are rejected rather than merged, because a reorder can originate from
+ * a stale snapshot after another tab changed the collection.
  *
  * @param {string[]} orderedIds
- * @param {{ now?: number }} [opts]
+ * @param {{ now?: number, folderId?: string|null }} [opts]
  * @returns {{ ok: true, changed: boolean } | { ok: false, error: string }}
  */
 export function reorderLinks(orderedIds, opts = {}) {
     const payload = readLinks();
+    const target = resolveFolderTarget(payload, opts.folderId);
+    if (!target.ok) return { ok: false, error: target.error };
     if (!Array.isArray(orderedIds)) {
         return { ok: false, error: 'Link order is out of date. Refresh and try again.' };
     }
-    const currentIds = payload.links.map((link) => link.id);
+    const scopeLinks = payload.links.filter((link) => inFolderScope(link, target.folderId));
+    const currentIds = scopeLinks.map((link) => link.id);
     if (orderedIds.length !== currentIds.length) {
         return { ok: false, error: 'Link order is out of date. Refresh and try again.' };
     }
@@ -190,18 +241,205 @@ export function reorderLinks(orderedIds, opts = {}) {
         return { ok: true, changed: false };
     }
 
-    const byId = new Map(payload.links.map((link) => [link.id, link]));
+    const byId = new Map(scopeLinks.map((link) => [link.id, link]));
+    const orderedScoped = orderedIds.map((id) => byId.get(id));
+    let scopedIndex = 0;
+    const nextLinks = payload.links.map((link) => (
+        inFolderScope(link, target.folderId) ? orderedScoped[scopedIndex++] : link
+    ));
     const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
     const next = {
-        version: LINKS_SCHEMA_VERSION,
+        ...payload,
         updatedAt: now,
-        links: orderedIds.map((id) => byId.get(id))
+        links: nextLinks
     };
     if (!persistPayload(next)) {
         return { ok: false, error: 'Could not save the link order (storage may be full).' };
     }
     return { ok: true, changed: true };
 }
+/**
+ * Create a folder at the end of the folder order.
+ * @param {string} name
+ * @param {{ now?: number }} [opts]
+ * @returns {{ ok: true, folder: object } | { ok: false, error: string }}
+ */
+export function createFolder(name, opts = {}) {
+    const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+    const normalizedName = normalizeFolderName(name);
+    if (!normalizedName) return { ok: false, error: 'Enter a folder name.' };
+
+    const payload = readLinks();
+    if (findFolderByName(payload.folders, normalizedName)) {
+        return { ok: false, error: 'A folder with that name already exists.' };
+    }
+
+    const folder = normalizeFolderRecord({
+        id: createFolderId(now),
+        name: normalizedName,
+        createdAt: now,
+        updatedAt: now
+    }, { now });
+    if (!folder) return { ok: false, error: 'Enter a folder name.' };
+
+    const next = {
+        ...payload,
+        updatedAt: now,
+        folders: [...payload.folders, folder]
+    };
+    if (!persistPayload(next)) {
+        return { ok: false, error: 'Could not save the folder (storage may be full).' };
+    }
+    return { ok: true, folder };
+}
+
+/**
+ * Rename an existing folder. Names stay unique case-insensitively.
+ * @param {string} id
+ * @param {string} name
+ * @param {{ now?: number }} [opts]
+ * @returns {{ ok: true, folder: object, unchanged?: boolean } | { ok: false, error: string }}
+ */
+export function renameFolder(id, name, opts = {}) {
+    if (!id) return { ok: false, error: 'Folder not found.' };
+    const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+    const normalizedName = normalizeFolderName(name);
+    if (!normalizedName) return { ok: false, error: 'Enter a folder name.' };
+
+    const payload = readLinks();
+    const existing = payload.folders.find((folder) => folder.id === id);
+    if (!existing) return { ok: false, error: 'Folder not found.' };
+    if (findFolderByName(payload.folders, normalizedName, id)) {
+        return { ok: false, error: 'A folder with that name already exists.' };
+    }
+    if (normalizedName === existing.name) {
+        return { ok: true, folder: existing, unchanged: true };
+    }
+
+    const folder = { ...existing, name: normalizedName, updatedAt: now };
+    const next = {
+        ...payload,
+        updatedAt: now,
+        folders: payload.folders.map((entry) => (entry.id === id ? folder : entry))
+    };
+    if (!persistPayload(next)) {
+        return { ok: false, error: 'Could not save the folder (storage may be full).' };
+    }
+    return { ok: true, folder };
+}
+
+/**
+ * Delete a folder, returning its links to the root level instead of deleting
+ * them. Link timestamps are preserved so date sorts stay stable.
+ *
+ * @param {string} id
+ * @param {{ now?: number }} [opts]
+ * @returns {{ ok: true, folder: object, movedLinks: number } | { ok: false, error: string }}
+ */
+export function removeFolder(id, opts = {}) {
+    if (!id) return { ok: false, error: 'Folder not found.' };
+    const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+    const payload = readLinks();
+    const folder = payload.folders.find((entry) => entry.id === id);
+    if (!folder) return { ok: false, error: 'Folder not found.' };
+
+    let movedLinks = 0;
+    const nextLinks = payload.links.map((link) => {
+        if (link.folderId !== id) return link;
+        movedLinks += 1;
+        return { ...link, folderId: null };
+    });
+    const next = {
+        ...payload,
+        updatedAt: now,
+        folders: payload.folders.filter((entry) => entry.id !== id),
+        links: nextLinks
+    };
+    if (!persistPayload(next)) {
+        return { ok: false, error: 'Could not delete the folder (storage may be full).' };
+    }
+    return { ok: true, folder, movedLinks };
+}
+
+/**
+ * Move a link into a folder, or back to the root when `folderId` is null.
+ * Organizational moves do not touch the link's timestamps.
+ *
+ * @param {string} linkId
+ * @param {string|null} folderId
+ * @param {{ now?: number }} [opts]
+ * @returns {{ ok: true, changed: boolean, link: object } | { ok: false, error: string }}
+ */
+export function moveLinkToFolder(linkId, folderId, opts = {}) {
+    if (!linkId) return { ok: false, error: 'Link not found.' };
+    const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+    const payload = readLinks();
+    const existing = payload.links.find((link) => link.id === linkId);
+    if (!existing) return { ok: false, error: 'Link not found.' };
+
+    const target = resolveFolderTarget(payload, folderId);
+    if (!target.ok) return { ok: false, error: target.error };
+    if ((existing.folderId || null) === target.folderId) {
+        return { ok: true, changed: false, link: existing };
+    }
+
+    const link = { ...existing, folderId: target.folderId };
+    const next = {
+        ...payload,
+        updatedAt: now,
+        links: payload.links.map((entry) => (entry.id === linkId ? link : entry))
+    };
+    if (!persistPayload(next)) {
+        return { ok: false, error: 'Could not move the link (storage may be full).' };
+    }
+    return { ok: true, changed: true, link };
+}
+
+/**
+ * Persist a manual order for the folder list. The caller must pass every
+ * current folder id; partial orders are rejected.
+ *
+ * @param {string[]} orderedIds
+ * @param {{ now?: number }} [opts]
+ * @returns {{ ok: true, changed: boolean } | { ok: false, error: string }}
+ */
+export function reorderFolders(orderedIds, opts = {}) {
+    const payload = readLinks();
+    if (!Array.isArray(orderedIds)) {
+        return { ok: false, error: 'Folder order is out of date. Refresh and try again.' };
+    }
+    const currentIds = payload.folders.map((folder) => folder.id);
+    if (orderedIds.length !== currentIds.length) {
+        return { ok: false, error: 'Folder order is out of date. Refresh and try again.' };
+    }
+    const known = new Set(currentIds);
+    const seen = new Set();
+    for (const id of orderedIds) {
+        if (typeof id !== 'string' || !known.has(id) || seen.has(id)) {
+            return { ok: false, error: 'Folder order is out of date. Refresh and try again.' };
+        }
+        seen.add(id);
+    }
+    if (orderedIds.every((id, index) => id === currentIds[index])) {
+        return { ok: true, changed: false };
+    }
+
+    const byId = new Map(payload.folders.map((folder) => [folder.id, folder]));
+    const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+    const next = {
+        ...payload,
+        updatedAt: now,
+        folders: orderedIds.map((id) => byId.get(id))
+    };
+    if (!persistPayload(next)) {
+        return { ok: false, error: 'Could not save the folder order (storage may be full).' };
+    }
+    return { ok: true, changed: true };
+}
+
+
+
+
 
 /**
  * Delete one link and prune its device-local preview opt-in.
@@ -215,7 +453,7 @@ export function removeLink(id) {
     if (nextLinks.length === payload.links.length) return false;
 
     const written = persistPayload({
-        version: LINKS_SCHEMA_VERSION,
+        ...payload,
         updatedAt: Date.now(),
         links: nextLinks
     });
@@ -225,18 +463,19 @@ export function removeLink(id) {
 }
 
 /**
- * Delete every saved link and clear all screenshot opt-ins.
+ * Delete every saved link and folder, and clear all screenshot opt-ins.
  * @returns {number} number of removed links
  */
 export function clearAllLinks() {
     const payload = readLinks();
-    if (!payload.links.length) {
+    if (!payload.links.length && !payload.folders.length) {
         clearLinkPreviewIds();
         return 0;
     }
     const written = persistPayload({
         version: LINKS_SCHEMA_VERSION,
         updatedAt: Date.now(),
+        folders: [],
         links: []
     });
     if (!written) return 0;
@@ -253,7 +492,7 @@ export function clearAllLinks() {
  */
 export function applyLinksBackupSection(section) {
     if (!section || typeof section !== 'object') return false;
-    if (!Array.isArray(section.links)) return false;
+    if (!Array.isArray(section.links) && !Array.isArray(section.folders)) return false;
     return writeLinksPayload(section, { touch: false });
 }
 

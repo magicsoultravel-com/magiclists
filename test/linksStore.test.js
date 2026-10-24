@@ -40,11 +40,16 @@ const {
     applyLinksBackupSection,
     clearAllLinks,
     clearLinkPreviewIds,
+    createFolder,
     isLinkPreviewEnabled,
+    moveLinkToFolder,
     pruneLinkPreviewIds,
     readLinks,
     readPreviewIds,
+    removeFolder,
     removeLink,
+    renameFolder,
+    reorderFolders,
     reorderLinks,
     setLinkPreviewEnabled,
     updateLink,
@@ -188,6 +193,91 @@ describe('linksStore · manual ordering', () => {
         assert.deepEqual(readLinks().links.map((link) => link.id), [c.id, b.id, a.id]);
     });
 });
+describe('linksStore · folders', () => {
+    beforeEach(() => {
+        memory.clear();
+        events.length = 0;
+    });
+
+    it('creates, renames and deletes folders without deleting their links', () => {
+        const work = createFolder('  Work   Stuff ', { now: 10 });
+        assert.equal(work.ok, true);
+        assert.equal(work.folder.name, 'Work Stuff');
+        assert.equal(createFolder('work stuff', { now: 11 }).ok, false);
+
+        const home = createFolder('Home', { now: 12 });
+        assert.equal(home.ok, true);
+        assert.deepEqual(readLinks().folders.map((folder) => folder.name), ['Work Stuff', 'Home']);
+
+        const renamed = renameFolder(work.folder.id, 'Projects', { now: 20 });
+        assert.equal(renamed.ok, true);
+        assert.equal(renamed.folder.name, 'Projects');
+        assert.equal(renameFolder(home.folder.id, 'projects', { now: 21 }).ok, false);
+        assert.equal(renameFolder(work.folder.id, 'Projects', { now: 22 }).unchanged, true);
+
+        const link = addLink({ url: 'example.com/InFolder', folderId: work.folder.id }, { now: 30 }).link;
+        const root = addLink({ url: 'example.com/Root' }, { now: 31 }).link;
+        const removed = removeFolder(work.folder.id, { now: 40 });
+        assert.equal(removed.ok, true);
+        assert.equal(removed.movedLinks, 1);
+        const payload = readLinks();
+        assert.deepEqual(payload.folders.map((folder) => folder.id), [home.folder.id]);
+        assert.equal(payload.links.find((entry) => entry.id === link.id).folderId, null);
+        assert.equal(payload.links.find((entry) => entry.id === link.id).updatedAt, 30);
+        assert.equal(payload.links.find((entry) => entry.id === root.id).folderId, null);
+
+        assert.equal(clearAllLinks(), 2);
+        assert.deepEqual(readLinks().folders, []);
+        assert.deepEqual(readLinks().links, []);
+    });
+
+    it('adds, moves and updates links inside one folder while preserving timestamps', () => {
+        const alpha = createFolder('Alpha', { now: 1 }).folder;
+        const beta = createFolder('Beta', { now: 2 }).folder;
+        const root = addLink({ url: 'example.com/Root' }, { now: 10 }).link;
+        const a = addLink({ url: 'example.com/A', folderId: alpha.id }, { now: 11 }).link;
+        const b = addLink({ url: 'example.com/B', folderId: alpha.id }, { now: 12 }).link;
+        const betaLink = addLink({ url: 'example.com/Beta', folderId: beta.id }, { now: 13 }).link;
+        assert.equal(addLink({ url: 'example.com/A' }, { now: 14 }).ok, false);
+        const betaIndex = readLinks().links.findIndex((link) => link.id === betaLink.id);
+
+        const moved = moveLinkToFolder(root.id, alpha.id, { now: 20 });
+        assert.equal(moved.ok, true);
+        assert.equal(moved.changed, true);
+        assert.equal(moved.link.folderId, alpha.id);
+        assert.equal(moved.link.updatedAt, 10);
+        assert.equal(moveLinkToFolder(root.id, alpha.id, { now: 21 }).changed, false);
+        assert.equal(moveLinkToFolder(root.id, 'folder_missing').ok, false);
+
+        const reordered = reorderLinks([root.id, b.id, a.id], { folderId: alpha.id, now: 30 });
+        assert.equal(reordered.ok, true);
+        assert.deepEqual(
+            readLinks().links.filter((link) => link.folderId === alpha.id).map((link) => link.id),
+            [root.id, b.id, a.id]
+        );
+        assert.equal(readLinks().links.find((link) => link.id === root.id).updatedAt, 10);
+        assert.equal(readLinks().links.findIndex((link) => link.id === betaLink.id), betaIndex);
+        assert.equal(readLinks().links.find((link) => link.id === betaLink.id).folderId, beta.id);
+
+        const movedBack = updateLink(a.id, { folderId: null }, { now: 40 });
+        assert.equal(movedBack.ok, true);
+        assert.equal(movedBack.link.folderId, null);
+        assert.equal(updateLink(b.id, { folderId: beta.id }, { now: 41 }).link.folderId, beta.id);
+        assert.equal(updateLink(b.id, { folderId: 'folder_missing' }).ok, false);
+    });
+
+    it('reorders folders with an exact id set', () => {
+        const alpha = createFolder('Alpha', { now: 1 }).folder;
+        const beta = createFolder('Beta', { now: 2 }).folder;
+        assert.deepEqual(reorderFolders([beta.id, alpha.id], { now: 9 }), { ok: true, changed: true });
+        assert.deepEqual(readLinks().folders.map((folder) => folder.id), [beta.id, alpha.id]);
+        assert.equal(reorderFolders([beta.id], { now: 10 }).ok, false);
+        assert.equal(reorderFolders([beta.id, 'folder_missing'], { now: 11 }).ok, false);
+        assert.deepEqual(readLinks().folders.map((folder) => folder.id), [beta.id, alpha.id]);
+    });
+});
+
+
 
 describe('linksStore · backup replacement', () => {
     beforeEach(() => {
@@ -208,6 +298,26 @@ describe('linksStore · backup replacement', () => {
         const payload = readLinks();
         assert.equal(payload.updatedAt, 999);
         assert.deepEqual(payload.links.map((link) => link.url), ['https://example.com/In']);
+    });
+
+    it('preserves folders from backup sections and roots orphaned links', () => {
+        const applied = applyLinksBackupSection({
+            version: 2,
+            updatedAt: 999,
+            folders: [
+                { id: 'folder_keep', name: 'Keep' },
+                { id: 'folder_dup', name: 'keep' }
+            ],
+            links: [
+                { id: 'link_in', url: 'example.com/In', folderId: 'folder_keep', createdAt: 5, updatedAt: 5 },
+                { id: 'link_orphan', url: 'example.com/Orphan', folderId: 'folder_missing' }
+            ]
+        });
+        assert.equal(applied, true);
+        const payload = readLinks();
+        assert.deepEqual(payload.folders.map((folder) => folder.name), ['Keep']);
+        assert.equal(payload.links.find((link) => link.id === 'link_in').folderId, 'folder_keep');
+        assert.equal(payload.links.find((link) => link.id === 'link_orphan').folderId, null);
     });
 
     it('ignores malformed sections so old packages leave links alone', () => {

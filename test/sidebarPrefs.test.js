@@ -6,12 +6,16 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+    LINKS_SIDEBAR_EXPANDED_KEY,
     LINKS_SIDEBAR_VIEW_KEY,
     LINKS_VIEW_LIST,
     LINKS_VIEW_TILES,
+    SIDEBAR_BACKUP_KEYS,
     normalizeLinksSidebarView,
+    readLinksSidebarExpanded,
     readLinksSidebarView,
     readSidebarPrefs,
+    writeLinksSidebarExpanded,
     writeLinksSidebarView
 } from '../js/sidebarPrefs.js';
 
@@ -68,5 +72,32 @@ describe('sidebarPrefs · Links view', () => {
         } finally {
             localStorage.getItem = original;
         }
+    });
+});
+
+describe('sidebarPrefs · expanded Links folders', () => {
+    beforeEach(() => {
+        memory.clear();
+    });
+
+    it('defaults to no expanded folders and sanitizes stored ids', () => {
+        assert.deepEqual(readLinksSidebarExpanded(), []);
+        localStorage.setItem(LINKS_SIDEBAR_EXPANDED_KEY, JSON.stringify(['folder_a', 'folder_a', '', 4, 'folder_b']));
+        assert.deepEqual(readLinksSidebarExpanded(), ['folder_a', 'folder_b']);
+    });
+
+    it('persists expansion locally and removes the key when empty', () => {
+        writeLinksSidebarExpanded(new Set(['folder_a', 'folder_b', 'folder_a']));
+        assert.deepEqual(JSON.parse(localStorage.getItem(LINKS_SIDEBAR_EXPANDED_KEY)), ['folder_a', 'folder_b']);
+        assert.equal(SIDEBAR_BACKUP_KEYS.includes(LINKS_SIDEBAR_EXPANDED_KEY), false);
+        writeLinksSidebarExpanded([]);
+        assert.equal(localStorage.getItem(LINKS_SIDEBAR_EXPANDED_KEY), null);
+    });
+
+    it('falls back safely when the stored value is malformed', () => {
+        localStorage.setItem(LINKS_SIDEBAR_EXPANDED_KEY, '{not json');
+        assert.deepEqual(readLinksSidebarExpanded(), []);
+        localStorage.setItem(LINKS_SIDEBAR_EXPANDED_KEY, '{"folder_a":true}');
+        assert.deepEqual(readLinksSidebarExpanded(), []);
     });
 });
