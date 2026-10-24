@@ -66,15 +66,11 @@ const STATE_SEAMS = new Set(['isDrawingMode', 'stateWorkspaceMode']);
 // per commit. Every entry here is a body the facade still owns - when a slice
 // moves, this list must shrink in the same commit, and Commit 3 empties it.
 const PENDING = new Set([
-    'checkAuthSession', 'logRepairDiagnostics', 'loadCategoriesStore', 'applyPendingCategoryAliases',
-    'syncDataStore', '_syncDataStoreInner', 'updateWorkspaceCounter', 'renderControlBar',
-    'renderQuickActions', 'renderQuickActionsHeaderIcons', 'updateFabVisibility', 'onMagicFocusEnter',
-    'applyDesktopDockAfterFocusEnter', 'applyDesktopDockAfterFocusLeave', 'onMagicFocusLeave', 'exitDrawingForFocus',
-    'switchWorkspaceMode', 'applyWorkspaceMode', 'enterNoteCanvasMode', 'enterFlowchartMode',
-    'exitNoteCanvasMode', 'executeDataBackupExport', 'executeFullBackupExport', 'executeExportAllTxt',
-    'setupBackupInterface', 'executeAddCategory', 'executeAddCategoryPrompt', 'executeLoginPrompt',
-    'executeLogout', 'migrateBoardOverlayFromFreeform', 'toggleBoardOverlay', 'toggleFileCabinet',
-    'updateViewToggleState', 'updateDesktopZoomVisibility', 'updateLayoutResetVisibility'
+    'renderControlBar', 'renderQuickActions', 'renderQuickActionsHeaderIcons', 'updateFabVisibility',
+    'onMagicFocusEnter', 'applyDesktopDockAfterFocusEnter', 'applyDesktopDockAfterFocusLeave', 'onMagicFocusLeave',
+    'exitDrawingForFocus', 'switchWorkspaceMode', 'applyWorkspaceMode', 'enterNoteCanvasMode',
+    'enterFlowchartMode', 'exitNoteCanvasMode', 'migrateBoardOverlayFromFreeform', 'toggleBoardOverlay',
+    'toggleFileCabinet', 'updateViewToggleState', 'updateDesktopZoomVisibility', 'updateLayoutResetVisibility'
 ]);
 
 const facadeSource = readFileSync(FACADE, 'utf8');
