@@ -110,8 +110,7 @@
 }
 
 .sidebar-links__folder-group:hover,
-.sidebar-links__folder-group:focus-within,
-.sidebar-links__folder-group.is-expanded {
+.sidebar-links__folder-group:focus-within {
     z-index: 30;
 }
 
@@ -200,20 +199,18 @@
     transform: rotate(180deg);
 }
 
-/* Tile-mode popover: hover/focus peeks, click pins it across rebuilds. */
+/* Tile-mode popover: hover/focus peeks; it sizes to a balanced link grid. */
 .sidebar-links__folder-drawer {
     position: absolute;
     top: calc(100% - 1px);
     left: var(--folder-drawer-left, 0);
     z-index: 30;
     display: none;
-    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    grid-template-columns: repeat(var(--folder-drawer-cols, 2), var(--folder-drawer-cell, 44px));
+    grid-auto-rows: max-content;
+    align-content: start;
     gap: 0.28rem;
-    width: var(--folder-drawer-width, 12rem);
-    max-width: min(15rem, calc(100vw - 1rem));
-    max-height: min(50vh, 20rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    width: max-content;
     padding: 0.28rem 0.3rem;
     border: 1px solid color-mix(in srgb, var(--text-main, #eee) 14%, transparent);
     border-top: 2px solid color-mix(in srgb, var(--accent, #3b82f6) 54%, transparent);
@@ -223,8 +220,7 @@
 }
 
 .sidebar-links__folder-group:hover .sidebar-links__folder-drawer,
-.sidebar-links__folder-group:focus-within .sidebar-links__folder-drawer,
-.sidebar-links__folder-group.is-expanded .sidebar-links__folder-drawer {
+.sidebar-links__folder-group:focus-within .sidebar-links__folder-drawer {
     display: grid;
 }
 
@@ -395,8 +391,9 @@
 
 .sidebar-links[data-links-view="list"] .sidebar-links__tile-text {
     flex: 1 1 auto;
-    align-items: stretch;
-    gap: 0.02rem;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.3rem;
 }
 
 .sidebar-links[data-links-view="list"] .sidebar-links__tile-actions {
@@ -408,17 +405,22 @@
 }
 
 .sidebar-links[data-links-view="list"] .sidebar-links__tile-title {
-    width: 100%;
+    flex: 0 1 auto;
+    width: auto;
+    min-width: 0;
     font-size: 0.55rem;
     text-align: left;
 }
 
 .sidebar-links[data-links-view="list"] .sidebar-links__tile-host {
     display: block;
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     color: var(--text-muted);
     font-size: 0.45rem;
     line-height: 1.15;
+    text-align: right;
     text-overflow: ellipsis;
     white-space: nowrap;
 }

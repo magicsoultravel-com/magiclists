@@ -59,18 +59,21 @@ function buildTileHtml(link, view) {
 }
 
 function buildFolderGroupHtml(folder, folderLinks, view) {
-    const expanded = expandedFolderIds.has(folder.id);
+    /* Expansion is a list-view accordion state. Tile folders open on hover only. */
+    const expanded = view === LINKS_VIEW_LIST && expandedFolderIds.has(folder.id);
     const count = folderLinks.length;
     const meta = `${count} link${count === 1 ? '' : 's'}`;
+    const expandedAttr = view === LINKS_VIEW_LIST
+        ? ` aria-expanded="${expanded ? 'true' : 'false'}"`
+        : '';
     const linksHtml = folderLinks.map((link) => buildTileHtml(link, view)).join('');
     /* List mode is a compact accordion row: chevron + name + count is enough. */
     const iconHtml = view === LINKS_VIEW_LIST
         ? ''
         : `<span class="sidebar-links__folder-icon" aria-hidden="true">${CARD_ICONS.folder}</span>`;
     return `<div class="sidebar-links__folder-group${expanded ? ' is-expanded' : ''}"
-        data-folder-id="${escapeAttr(folder.id)}">
-        <button type="button" class="sidebar-links__folder-tile" data-folder-toggle
-            aria-expanded="${expanded ? 'true' : 'false'}"
+        data-folder-id="${escapeAttr(folder.id)}" data-folder-count="${count}">
+        <button type="button" class="sidebar-links__folder-tile" data-folder-toggle${expandedAttr}
             title="${escapeAttr(`${folder.name} — ${meta}`)}"
             aria-label="${escapeAttr(`${folder.name}, ${meta}`)}">
             <span class="sidebar-links__folder-chevron" aria-hidden="true">${CARD_ICONS.chevronDown}</span>
@@ -85,8 +88,9 @@ function buildFolderGroupHtml(folder, folderLinks, view) {
 }
 
 /**
- * Tile popovers are absolute children of a small grid cell. Measure against the
- * list so folders near the right edge still open fully inside the sidebar.
+ * Tile popovers are absolute children of a small grid cell. Size each drawer
+ * from the folder's link count so it forms a balanced, content-sized grid, then
+ * shift it left when needed so it stays inside the sidebar list.
  * clientWidth/offsetWidth stay in layout pixels while getBoundingClientRect is
  * scaled by the sidebar zoom, hence the scale conversion.
  */
@@ -97,13 +101,35 @@ function positionFolderDrawer(group) {
     if (!listRect?.width || !groupRect) return;
     const scale = list.offsetWidth ? listRect.width / list.offsetWidth : 1;
     const listWidth = list.clientWidth || (listRect.width / (scale || 1));
-    const width = Math.min(240, listWidth - 8);
-    if (width <= 0) return;
+    const cell = (groupRect.width / (scale || 1)) || 44;
+    const count = Math.max(0, Number.parseInt(group.dataset?.folderCount, 10) || 0);
+
+    const drawer = group.querySelector?.('.sidebar-links__folder-drawer');
+    const styles = typeof globalThis.getComputedStyle === 'function' && drawer
+        ? globalThis.getComputedStyle(drawer)
+        : null;
+    const readPx = (value, fallback) => {
+        const parsed = Number.parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    const gap = readPx(styles?.columnGap, 4.5);
+    const chrome = readPx(styles?.paddingLeft, 4.8)
+        + readPx(styles?.paddingRight, 4.8)
+        + readPx(styles?.borderLeftWidth, 1)
+        + readPx(styles?.borderRightWidth, 1);
+
+    /* Near-square for small folders; extra rows once width runs out. */
+    const idealCols = count ? Math.ceil(Math.sqrt(count)) : 2;
+    const maxCols = Math.max(1, Math.floor((listWidth - 4 - chrome + gap) / (cell + gap)));
+    const cols = Math.min(idealCols, maxCols);
+    const drawerWidth = (cols * cell) + ((cols - 1) * gap) + chrome;
     const groupLeft = (groupRect.left - listRect.left) / (scale || 1);
-    const maxLeft = Math.max(0, listWidth - width - 4);
-    const left = Math.min(Math.max(groupLeft, 0), maxLeft);
+    const maxLeft = Math.max(0, listWidth - drawerWidth - 2);
+    const left = Math.round(Math.min(Math.max(groupLeft, 0), maxLeft) * 10) / 10;
+
+    group.style.setProperty('--folder-drawer-cols', `${cols}`);
+    group.style.setProperty('--folder-drawer-cell', `${Math.round(cell * 100) / 100}px`);
     group.style.setProperty('--folder-drawer-left', `${left}px`);
-    group.style.setProperty('--folder-drawer-width', `${width}px`);
 }
 
 function positionFolderDrawers() {
@@ -148,7 +174,9 @@ function bindEvents() {
         if (folderToggle) {
             e.preventDefault();
             const id = folderToggle.closest('[data-folder-id]')?.dataset.folderId;
-            toggleFolder(id);
+            if (readLinksSidebarView() === LINKS_VIEW_LIST) toggleFolder(id);
+            /* Tile folders open on hover; release focus so a click cannot pin. */
+            else folderToggle.blur?.();
             return;
         }
 

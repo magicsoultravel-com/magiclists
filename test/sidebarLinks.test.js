@@ -79,8 +79,7 @@ describe('sidebarLinks · folders', () => {
         makeRoot();
     });
 
-    it('renders folders before root links and preserves pinned expansion', () => {
-        localStorage.setItem('matrix_links_sidebar_expanded', JSON.stringify(['folder_work']));
+    it('renders folders before root links in one grid without pinning tile folders', () => {
         writeLinksPayload({
             version: 2,
             updatedAt: 1,
@@ -93,7 +92,10 @@ describe('sidebarLinks · folders', () => {
 
         SidebarLinks.init();
         assert.equal(root.dataset.linksEmpty, 'false');
-        assert.match(list.innerHTML, /sidebar-links__folder-group is-expanded/);
+        assert.match(list.innerHTML, /sidebar-links__folder-group/);
+        assert.equal(list.innerHTML.includes('is-expanded'), false);
+        assert.equal(list.innerHTML.includes('aria-expanded'), false);
+        assert.match(list.innerHTML, /data-folder-count="1"/);
         assert.match(list.innerHTML, /sidebar-links__folder-name">Work</);
         assert.match(list.innerHTML, /sidebar-links__folder-icon/);
         assert.match(list.innerHTML, /Inside/);
@@ -117,6 +119,7 @@ describe('sidebarLinks · folders', () => {
 
     it('renders list-mode folder rows without fetching thumbnails', () => {
         localStorage.setItem('matrix_links_sidebar_view', 'list');
+        localStorage.setItem('matrix_links_sidebar_expanded', JSON.stringify(['folder_work']));
         writeLinksPayload({
             version: 2,
             updatedAt: 1,
@@ -128,22 +131,24 @@ describe('sidebarLinks · folders', () => {
         });
 
         SidebarLinks.init();
-        assert.match(list.innerHTML, /sidebar-links__folder-group/);
+        assert.match(list.innerHTML, /sidebar-links__folder-group is-expanded/);
         assert.match(list.innerHTML, /sidebar-links__folder-name">Work</);
+        assert.match(list.innerHTML, /aria-expanded="true"/);
         assert.equal(list.innerHTML.includes('sidebar-links__folder-icon'), false);
         assert.equal(list.innerHTML.includes('class="link-thumb'), false);
     });
 
-    it('clamps the tile folder popover inside the sidebar width', () => {
+    it('sizes and clamps the tile folder popover inside the sidebar width', () => {
         writeLinksPayload({
             version: 2,
             updatedAt: 1,
             folders: [{ id: 'folder_work', name: 'Work' }],
-            links: [{ id: 'link_folder', url: 'https://example.com/folder', title: 'Inside', folderId: 'folder_work' }]
+            links: makeLinks(5, 'folder', 'folder_work')
         });
 
         const vars = {};
         const group = {
+            dataset: { folderCount: '5' },
             getBoundingClientRect: () => ({ left: 150, width: 44 }),
             style: {
                 setProperty(name, value) {
@@ -159,8 +164,9 @@ describe('sidebarLinks · folders', () => {
         );
 
         SidebarLinks.init();
-        assert.equal(vars['--folder-drawer-width'], '196px');
-        assert.equal(vars['--folder-drawer-left'], '4px');
+        assert.equal(vars['--folder-drawer-cols'], '3');
+        assert.equal(vars['--folder-drawer-cell'], '44px');
+        assert.equal(vars['--folder-drawer-left'], '49.4px');
     });
 
     it('caps only root links, never folder contents', () => {
