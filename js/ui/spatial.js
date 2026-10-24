@@ -1,11 +1,17 @@
 /** @module {"owns":"spatial card geometry and chrome - rect resolution, expansion tiers, collapse/expand commits, the resize and toggle wiring, and the per-card update path; talks to storage through the facade and to the board lookup through boardState","related":["ui.js","ui/gridPack.js","ui/render.js","ui/boardState.js"]} */
 import {
+    ensureDesktopBoardPane as ensureDesktopBoardPaneCore,
+    getDesktopBoardPane as getDesktopBoardPaneCore,
+    getGridBoardBounds as getGridBoardBoundsCore,
     getGridViewportBounds,
+    getLiveBoardBounds as getLiveBoardBoundsCore,
     scheduleBoardCanvasExtents as scheduleBoardCanvasExtentsCore,
-    updateBoardCanvasExtents as updateBoardCanvasExtentsCore
+    updateBoardCanvasExtents as updateBoardCanvasExtentsCore,
+    updateDesktopScrollPolicy as updateDesktopScrollPolicyCore
 } from '../board/boardExtents.js';
 import {
     applyGridBoardLayout as applyGridBoardLayoutCore,
+    clearSnapPanelPreview as clearSnapPanelPreviewCore,
     computeGridBoardLayout as computeGridBoardLayoutCore,
     reflowGridBoard as reflowGridBoardCore
 } from '../board/gridEngine.js';
@@ -25,7 +31,13 @@ import { getCardRenderContext, readStoredCategories } from '../categories.js';
 import { mountFloatChrome } from '../desktopFloatChrome.js';
 import { DesktopManager, isDesktopCard } from '../desktopManager.js';
 import { raiseDesktopElement, syncDesktopStackSeq } from '../desktopStack.js';
-import { getFileCabinetToggleLabels, isFileCabinetActive, removeFromFileCabinetOrder } from '../fileCabinet.js';
+import {
+    applyFileCabinetZoneToggle as applyFileCabinetZoneToggleCore,
+    getFileCabinetToggleLabels,
+    isFileCabinetActive,
+    removeFromFileCabinetOrder,
+    saveFiledCabinetLayout as saveFiledCabinetLayoutCore
+} from '../fileCabinet.js';
 import { cellsToSpanH as gridCellsToSpanH, cellsToSpanW as gridCellsToSpanW, getGridMetrics } from '../gridDensity.js';
 import { CARD_ICONS } from '../icons.js';
 import { NoteSurface } from '../noteSurface.js';
@@ -353,7 +365,7 @@ export function applyTileZoneToggle(ui, card, item, ctx = {}) {
 }
 
 export function applyFileCabinetZoneToggle(ui, card, item, ctx = {}) {
-    applyFileCabinetZoneToggle(card, item, ctx, ui);
+    applyFileCabinetZoneToggleCore(card, item, ctx, ui);
 }
 
 export function reapplySmallFootprintOnBoard(ui) {
@@ -878,7 +890,7 @@ export function saveGridLayout(ui, itemId, rect, { updateRemembered = false } = 
 }
 
 export function saveFiledCabinetLayout(ui, itemId, rect, sortBy) {
-    saveFiledCabinetLayout(itemId, rect, sortBy);
+    saveFiledCabinetLayoutCore(itemId, rect, sortBy);
 }
 
 export function saveCompactBoardLayout(ui, itemId, slot, _sortBy) {
@@ -946,19 +958,19 @@ export function toggleGridPin(ui, itemId) {
 }
 
 export function getGridBoardBounds(ui, canvas) {
-    return getGridBoardBounds(canvas);
+    return getGridBoardBoundsCore(canvas);
 }
 
 export function getLiveBoardBounds(ui, canvas) {
-    return getLiveBoardBounds(canvas);
+    return getLiveBoardBoundsCore(canvas);
 }
 
 export function getDesktopBoardPane(ui, canvas) {
-    return getDesktopBoardPane(canvas);
+    return getDesktopBoardPaneCore(canvas);
 }
 
 export function ensureDesktopBoardPane(ui, canvas) {
-    return ensureDesktopBoardPane(canvas);
+    return ensureDesktopBoardPaneCore(canvas);
 }
 
 export function scheduleBoardCanvasExtents(ui, canvas) {
@@ -972,7 +984,7 @@ export function updateBoardCanvasExtents(ui, canvas) {
 }
 
 export function updateDesktopScrollPolicy(ui, canvas) {
-    updateDesktopScrollPolicy(canvas);
+    updateDesktopScrollPolicyCore(canvas);
 }
 
 export function applyDesktopSize(ui, card) {
@@ -1037,7 +1049,7 @@ export function computeGridBoardLayout(ui, canvas, actorId, actorRect = null) {
 }
 
 export function clearSnapPanelPreview(ui, panelEl) {
-    clearSnapPanelPreview(panelEl);
+    clearSnapPanelPreviewCore(panelEl);
 }
 
 export function applyGridBoardLayout(ui, canvas, layout, opts = {}) {
@@ -1045,7 +1057,7 @@ export function applyGridBoardLayout(ui, canvas, layout, opts = {}) {
 }
 
 export function clearGridLayoutPreview(ui, canvas) {
-    clearSnapPanelPreview(canvas);
+    clearSnapPanelPreviewCore(canvas);
 }
 
 export function findDesktopCenterSlot(ui, w, h, canvas, viewMode, { excludeId = null } = {}) {

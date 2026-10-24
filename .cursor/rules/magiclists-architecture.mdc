@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T20:37:45.387Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T20:46:09.643Z
 
 ## CSS load order
 
@@ -210,6 +210,7 @@ alwaysApply: true
 | js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js, sidebarModules.js | — | — |
 | js/sync.js | cross-tab state sync — BroadcastChannel primary, storage-event insurance | app.js, api.js, layoutStorage.js, displayOptions.js, appTheme.js, popoutNote.js | — | — |
 | js/toolPanelPopout.js | tool panel popout open/focus/pop-in, DOM portal | toolPanelChrome.js, toolsManager.js, popoutWindows.js, appDocuments.js | — | — |
+| js/ui.js | the board facade - the one handle six modules import; hold the shared state seam and one-line delegates into ui/* | ui/boardState.js, ui/gridPack.js, ui/spatial.js, ui/render.js | — | — |
 | js/ui/boardState.js | the two pieces of board state the ui sessions read - the id->item lookup that render fills and the mutations update, plus the view mode the spatial layer falls back to; accessors only, so no session reaches into another session's closure | ui.js, ui/spatial.js, ui/render.js | — | — |
 | js/ui/gridPack.js | the grid packer - expansion classification, item sizing, the deterministic zero-gap rect solver behind sort/reset, and the spatial sort both the packer and the legacy migration use; no DOM writes, no state | ui.js, ui/spatial.js, ui/render.js | — | — |
 | js/ui/render.js | the board render pass - canvas prep, view state, item partitioning, layout and card creation, plus the post-render finalize; the only ui module that paints | ui.js, ui/spatial.js, ui/gridPack.js | — | — |

@@ -9,10 +9,15 @@
 // out, which made it look like the facade still owned rendering and image
 // painting. Reading the imports was actively misleading.
 //
-// Scope is deliberately the magicCanvas / drawing-board family — the files the
-// session split touches. The rest of the tree still carries stale names of its
-// own (js/noteSurface.js is the worst); widen this list as those files are
-// touched, do not sweep them in one commit.
+// The same thing happened again on the board facade: after gridPack, boardState,
+// spatial and render moved out, js/ui.js still imported 120 names it no longer
+// touched - the whole tile geometry set, the cabinet renderer, the grid engine
+// adapters - so the facade looked like it still owned the board.
+//
+// Scope is deliberately the families a session split has touched so far: the
+// magicCanvas / drawing-board one and the board facade one. The rest of the tree
+// still carries stale names of its own (js/noteSurface.js is the worst); widen
+// this list as those files are touched, do not sweep them in one commit.
 //
 // Run with: npm test  (node --test)
 import { describe, it } from 'node:test';
@@ -28,11 +33,14 @@ const { parse } = require('acorn');
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const JS_DIR = path.join(ROOT, 'js');
 
-/** The family covered by the magicCanvas session-module split. */
-const SCOPE_DIRS = ['drawingBoard'];
+/** Families covered by the session-module splits so far. */
+const SCOPE_DIRS = ['drawingBoard', 'ui'];
 const SCOPE_PREFIXES = ['drawingBoard', 'canvas', 'noteCanvas', 'flowchart'];
+/** Single files a split touched without owning a directory. */
+const SCOPE_FILES = ['ui.js'];
 
 function inScope(rel) {
+    if (SCOPE_FILES.includes(rel)) return true;
     if (SCOPE_DIRS.some((dir) => rel.startsWith(`${dir}/`))) return true;
     return SCOPE_PREFIXES.some((prefix) => rel.startsWith(prefix) && rel.endsWith('.js'));
 }
@@ -110,7 +118,12 @@ describe('drawing-board family · import hygiene', () => {
             'drawingBoard/input.js',
             'drawingBoard/view.js',
             'drawingBoard/document.js',
-            'drawingBoard/lifecycle.js'
+            'drawingBoard/lifecycle.js',
+            'ui.js',
+            'ui/boardState.js',
+            'ui/gridPack.js',
+            'ui/spatial.js',
+            'ui/render.js'
         ]) {
             assert.ok(covered.includes(expected), `${expected} should be in the guarded set`);
         }

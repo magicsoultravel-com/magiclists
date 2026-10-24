@@ -322,3 +322,76 @@ The lazy imports needed the same depth fix as `paneMarkup.js` and `panes.js`
 that need no browser: only the pointer gestures (drag, splitter drag) and anything
 that requires a real `<template>` stay browser-only.
 
+
+#### The board facade: 121 methods, six importers, no browser
+
+`js/ui.js` was the last monolithic facade — 1894 lines, one object literal of 121
+methods, and six modules importing `UI` (`dragdrop`, `app`, `hamburger`,
+`editor`, `desktopCardManager`, `noteQuickActions`). Unlike `MagicFocus` it had no
+helper layer to start from: all 1533 body lines were methods, and nothing could be
+called without a mounted board.
+
+| module | owns | lines |
+| --- | --- | --- |
+| `ui/boardState.js` | the two module-level bindings: the id → item lookup `render()` refills and the view mode the spatial layer falls back to | 37 |
+| `ui/gridPack.js` | expansion classification, item sizing, the zero-gap rect solver behind sort/reset, the spatial sort helper | 409 |
+| `ui/spatial.js` | rect resolution, collapse/expand tiers, resize and toggle wiring, freeform/grid storage, pins, canvas extents, mode switch | 1198 |
+| `ui/render.js` | canvas prep, view state, item partition, layout and card creation, post-render finalize | 218 |
+| `js/ui.js` | the state seam plus one-line delegates into the four | 240 |
+
+The split added 138 tests in six suites (`uiFacade`, `uiBoardState`, `uiGridPack`,
+`uiSpatialGeometry`, `uiSpatialStorage`, `uiRender`), no browser required: the
+sessions take the receiver as their first argument (`Spatial.commitSpatialRect(ui,
+…)`), so `ui` can be a double. `uiFacade` freezes the surface — export list, the
+121 method names and every `Function.length` — and asserts the structural rules
+that keep the facade thin (one-statement delegates, no module-level state, no
+session importing the facade).
+
+What was worth knowing before starting:
+
+- **A method can shadow the state it reads.** `getViewState()` declared
+  `const activeBoardViewMode = 'grid'` *inside* the method, shadowing the module
+  binding of the same name. It had to move verbatim; "cleaning it up" would have
+  changed what the function returns.
+- **A property that never existed.** `fileCabinet.js` and
+  `fileCabinet/transfer.js` read `UI.activeBoardViewMode`. `UI` never had that
+  property — the reads were always `undefined` and the callers fell back. Adding
+  it would have switched on a code path that has never run.
+- **One duplicate, two owners.** `prepareBoardItems` existed byte-for-byte in
+  both `fileCabinet.js` and `ui.js`, and `ui.js` imported the cabinet copy without
+  ever calling it. The facade's version is gone; `ui/render.js` wraps the cabinet
+  implementation (its fifth positional argument is the UI object, ours is the
+  receiver first), so there is one body again.
+- **A predicate with six new callers.** `isDesktopCard` was a 4-line export of
+  `ui.js` that six of the extracted spatial methods call by name. Importing it back
+  from the facade would have made `spatial.js` part of a load-order cycle, so it
+  moved to `desktopManager.js` (the state it reads) and `ui.js` re-exports it — same
+  identity, same surface.
+- **Indentation is not a boundary.** Two methods sat at column 0 inside the object
+  literal, and every parameter list with destructuring defaults spans several
+  lines. Moving by indent regex drops them silently; the slices were generated from
+  acorn spans instead, and each one was proven with an AST comparison of the old
+  method body against the new function (only `this` → `ui` may differ).
+- **`\bthis\b` is not `this`.** One method body contains the word "this" in a
+  comment ("…owns this note…"). Rewriting ThisExpression nodes by offset keeps the
+  comment; a word-boundary regex turns it into "owns ui note".
+- **A moved wrapper can shadow its own import.** `getGridBoardBounds(canvas) {
+  return getGridBoardBounds(canvas); }` was fine inside the object literal: bare
+  names resolve to the *imported* boardExtents function, not to the method key
+  (keys are not bindings). In a module where the wrapper is itself named
+  `getGridBoardBounds`, the same line recurses forever. Eight forwarders landed
+  that way and every guard passed — `freeIdentifierScan` sees a resolved
+  identifier, the AST body comparison sees identical text, and the suites call
+  `ui.getGridBoardBounds` on a double rather than the wrapper. Aliasing the import
+  (`getGridBoardBounds as getGridBoardBoundsCore`) fixed it; `uiFacade` now asserts
+  that a session never declares a function under the name of something it imports,
+  and that no extracted wrapper calls itself. The catch came from a scripted
+  end-to-end smoke (`UI.render` → `UI.sortBoardLayout` → `UI.resetBoardLayout` on a
+  DOM double), not from a unit test.
+- **State that is replaced, not mutated.** `render()` clears the item map and then
+  assigns a *new* `Map`, so `boardState.js` needs `replaceBoardItemsMap`, not only
+  `set`/`delete` on a captured reference.
+
+`test/noUnusedImports.test.js` now guards `js/ui.js` and `js/ui/*`: after the last
+slice the facade had no business importing 120 of the names it started with, and a
+stale import list is what makes a thin facade look like it still owns the board.

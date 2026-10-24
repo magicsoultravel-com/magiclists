@@ -1,5 +1,5 @@
 /** @module {"owns":"the grid packer - expansion classification, item sizing, the deterministic zero-gap rect solver behind sort/reset, and the spatial sort both the packer and the legacy migration use; no DOM writes, no state","related":["ui.js","ui/spatial.js","ui/render.js"]} */
-import { getLiveBoardBounds } from '../board/boardExtents.js';
+
 import { GRID_LAYOUT_KEY, GRID_PINS_KEY } from '../board/layoutKeys.js';
 import {
     findFirstCanvasSlot as findFirstCanvasSlotCore,

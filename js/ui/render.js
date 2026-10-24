@@ -1,5 +1,5 @@
 /** @module {"owns":"the board render pass - canvas prep, view state, item partitioning, layout and card creation, plus the post-render finalize; the only ui module that paints","related":["ui.js","ui/spatial.js","ui/gridPack.js"]} */
-import { DESKTOP_BOARD_PANE_CLASS, getGridBoardBounds } from '../board/boardExtents.js';
+import { DESKTOP_BOARD_PANE_CLASS } from '../board/boardExtents.js';
 import { computeBoardLayout } from '../board/gridEngine.js';
 import { findFirstCanvasSlot as findFirstCanvasSlotCore } from '../board/noteGeometry.js';
 import { BoardOperations } from '../boardOperations.js';
