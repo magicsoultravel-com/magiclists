@@ -346,7 +346,16 @@ export function addToFileCabinetOrder(category, itemId) {
     if (!itemId) return;
     const cat = category || 'Uncategorized';
     const order = getFileCabinetOrder();
-    removeFromFileCabinetOrder(itemId);
+    // Drop the id from the other drawers on this same snapshot. Calling
+    // removeFromFileCabinetOrder() here instead would work on a second snapshot
+    // whose save is then overwritten by this one, leaving the note listed in
+    // both the old and the new drawer. The target drawer is left alone so
+    // re-filing into the same drawer keeps the note's position.
+    Object.keys(order).forEach((name) => {
+        if (name === cat || !Array.isArray(order[name]) || !order[name].includes(itemId)) return;
+        order[name] = order[name].filter((id) => id !== itemId);
+        if (order[name].length === 0) delete order[name];
+    });
     if (!order[cat]) order[cat] = [];
     if (!order[cat].includes(itemId)) order[cat].push(itemId);
     saveFileCabinetOrder(order);
