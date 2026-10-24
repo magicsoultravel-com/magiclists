@@ -5,6 +5,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import * as acorn from 'acorn';
 
 const spec = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+// The instance parameter mirrors the singleton name the facade is declared with,
+// so it can never collide with a local `const focus = normalizeFocus(...)`.
+const INSTANCE = spec.param || 'magicFocus';
 const facadePath = spec.facade || 'js/magicFocus.js';
 const src = readFileSync(facadePath, 'utf8');
 const ast = acorn.parse(src, { ecmaVersion: 'latest', sourceType: 'module', locations: true });
@@ -27,13 +30,13 @@ function paramsOf(fnNode) {
     if (params.length === 1 && params[0].type === 'AssignmentPattern'
         && params[0].left.type === 'ObjectPattern') {
         // `{ a = 1 } = {}` -> keep the default, name the binding
-        const right = srcLines.slice(span(params[0].right).start, span(params[0].right).end + 1).join('\n');
+        const right = src.slice(params[0].right.start, params[0].right.end);
         return { decl: `opts = ${right}`, args: 'opts' };
     }
     if (params.length === 1 && params[0].type === 'ObjectPattern') {
         return { decl: 'opts', args: 'opts' };
     }
-    const decl = srcLines.slice(span(params[0]).start, span(params[params.length - 1]).end + 1).join('\n');
+    const decl = src.slice(params[0].start, params[params.length - 1].end);
     const args = params.map((p) => (p.type === 'AssignmentPattern' || p.type === 'RestElement'
         ? src.slice(p.start, p.end).replace(/\s*=[\s\S]*$/, '')
         : p.type === 'Identifier' ? p.name : src.slice(p.start, p.end))).join(', ');
@@ -78,9 +81,9 @@ for (const name of spec.methods || []) {
     const bodyEnd = prop.value.body.loc.end.line - 1;
     const body = srcLines.slice(bodyStart + 1, bodyEnd).map((l) => {
         const deindented = l.startsWith('    ') ? l.slice(4) : l;
-        return deindented.replace(/\bthis\b/g, 'focus');
+        return deindented.replace(/\bthis\b/g, INSTANCE);
     });
-    const head = `export ${isAsync ? 'async ' : ''}function ${name}(${decl ? `focus, ${decl}` : 'focus'}) {`;
+    const head = `export ${isAsync ? 'async ' : ''}function ${name}(${decl ? `${INSTANCE}, ${decl}` : INSTANCE}) {`;
     out.push(head, ...body, '}', '');
     const sig = `(${decl})`;
     const callArgs = args ? `, ${args}` : '';

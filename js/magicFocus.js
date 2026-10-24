@@ -4,7 +4,7 @@ import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { buildNoteQuickActionsHtml, buildNoteTitleHtml, buildNoteContentFieldHtml } from './noteSurfaceHtml.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
 import { NoteSurface, clearDesktopAutoSaveTimer, flushDesktopAutoSave } from './noteSurface.js';
-import { escapeAttr, escapeHTML } from './domEscape.js';
+import { escapeAttr } from './domEscape.js';
 import { createEmptyNoteCanvas } from './noteModel.js';
 import { focusInlineEdit } from './noteSurfaceEditing.js';
 import { applyCardTheme } from './cardTheme.js';
@@ -16,36 +16,10 @@ import {
     setChromeVisible,
     UI_TRANSITION_MS
 } from './uiTransitions.js';
-import {
-    BLOCKS,
-    PRESET_META,
-    BLOCK_ICONS,
-    PRESET_ZONE_COUNTS,
-    FOCUS_ZOOM_MIN,
-    FOCUS_ZOOM_MAX,
-    FOCUS_ZOOM_STEP,
-    FOCUS_ZOOM_DEFAULT,
-    clampFocusZoom,
-    emptyZoom,
-    defaultRatios,
-    asBlockList,
-    allPlacedBlocks,
-    removeBlockFromZones,
-    createDefaultFocus,
-    normalizeFocus,
-    focusIsConfigured,
-    blockLabel
-} from './magicFocus/model.js';
+import { PRESET_ZONE_COUNTS, FOCUS_ZOOM_MIN, FOCUS_ZOOM_MAX, FOCUS_ZOOM_STEP, FOCUS_ZOOM_DEFAULT, clampFocusZoom, defaultRatios, asBlockList, createDefaultFocus, normalizeFocus, focusIsConfigured } from './magicFocus/model.js';
 import { layoutForFocus } from './magicFocus/layout.js';
-import {
-    buildChecklistPaneHtml,
-    buildTablePaneHtml,
-    buildChartPaneHtml,
-    buildKanbanPaneHtml,
-    buildWbsPaneHtml,
-    buildMediaPaneHtml,
-    presetGlyphHtml
-} from './magicFocus/paneMarkup.js';
+import { buildChecklistPaneHtml, buildTablePaneHtml, buildChartPaneHtml, buildKanbanPaneHtml, buildWbsPaneHtml, buildMediaPaneHtml } from './magicFocus/paneMarkup.js';
+import * as SetupSession from './magicFocus/setup.js';
 export { createDefaultFocus, normalizeFocus, focusIsConfigured };
 
 const MORPH_CLASS = 'ui-morph-hidden';
@@ -555,250 +529,17 @@ export const MagicFocus = {
         });
     },
 
-    renderSetup(item) {
-        if (!this.bodyEl) return;
-        if (this.setupStep === 'assign' && this.setupDraft) {
-            this._renderAssignStep(item);
-        } else {
-            this._renderLayoutStep(item);
-        }
-    },
+    renderSetup(item) { return SetupSession.renderSetup(this, item); },
 
-    _renderLayoutStep(item) {
-        const selected = this.setupDraft?.preset || null;
-        const presetsHtml = PRESET_META.map((p) => `
-            <button type="button" class="magic-focus__preset${p.id === selected ? ' is-active' : ''}" data-focus-preset="${p.id}" title="${escapeAttr(p.label)}" aria-label="${escapeAttr(p.label)}">
-                ${presetGlyphHtml(p.id)}
-            </button>
-        `).join('');
+    _renderLayoutStep(item) { return SetupSession._renderLayoutStep(this, item); },
 
-        this.bodyEl.innerHTML = `
-            <div class="magic-focus__setup magic-focus__setup--layout">
-                <div class="magic-focus__setup-hero">
-                    <h2 class="magic-focus__setup-heading">Layout</h2>
-                </div>
-                <div class="magic-focus__presets" role="listbox" aria-label="Layout">${presetsHtml}</div>
-                <div class="magic-focus__setup-actions">
-                    <button type="button" class="btn btn--compact" data-focus-setup-reset>Reset</button>
-                    <button type="button" class="btn btn--compact" data-focus-setup-cancel>Cancel</button>
-                </div>
-            </div>
-        `;
-        this._bindLayoutStepEvents(item);
-    },
+    _renderAssignStep(item) { return SetupSession._renderAssignStep(this, item); },
 
-    _renderAssignStep(item) {
-        const draft = this.setupDraft;
-        if (!draft) {
-            this.setupStep = 'layout';
-            this._renderLayoutStep(item);
-            return;
-        }
-        const count = PRESET_ZONE_COUNTS[draft.preset] || 2;
-        const placed = allPlacedBlocks(draft.zones);
-        const layout = layoutForFocus(draft);
+    _resetFocusConfig(item) { return SetupSession._resetFocusConfig(this, item); },
 
-        const paletteHtml = BLOCKS.map((b) => `
-            <div class="magic-focus__tile${placed.has(b.id) ? ' is-placed' : ''}"
-                 draggable="${placed.has(b.id) ? 'false' : 'true'}"
-                 data-focus-tile="${b.id}"
-                 title="${escapeAttr(b.label)}">
-                <span class="magic-focus__tile-icon" aria-hidden="true">${BLOCK_ICONS[b.id] || ''}</span>
-                <span class="magic-focus__tile-label">${escapeHTML(b.label)}</span>
-            </div>
-        `).join('');
+    _bindLayoutStepEvents(item) { return SetupSession._bindLayoutStepEvents(this, item); },
 
-        const zoneSlots = [];
-        for (let i = 0; i < count; i += 1) {
-            const zid = `z${i}`;
-            const blocks = asBlockList(draft.zones[zid]);
-            const tiles = blocks.map((block) => `
-                <div class="magic-focus__tile magic-focus__tile--in-zone" draggable="true" data-focus-tile="${block}" data-from-zone="${zid}">
-                    <span class="magic-focus__tile-icon" aria-hidden="true">${BLOCK_ICONS[block] || ''}</span>
-                    <span class="magic-focus__tile-label">${escapeHTML(blockLabel(block))}</span>
-                </div>
-            `).join('');
-            zoneSlots.push(`
-                <div class="magic-focus__zone-slot${blocks.length ? ' has-block' : ''}" data-focus-zone="${zid}" style="grid-area:${zid}">
-                    ${blocks.length
-                        ? tiles
-                        : `<span class="magic-focus__zone-placeholder">${escapeHTML(String.fromCharCode(65 + i))}</span>`}
-                </div>
-            `);
-        }
-
-        this.bodyEl.innerHTML = `
-            <div class="magic-focus__setup magic-focus__setup--assign">
-                <div class="magic-focus__assign-chrome">
-                    <div class="magic-focus__palette magic-focus__palette--row" data-focus-palette aria-label="Blocks">
-                        ${paletteHtml}
-                    </div>
-                    <div class="magic-focus__assign-tools">
-                        <button type="button" class="btn btn--compact magic-focus__change-layout" data-focus-change-layout title="Change layout" aria-label="Change layout">
-                            ${presetGlyphHtml(draft.preset)}
-                        </button>
-                        <button type="button" class="btn btn--compact" data-focus-setup-reset>Reset</button>
-                        <button type="button" class="btn btn--compact" data-focus-setup-back>Back</button>
-                        <button type="button" class="btn btn--compact" data-focus-setup-cancel>Cancel</button>
-                        <button type="button" class="btn btn--compact magic-focus__btn-apply" data-focus-setup-apply>Apply</button>
-                    </div>
-                </div>
-                <div class="magic-focus__layout-preview" data-focus-zones>
-                    ${zoneSlots.join('')}
-                </div>
-            </div>
-        `;
-        const preview = this.bodyEl.querySelector('[data-focus-zones]');
-        if (preview) {
-            preview.style.gridTemplateColumns = layout.columns;
-            preview.style.gridTemplateRows = layout.rows;
-            preview.style.gridTemplateAreas = layout.areas;
-        }
-        this._bindAssignStepEvents(item);
-    },
-
-    _resetFocusConfig(item) {
-        NoteSurface.mutateItem(item, (it) => {
-            it.focus = null;
-        }, { preserveView: true, skipRerender: true });
-        this.setupDraft = null;
-        this.setupStep = 'layout';
-        this.renderSetup(this.resolveItem() || item);
-    },
-
-    _bindLayoutStepEvents(item) {
-        const root = this.bodyEl;
-        root.querySelectorAll('[data-focus-preset]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const preset = btn.getAttribute('data-focus-preset');
-                const prevZones = this.setupDraft?.zones || {};
-                const prevZoom = this.setupDraft?.zoom || item?.focus?.zoom;
-                const next = createDefaultFocus(preset);
-                next.zoom = emptyZoom(PRESET_ZONE_COUNTS[preset], prevZoom);
-                const seen = new Set();
-                for (let i = 0; i < PRESET_ZONE_COUNTS[preset]; i += 1) {
-                    const key = `z${i}`;
-                    asBlockList(prevZones[key]).forEach((id) => {
-                        if (seen.has(id)) return;
-                        next.zones[key].push(id);
-                        seen.add(id);
-                    });
-                }
-                this.setupDraft = next;
-                this.setupStep = 'assign';
-                this.renderSetup(item);
-            });
-        });
-
-        root.querySelector('[data-focus-setup-reset]')?.addEventListener('click', () => {
-            this._resetFocusConfig(item);
-        });
-
-        root.querySelector('[data-focus-setup-cancel]')?.addEventListener('click', async () => {
-            if (focusIsConfigured(item.focus)) {
-                this.showingSetup = false;
-                await this.renderWork(item);
-            } else {
-                await this.close();
-            }
-        });
-    },
-
-    _bindAssignStepEvents(item) {
-        const root = this.bodyEl;
-
-        root.querySelector('[data-focus-change-layout]')?.addEventListener('click', () => {
-            this.setupStep = 'layout';
-            this.renderSetup(item);
-        });
-        root.querySelector('[data-focus-setup-back]')?.addEventListener('click', () => {
-            this.setupStep = 'layout';
-            this.renderSetup(item);
-        });
-        root.querySelector('[data-focus-setup-reset]')?.addEventListener('click', () => {
-            this._resetFocusConfig(item);
-        });
-
-        let dragTile = null;
-
-        root.querySelectorAll('[data-focus-tile]').forEach((tile) => {
-            tile.addEventListener('dragstart', (e) => {
-                if (tile.classList.contains('is-placed')) {
-                    e.preventDefault();
-                    return;
-                }
-                dragTile = tile.getAttribute('data-focus-tile');
-                tile.classList.add('is-dragging');
-                e.dataTransfer?.setData('text/plain', dragTile);
-                e.dataTransfer.effectAllowed = 'move';
-            });
-            tile.addEventListener('dragend', () => {
-                tile.classList.remove('is-dragging');
-                dragTile = null;
-            });
-        });
-
-        const assignToZone = (zoneId, blockId) => {
-            if (!this.setupDraft || !blockId) return;
-            removeBlockFromZones(this.setupDraft.zones, blockId);
-            const list = asBlockList(this.setupDraft.zones[zoneId]);
-            list.push(blockId);
-            this.setupDraft.zones[zoneId] = list;
-            this.renderSetup(item);
-        };
-
-        root.querySelectorAll('[data-focus-zone]').forEach((slot) => {
-            slot.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                slot.classList.add('is-dragover');
-            });
-            slot.addEventListener('dragleave', () => slot.classList.remove('is-dragover'));
-            slot.addEventListener('drop', (e) => {
-                e.preventDefault();
-                slot.classList.remove('is-dragover');
-                const blockId = dragTile || e.dataTransfer?.getData('text/plain');
-                assignToZone(slot.getAttribute('data-focus-zone'), blockId);
-            });
-            slot.addEventListener('dblclick', (e) => {
-                // Double-click a tile to remove it; empty zone click clears nothing useful
-                const tile = e.target.closest?.('[data-focus-tile][data-from-zone]');
-                if (tile && this.setupDraft) {
-                    removeBlockFromZones(this.setupDraft.zones, tile.getAttribute('data-focus-tile'));
-                    this.renderSetup(item);
-                }
-            });
-        });
-
-        const palette = root.querySelector('[data-focus-palette]');
-        palette?.addEventListener('dragover', (e) => e.preventDefault());
-        palette?.addEventListener('drop', (e) => {
-            e.preventDefault();
-            const blockId = dragTile || e.dataTransfer?.getData('text/plain');
-            if (!blockId || !this.setupDraft) return;
-            removeBlockFromZones(this.setupDraft.zones, blockId);
-            this.renderSetup(item);
-        });
-
-        root.querySelector('[data-focus-setup-cancel]')?.addEventListener('click', async () => {
-            if (focusIsConfigured(item.focus)) {
-                this.showingSetup = false;
-                await this.renderWork(item);
-            } else {
-                await this.close();
-            }
-        });
-
-        root.querySelector('[data-focus-setup-apply]')?.addEventListener('click', async () => {
-            const draft = normalizeFocus(this.setupDraft);
-            NoteSurface.mutateItem(item, (it) => {
-                it.focus = draft;
-            }, { preserveView: true, skipRerender: true });
-            this.showingSetup = false;
-            this.setupDraft = null;
-            this.setupStep = 'layout';
-            await this.renderWork(this.resolveItem() || item);
-        });
-    },
+    _bindAssignStepEvents(item) { return SetupSession._bindAssignStepEvents(this, item); },
 
     async renderWork(item) {
         if (!this.bodyEl || !item) return;
