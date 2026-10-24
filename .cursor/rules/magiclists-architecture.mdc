@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T18:46:08.482Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T18:48:27.380Z
 
 ## CSS load order
 
@@ -94,6 +94,7 @@ alwaysApply: true
 | js/fileCabinet/chrome.js | file cabinet chrome state - active/shut flags, persisted drawer height, the mount element and the drawer-height sync that reads them | fileCabinet.js, fileCabinet/layout.js, shellResize.js | — | — |
 | js/fileCabinet/layout.js | file cabinet drawer metrics - cascade geometry, drawer height, UI scale and the stack positioner every rail layer reuses | fileCabinet.js, fileCabinet/chrome.js, fileCabinet/render.js, fileCabinet/drag.js, tileGeometry.js | — | — |
 | js/fileCabinet/order.js | file cabinet drawer ordering and filing decisions - which note sits in which drawer, at which position, and when a note counts as filed | fileCabinet.js, tileGeometry.js, boardSort.js, notePackage.js | — | — |
+| js/fileCabinet/transfer.js | file cabinet item transfers - filing a board note into a drawer, expanding a drawer note back onto the board, and moving a note between categories | fileCabinet.js, fileCabinet/order.js, noteSurface.js, uiTransitions.js | — | — |
 | js/flowchart.js | flowchart note subsection model — per-note diagram doc, grid/snap prefs, attached labels, connectors | canvasDocument.js, noteModel.js, api.js, flowchartGeometry.js, flowchartUi.js | — | — |
 | js/flowchartGeometry.js | flowchart geometry — shape ports, connector routing, hit-test, reroute | flowchart.js, lassoGeometry.js, canvasBrushes.js | — | — |
 | js/hamburger.js | side panel shell, notes list, category summary, sort | searchBar.js, ui.js, sidebarHistory.js, sidebarStats.js, categoriesOverlay.js | categories:manage_requested, category:order_changed | — |
