@@ -389,3 +389,68 @@ describe('file cabinet order · sorting', () => {
         assert.equal(storage.writeCount(ORDER_KEY), writesBefore);
     });
 });
+
+// The ordering layer lives in js/fileCabinet/order.js and js/fileCabinet.js
+// re-exports it. Callers import from the facade, so the re-export has to stay
+// *identical* — a wrapper would silently drop the function identity that
+// ui.js/dragdrop.js/layoutStorage.js rely on, and re-exporting the module's
+// private helpers would widen an API that used to be internal.
+describe('file cabinet order · module boundary', () => {
+    const PUBLIC = [
+        'getFileCabinetOrder', 'saveFileCabinetOrder', 'removeFromFileCabinetOrder',
+        'addToFileCabinetOrder', 'reorderInCategory', 'getFileCabinetFiledCategories',
+        'saveFileCabinetFiledCategories', 'isFileCabinetEmptyShelvesCollapsed',
+        'setFileCabinetEmptyShelvesCollapsed', 'toggleFileCabinetEmptyShelvesCollapsed',
+        'isFileCabinetCategoryFiled', 'toggleFileCabinetCategoryFiled',
+        'getFileCabinetCategoryOrder', 'saveFileCabinetCategoryOrder',
+        'appendFileCabinetCategoryOrder', 'removeCategoryFromFileCabinetLayout',
+        'applyFileCabinetCategoryOrder', 'persistFileCabinetCategoryOrderFromDom',
+        'getStoredItemSize', 'isItemInFileCabinetOrder', 'pruneFileCabinetOrderByLayout',
+        'shouldFileItem', 'isItemFiled', 'partitionItemsForFileCabinet',
+        'fileItemToCabinet', 'fileAllItemsToCabinet', 'migrateItemsToFileCabinet',
+        'reconcileFileCabinetOrderWithItems',
+        'seedFileCabinetOrderFromItems', 'seedFromCurrentLayout',
+        'applySortToFileCabinetOrder', 'pruneFileCabinetOrder', 'saveFiledCabinetLayout',
+        'sortFileCabinetItems'
+    ];
+    const NOT_PUBLIC = [
+        // private helpers the facade still calls but never exported
+        'isCollapsedForFileCabinet', 'isSpatiallyEligibleForFileCabinet',
+        'resolveFileCabinetItemPosition', 'sortItemsByFileCabinetOrder'
+    ];
+
+    it('re-exports every order function as the very same object', async () => {
+        installGlobals();
+        const facade = await load();
+        const order = await import('../js/fileCabinet/order.js');
+
+        for (const name of PUBLIC) {
+            assert.equal(typeof order[name], 'function', `${name} missing from fileCabinet/order.js`);
+            assert.equal(facade[name], order[name], `${name} is wrapped instead of re-exported`);
+        }
+    });
+
+    it('keeps the order module internals out of the facade surface', async () => {
+        installGlobals();
+        const facade = await load();
+
+        for (const name of NOT_PUBLIC) {
+            assert.equal(facade[name], undefined, `${name} leaked into the fileCabinet.js surface`);
+        }
+    });
+
+    it('shares the four storage keys with the order module', async () => {
+        installGlobals();
+        const facade = await load();
+        const order = await import('../js/fileCabinet/order.js');
+
+        assert.equal(facade.FILE_CABINET_ORDER_KEY, order.FILE_CABINET_ORDER_KEY);
+        assert.equal(facade.FILE_CABINET_ORDER_KEY, ORDER_KEY);
+        assert.equal(facade.FILE_CABINET_FILED_CATEGORIES_KEY, FILED_KEY);
+        assert.equal(facade.FILE_CABINET_CATEGORY_ORDER_KEY, CATEGORY_ORDER_KEY);
+        assert.equal(
+            facade.FILE_CABINET_EMPTY_SHELVES_COLLAPSED_KEY,
+            'matrix_file_cabinet_empty_shelves_collapsed'
+        );
+    });
+});

@@ -100,3 +100,41 @@ still share an identical entry tail (chrome → toolbar mount → brand → aria
 `renderToolbar` → `updateZoomLevel` → `resize` → `redraw`); deduping it is its
 own commit, with the lifecycle tests as the safety net.
 
+### Variation: stateless modules instead of sessions
+
+`js/fileCabinet.js` (2965 lines) is the second file split this way, but its
+ordering layer is plain module functions taking arguments — no `this`, no shared
+state — so `js/fileCabinet/order.js` needs no facade instance and the facade
+uses a straight interop block instead of delegates:
+
+```js
+import { addToFileCabinetOrder, /* … */ } from './fileCabinet/order.js';
+export { addToFileCabinetOrder, /* … */ };
+export { saveFiledCabinetLayout, /* keys */ } from './fileCabinet/order.js';
+```
+
+`import` + `export { … }` re-exports the *same* function object, so `ui.js`,
+`dragdrop.js` and `layoutStorage.js` keep importing from `./fileCabinet.js` with
+no change and no wrapper layer to drift. The four `FILE_CABINET_*_KEY`
+constants moved with the storage they guard and are re-exported the same way —
+a key that lives away from its reader is how the two sides silently diverge.
+
+Two boundaries worth keeping:
+
+- `moveItemBetweenCategories` stays in the facade. It needs `NoteSurface`, and
+  `noteSurface.js` imports `fileCabinet.js` — moving it would close the cycle
+  `order.js → noteSurface.js → fileCabinet.js → order.js`. ESM survives that
+  (the binding is only read inside a function), but a needless cycle is worse
+  than one function left behind.
+- The module's private helpers (`isCollapsedForFileCabinet`,
+  `isSpatiallyEligibleForFileCabinet`, `resolveFileCabinetItemPosition`,
+  `sortItemsByFileCabinetOrder`) are **not** re-exported. Only the last one is
+  exported from `order.js` at all, because the facade's renderer still calls it.
+  `test/fileCabinetOrder.test.js › module boundary` asserts the public list is
+  identity-equal to `order.js` and that the internals are absent from the
+  facade, so neither drift nor surface creep passes silently.
+
+The move also dropped a dead line: `saveFiledCabinetLayout` computed
+`normalizeViewMode(sortBy)` into a binding nothing read (the stored entry is
+only `w`/`h`/`x`/`y`), which is why it no longer takes a sort mode.
+

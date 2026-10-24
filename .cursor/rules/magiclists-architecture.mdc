@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T18:31:33.547Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T18:39:36.255Z
 
 ## CSS load order
 
@@ -90,7 +90,8 @@ alwaysApply: true
 | js/drawingBoardSelection.js | magicCanvas selection session (box select, lasso drag, resize handles) | drawingBoard.js, lassoGeometry.js, canvasDocument.js | — | — |
 | js/drawingBoardToolbar.js | magicCanvas toolbar session (render, bind, menu chrome) | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | — | — |
 | js/editor.js | modal note editor overlay, save flow | noteSurface.js, noteQuickActions.js, editorModalChrome.js, sheet.js | item:selected_for_edit, editor:reveal_on_board | — |
-| js/fileCabinet.js | file cabinet mode, drag-to-file, filed chip rail | noteSurface.js, dragdrop.js, layoutStorage.js | filecabinet:layout_changed | — |
+| js/fileCabinet.js | file cabinet mode, drag-to-file, filed chip rail | fileCabinet/order.js, noteSurface.js, dragdrop.js, layoutStorage.js | filecabinet:layout_changed | — |
+| js/fileCabinet/order.js | file cabinet drawer ordering and filing decisions - which note sits in which drawer, at which position, and when a note counts as filed | fileCabinet.js, tileGeometry.js, boardSort.js, notePackage.js | — | — |
 | js/flowchart.js | flowchart note subsection model — per-note diagram doc, grid/snap prefs, attached labels, connectors | canvasDocument.js, noteModel.js, api.js, flowchartGeometry.js, flowchartUi.js | — | — |
 | js/flowchartGeometry.js | flowchart geometry — shape ports, connector routing, hit-test, reroute | flowchart.js, lassoGeometry.js, canvasBrushes.js | — | — |
 | js/hamburger.js | side panel shell, notes list, category summary, sort | searchBar.js, ui.js, sidebarHistory.js, sidebarStats.js, categoriesOverlay.js | categories:manage_requested, category:order_changed | — |
