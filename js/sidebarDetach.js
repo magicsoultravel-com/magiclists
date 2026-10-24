@@ -537,6 +537,36 @@ export function bindSidebarCollapseAll() {
     // Collapse-all is module-level; sidebarDetach only ensures binding hook exists.
 }
 
+const SIDEBAR_COMPACT_CLASSES = ['is-compact', 'is-collapsed-strip', 'is-minimized', 'is-single-row'];
+
+export function isSidebarCompact() {
+    if (typeof document === 'undefined') return false;
+    const panel = document.getElementById('side-panel');
+    return !!panel && SIDEBAR_COMPACT_CLASSES.some((cls) => panel.classList.contains(cls));
+}
+
+export function setSidebarCompact(collapsed) {
+    if (typeof document === 'undefined') return false;
+    const panel = document.getElementById('side-panel');
+    if (!panel) return false;
+    SIDEBAR_COMPACT_CLASSES.forEach((cls) => panel.classList.toggle(cls, !!collapsed));
+    if (collapsed) {
+        panel.style.removeProperty('height');
+        panel.classList.remove('is-detached--sized');
+    }
+    return !!collapsed;
+}
+
+export function collapseSidebar() {
+    const next = !isSidebarCompact();
+    return setSidebarCompact(next);
+}
+export const collapseSidebarPanel = collapseSidebar;
+export const collapseSidebarToOneRow = collapseSidebar;
+export const minimizeSidebar = collapseSidebar;
+export const toggleSidebarCompact = collapseSidebar;
+export const toggleSidebarCollapse = collapseSidebar;
+
 export function bindSidebarCollapse() {
     if (typeof document === 'undefined') return;
     const btn = document.getElementById('sidebar-collapse')
@@ -547,7 +577,7 @@ export function bindSidebarCollapse() {
     btn.addEventListener('click', (event) => {
         event.preventDefault?.();
         event.stopPropagation?.();
-        try { SidePanel?.setCollapsed?.(true); } catch (e) {}
+        collapseSidebar();
     });
 }
 

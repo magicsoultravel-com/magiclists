@@ -233,6 +233,33 @@ body.is-editor-modal-open .side-panel {
     background: var(--bg-hover);
 }
 
+/* Compact single-row strip mode (floating sidebar). */
+.side-panel.is-compact,
+.side-panel.is-collapsed-strip,
+.side-panel.is-minimized,
+.side-panel.is-single-row {
+    height: auto !important;
+}
+.side-panel.is-compact .side-panel-modules,
+.side-panel.is-collapsed-strip .side-panel-modules,
+.side-panel.is-minimized .side-panel-modules,
+.side-panel.is-single-row .side-panel-modules,
+.side-panel.is-compact .side-panel-chrome,
+.side-panel.is-collapsed-strip .side-panel-chrome,
+.side-panel.is-minimized .side-panel-chrome,
+.side-panel.is-single-row .side-panel-chrome,
+.side-panel.is-compact .side-panel-search,
+.side-panel.is-collapsed-strip .side-panel-search,
+.side-panel.is-minimized .side-panel-search,
+.side-panel.is-single-row .side-panel-search {
+    display: none !important;
+}
+
+/* Collapse-sidebar tray control is detached-mode only. */
+.side-panel:not(.is-detached) .sidebar-collapse {
+    display: none !important;
+}
+
 /* Collapse-sidebar tray control (hover-revealed). */
 .sidebar-collapse {
     flex-shrink: 0;

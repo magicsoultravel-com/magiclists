@@ -389,18 +389,35 @@ export function bindSidebarResetSize() {
     });
 }
 
-/** Collapse the entire sidebar panel into its compact collapsed state. */
+const SIDEBAR_COMPACT_CLASSES = ['is-compact', 'is-collapsed-strip', 'is-minimized', 'is-single-row'];
+
+export function isSidebarCompact() {
+    const panel = (typeof document !== 'undefined') ? document.getElementById('side-panel') : null;
+    return !!panel && SIDEBAR_COMPACT_CLASSES.some((cls) => panel.classList.contains(cls));
+}
+
+/** Collapse/expand the floating sidebar into a single-row compact strip. */
+export function setSidebarCompact(collapsed) {
+    if (typeof document === 'undefined') return false;
+    const panel = document.getElementById('side-panel');
+    if (!panel) return false;
+    SIDEBAR_COMPACT_CLASSES.forEach((cls) => panel.classList.toggle(cls, !!collapsed));
+    if (collapsed) {
+        panel.style.removeProperty('height');
+        panel.classList.remove('is-detached--sized');
+    }
+    return !!collapsed;
+}
+
 export function collapseSidebar() {
-    try { SidePanel?.setCollapsed?.(true); } catch (e) {}
-    return true;
+    const next = !isSidebarCompact();
+    return setSidebarCompact(next);
 }
 export const collapseSidebarPanel = collapseSidebar;
-export const toggleSidebarCollapse = () => {
-    try {
-        const collapsed = !!document.getElementById('side-panel')?.classList.contains('is-collapsed');
-        SidePanel?.setCollapsed?.(!collapsed);
-    } catch (e) {}
-};
+export const collapseSidebarToOneRow = collapseSidebar;
+export const minimizeSidebar = collapseSidebar;
+export const toggleSidebarCompact = collapseSidebar;
+export const toggleSidebarCollapse = collapseSidebar;
 
 export function bindSidebarCollapse() {
     const btn = document.getElementById('sidebar-collapse')
