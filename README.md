@@ -177,4 +177,41 @@ browser — `fileCabinetLayout`, `fileCabinetTransfer`, `fileCabinetCategoryRail
 and `fileCabinetDrag` were all added during the split, taking the cabinet from
 zero drag coverage to 1012 tests overall.
 
+#### The same recipe on a pure-markup module
+
+`js/noteSurfaceHtml.js` (1228 lines) is the opposite case: no mutable state, no
+event wiring to speak of — just string builders. It went the same way, one slice
+per commit, and ended as a **barrel**: 48 lines of `export { … } from`, no code of
+its own.
+
+| module | owns |
+| --- | --- |
+| `noteSurfaceHtml/quickActions.js` | the card toolbar string (board / modal / popout) |
+| `noteSurfaceHtml/metaFooter.js` | footer markup + size/line/date stats |
+| `noteSurfaceHtml/checklistMarkup.js` | expanded checklist, done section |
+| `noteSurfaceHtml/body.js` | content field, bodies, side sections, rich-text helpers |
+| `noteSurfaceHtml/shell.js` | title, format + config panels, shell assembly |
+| `noteSurfaceHtml/card.js` | theme, category band, board card + in-place refreshers |
+
+Ordering was forced by one edge: three body builders call
+`buildExpandedChecklistHtml`, so the checklist had to leave before the body or
+`body.js` would have had to import it back from the facade that imports `body.js`.
+
+Two checks earned their keep here and are worth reusing:
+
+- **Export-surface diff.** An acorn one-liner dumps every exported name of the
+  file before and after a slice, and `diff` must be empty. It caught
+  `fileCabinetStackPitch` (private, re-exported by accident) and
+  `initFileCabinetCategoryColumnDrag` (same) — both invisible to the tests, both
+  a silent widening of a public API that other modules compile against.
+- **"No code left" assertion.** Once a facade is *only* re-exports, a test asserts
+  the file has no top-level `function`/`const` at all, so a later "quick fix" can't
+  quietly re-introduce logic into the barrel.
+
+One trap, recorded because it cost a red build: a name used **only** by a local
+`export { … };` block still needs its import. A pruner that strips export blocks
+before deciding what is unused will delete real bindings (`buildChecklistRowHtml`);
+treat re-export blocks as usage, and let the free-identifier scan be the judge.
+
+
 
