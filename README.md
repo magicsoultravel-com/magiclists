@@ -16,7 +16,7 @@ Guards now in place:
 | --- | --- |
 | `npm run assets:stamp` | Rewrites `index.html` / `popout.html`: content hash on every `<script type="module" src>` and `<link rel="stylesheet">`, plus an inline `<script type="importmap">` that maps every `js/**.js` to `?v=<content hash>`. Run after touching anything in `js/` or `css/`. |
 | `npm run check:assets` | Fails when the stamped HTML no longer matches the current file contents. |
-| `npm run check:modules` | Links the real module graph with V8 (`vm.SourceTextModule`, nothing executed) and fails on any import whose target does not export that name. |
+| `npm run check:modules` | Links the real module graph with V8 (`vm.SourceTextModule`, nothing executed) and fails on any import whose target does not export that name. It also resolves every literal `import('./x.js')` itself, because the engine resolves dynamic specifiers lazily and `link()` never sees them. |
 | `npm test` | Full `node --test` suite (`test/assetVersions.test.js`, `test/moduleGraph.test.js`, `test/bootWatchdog.test.js` cover the guards above). |
 | `npm run verify` | All of the above in CI order. |
 | `npm run hooks:install` | Installs `.git/hooks/pre-commit` (also runs on `npm install`). Needed once per clone. |
@@ -72,4 +72,31 @@ modules:
 | `sidebar:width_changed` only fires on a real width change | `applySidebarMetrics()` in `js/shellResize.js` |
 | Emergency off switch: `false` makes the init return before binding anything or re-applying a stored detached state (it also clears the persisted flag and hides the toggle) | `SIDEBAR_DETACH_ENABLED` in `js/sidebarDetach.js` |
 | Microtask-batched `MutationObserver` fake reproduces the loop in `node --test`; a storm guard turns a regression into a fast failure instead of a hung runner | `test/sidebarDetach.test.js` |
+
+## Splitting a big module: facade + session modules
+
+`js/drawingBoard.js` was 1874 lines of one object literal. It is now 939 lines of
+facade plus `js/drawingBoard/{geometry,prefs,history,input,view,document,lifecycle}.js`,
+and the same shape is the target for the other oversized files. The rules that
+keep it reviewable:
+
+| Rule | Why |
+| --- | --- |
+| The facade keeps the public object (`DrawingBoard`) and one-line delegates: `deactivate() { return LifecycleSession.deactivate(this); }` | Nothing outside the file changes, so imports, tests and the architecture map stay put. |
+| A session module exports plain functions whose first argument is the facade instance (`export function deactivate(board)`, `board` where the method said `this`) | No shared mutable module state, no circular import, and the body stays testable with a stub board. |
+| Move bodies **verbatim**: de-indent, rewrite `this` → `board`, change nothing else | Lets a mechanical diff prove equivalence instead of a reviewer re-reading 200 lines. Compare old body vs new body line by line before committing. |
+| Re-create every import at `../` depth, including the specifiers inside `import('./x.js')` | Dynamic imports are resolved lazily, so a stale path links fine and only fails when that branch runs — this shipped once in `drawingBoard/document.js`. `npm run check:modules` now resolves them. |
+| Drop imports the facade no longer uses | Left-behind imports make a module claim work it handed off. `test/noUnusedImports.test.js` guards the family. |
+| Every module starts with `/** @module {"owns":"…","related":[…]} */` | `scripts/build-architecture-map.mjs` builds `.cursor/rules/magiclists-architecture.mdc` from it; a module without the header is invisible in the map. |
+| Add a `test/drawingBoard<Session>.test.js` for the moved invariants, not the moved lines | The bodies already ran; what needs pinning is what callers relied on (state reset on entry, flush before teardown, gesture flags not leaking). |
+
+Gate after each extraction: `npm run assets:stamp && node scripts/build-architecture-map.mjs && npm run verify`.
+
+What deliberately stays in the facade: `init`, the tool and preference setters,
+and the toolbar/DOM orchestration that every entry path needs — the seam the
+sessions call back into. `activate`, `activateForNote` and `openNoteFlowchart`
+still share an identical entry tail (chrome → toolbar mount → brand → aria →
+`loadFromDoc` → hand mode → `dataset.tool` → `shrinkInfiniteIfNeeded` →
+`renderToolbar` → `updateZoomLevel` → `resize` → `redraw`); deduping it is its
+own commit, with the lifecycle tests as the safety net.
 
