@@ -11,5 +11,8 @@
     "hooks:install": "node scripts/git-hooks/install.mjs",
     "prepare": "node scripts/git-hooks/install.mjs",
     "verify": "npm run check:assets && npm run check:modules && npm test"
+  },
+  "devDependencies": {
+    "acorn": "^8.19.0"
   }
 }

@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -52,15 +53,36 @@ describe('asset versions · stamper output', () => {
     });
 
     it('is idempotent (running it twice changes nothing)', () => {
-        const run = () => execFileSync(process.execPath, [STAMPER], { cwd: ROOT, stdio: 'pipe' });
+        // Stamp a throwaway copy: this test must never rewrite the tracked
+        // index.html / popout.html in the working tree.
+        const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'magiclists-assets-'));
+        try {
+            for (const name of HTML_FILES) {
+                fs.copyFileSync(path.join(ROOT, name), path.join(tmpRoot, name));
+            }
+            fs.mkdirSync(path.join(tmpRoot, 'scripts'));
+            fs.copyFileSync(STAMPER, path.join(tmpRoot, 'scripts', 'build-asset-versions.mjs'));
+            for (const dir of ['js', 'css']) {
+                fs.cpSync(path.join(ROOT, dir), path.join(tmpRoot, dir), {
+                    recursive: true,
+                    filter: (src) => path.basename(src) !== 'node_modules'
+                });
+            }
 
-        run();
-        const first = HTML_FILES.map((name) => readHtml(name));
-        run();
-        const second = HTML_FILES.map((name) => readHtml(name));
+            const stamper = path.join(tmpRoot, 'scripts', 'build-asset-versions.mjs');
+            const run = () => execFileSync(process.execPath, [stamper], { cwd: tmpRoot, stdio: 'pipe' });
+            const readCopy = (name) => fs.readFileSync(path.join(tmpRoot, name), 'utf8');
 
-        assert.deepEqual(second, first, 'a second stamp must be a no-op');
-        assert.match(run().toString(), /up to date|stamped/);
+            run();
+            const first = HTML_FILES.map(readCopy);
+            run();
+            const second = HTML_FILES.map(readCopy);
+
+            assert.deepEqual(second, first, 'a second stamp must be a no-op');
+            assert.match(run().toString(), /already up to date|stamped/);
+        } finally {
+            fs.rmSync(tmpRoot, { recursive: true, force: true });
+        }
     });
 
     for (const name of HTML_FILES) {

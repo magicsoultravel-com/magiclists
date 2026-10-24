@@ -1,6 +1,8 @@
 // test/displayOptionsSidebarModules.test.js
-// Display Options → Sidebar → Modules: modal rendering, partial-toggle merging
-// and the `<html data-sidebar-hidden>` mirror produced by applyDisplayOptions.
+// Display Options → Sidebar → Modules: modal rendering plus the one end-to-end
+// `applyDisplayOptions` → `<html data-sidebar-hidden>` assertion. Toggle
+// normalization and the setOptions merge are covered in
+// test/sidebarModulePrefs.test.js.
 // Run with: npm test
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -59,10 +61,6 @@ function moduleInputTag(html, id) {
     return match[0];
 }
 
-function hiddenTokens() {
-    return document.documentElement.dataset.sidebarHidden || '';
-}
-
 describe('display options → sidebar modules', () => {
     beforeEach(() => {
         store.clear();
@@ -92,35 +90,6 @@ describe('display options → sidebar modules', () => {
     it('mirrors the hidden set onto the html element when options apply', () => {
         store.set(STORAGE_KEY, JSON.stringify({ sidebarModules: { weather: false } }));
         applyDisplayOptions(readDisplayOptions());
-        assert.equal(hiddenTokens(), 'weather');
-    });
-
-    it('merges partial toggles and persists the complete map', () => {
-        store.set(STORAGE_KEY, JSON.stringify({ sidebarModules: { tv: false } }));
-
-        DisplayOptions.setOptions({ sidebarModules: { radio: false } });
-
-        const persisted = JSON.parse(store.get(STORAGE_KEY)).sidebarModules;
-        assert.deepEqual(persisted, {
-            radio: false,
-            tv: false,
-            weather: true,
-            links: true,
-            history: true,
-            stats: true
-        });
-        assert.equal(hiddenTokens(), 'radio tv');
-    });
-
-    it('drops the token again when a module is re-enabled', () => {
-        store.set(STORAGE_KEY, JSON.stringify({ sidebarModules: { radio: false, tv: false } }));
-        applyDisplayOptions(readDisplayOptions());
-        assert.equal(hiddenTokens(), 'radio tv');
-
-        DisplayOptions.setOptions({ sidebarModules: { tv: true } });
-        assert.equal(hiddenTokens(), 'radio');
-
-        DisplayOptions.setOptions({ sidebarModules: { radio: true } });
-        assert.equal(hiddenTokens(), '');
+        assert.equal(document.documentElement.dataset.sidebarHidden || '', 'weather');
     });
 });

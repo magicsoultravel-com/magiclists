@@ -38,6 +38,7 @@ import {
     STORAGE_KEY
 } from '../js/canvasDocument.js';
 import { clearCanvasDocuments, getCanvasDocument, setCanvasDocument } from '../js/storage/indexedDbCanvasStore.js';
+import { createEmptyNoteCanvas, normalizeNoteCanvas } from '../js/noteModel.js';
 
 describe('canvasDocument', () => {
     beforeEach(async () => {
@@ -313,3 +314,28 @@ describe('indexedDbCanvasStore (memory fallback)', () => {
         assert.equal(await getCanvasDocument('missing'), null);
     });
 });
+
+// js/noteModel.js wraps the document layer for notes: a note canvas is always an
+// infinite canvas, even when normalization has to fall back to an empty payload.
+describe('note canvas defaults (js/noteModel.js)', () => {
+    it('createEmptyNoteCanvas returns a valid canvasDocument v2 infinite doc', () => {
+        const doc = createEmptyNoteCanvas();
+        assert.equal(doc.version, 2);
+        assert.equal(doc.canvasMode, 'infinite');
+        assert.ok(Array.isArray(doc.pages));
+        assert.ok(doc.pages.length > 0);
+        assert.ok(doc.activePageId);
+        assert.ok(doc.infinite);
+        assert.ok(Array.isArray(doc.infinite.strokes));
+        assert.ok(Array.isArray(doc.infinite.texts));
+        assert.ok(Array.isArray(doc.infinite.images));
+        assert.ok(doc.viewport);
+    });
+
+    it('normalizeNoteCanvas falls back to an infinite doc, not the a4 document default', () => {
+        const doc = normalizeNoteCanvas(null);
+        assert.equal(doc.version, 2);
+        assert.equal(doc.canvasMode, 'infinite');
+    });
+});
+

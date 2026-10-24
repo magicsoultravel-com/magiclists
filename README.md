@@ -21,6 +21,9 @@ Guards now in place:
 | `npm run verify` | All of the above in CI order. |
 | `npm run hooks:install` | Installs `.git/hooks/pre-commit` (also runs on `npm install`). Needed once per clone. |
 
+Run `npm install` once per clone: `test/freeIdentifierScan.test.js` parses
+`js/**.js` with `acorn`, the repo's only devDependency.
+
 `scripts/git-hooks/pre-commit.mjs` restamps and re-stages the HTML and runs the
 module-graph check, so a commit cannot ship stale hashes or a broken import.
 GitHub Pages uses the same file names for every deploy, so never remove the

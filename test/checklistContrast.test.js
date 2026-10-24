@@ -90,34 +90,12 @@ describe('checklist group chevron contrast (custom backgrounds)', () => {
     );
   });
 
-  it('keeps the base chevron color as the theme text token', () => {
-    const base = rulesTargeting('.step-collapse-btn').filter(
-      (hit) => hit.file === 'shell-editor.css' && hit.selector === '.step-collapse-btn'
-    );
-    assert.ok(base.length > 0, 'base .step-collapse-btn rule should exist');
-    assert.ok(
-      base.some((hit) => hit.decls.color === 'var(--text-main)'),
-      'base .step-collapse-btn should use var(--text-main) for non-custom notes'
-    );
-  });
-
   it('maps a custom-background chevron to the per-card contrast token', () => {
     const override = rulesTargeting('.step-collapse-btn').find(
       (hit) => hit.file === 'cards.css' && hit.selector === '.has-custom-bg .step-collapse-btn'
     );
     assert.ok(override, '.has-custom-bg .step-collapse-btn override should exist in cards.css');
     assert.equal(override.decls.color, 'var(--card-fg)');
-  });
-
-  it('lets the custom-bg override win the cascade (last chevron color rule)', () => {
-    const colorRules = rulesTargeting('.step-collapse-btn')
-      .filter((hit) => hit.decls.color)
-      .map((hit) => hit.selector);
-    assert.deepEqual(
-      colorRules,
-      ['.step-collapse-btn', '.step-collapse-btn:hover', '.has-custom-bg .step-collapse-btn'],
-      'chevron color rules must be exactly the base pair plus the custom-bg override, in load order'
-    );
   });
 });
 

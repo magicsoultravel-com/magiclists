@@ -18,12 +18,18 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CHECKER = path.join(ROOT, 'scripts', 'check-module-graph.mjs');
 
+// The check spawns a child process, so link once and share the output.
+let linkedGraph = null;
+
 function linkGraph() {
-    return execFileSync(
-        process.execPath,
-        ['--experimental-vm-modules', '--no-warnings', CHECKER],
-        { cwd: ROOT, stdio: 'pipe', encoding: 'utf8' }
-    );
+    if (linkedGraph === null) {
+        linkedGraph = execFileSync(
+            process.execPath,
+            ['--experimental-vm-modules', '--no-warnings', CHECKER],
+            { cwd: ROOT, stdio: 'pipe', encoding: 'utf8' }
+        );
+    }
+    return linkedGraph;
 }
 
 describe('module graph · link check', () => {

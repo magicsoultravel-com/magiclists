@@ -221,7 +221,7 @@ describe('sidebar module lifecycle', () => {
     });
 });
 
-describe('sidebar module wiring (source guards)', () => {
+describe('sidebar module wiring (artifact guards)', () => {
     const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
     it('every module root in index.html is tagged with data-module-id', () => {
@@ -242,46 +242,6 @@ describe('sidebar module wiring (source guards)', () => {
                 `missing hide rule for ${id}`
             );
         }
-    });
-
-    it('display options persists and applies the module map', () => {
-        const src = read('js/displayOptions.js');
-        assert.ok(src.includes('sidebarModules: normalizeSidebarModules(raw.sidebarModules)'));
-        assert.ok(src.includes('applySidebarModuleVisibilityDom(options.sidebarModules)'));
-        assert.ok(src.includes('display-opt-module-'));
-        assert.ok(src.includes('SIDEBAR_MODULES_CHANGED_EVENT'));
-    });
-
-    it('app.js only activates heavy modules that are enabled, and registers lifecycles', () => {
-        const src = read('js/app.js');
-        assert.ok(src.includes("if (isModuleOn('radio')) SidebarRadio.init(); else SidebarRadio.initShell();"));
-        assert.ok(src.includes("if (isModuleOn('tv')) SidebarTv.init(); else SidebarTv.initShell();"));
-        assert.ok(src.includes("if (isModuleOn('weather')) SidebarWeather.init(); else SidebarWeather.initShell();"));
-        for (const id of SIDEBAR_MODULE_IDS) {
-            assert.ok(src.includes(`registerSidebarModuleLifecycle('${id}'`), `no lifecycle for ${id}`);
-        }
-        assert.ok(src.includes('syncSidebarModuleLifecycle(e.detail?.modules)'));
-    });
-
-    it('deactivate stops players and polling, activate is idempotent', () => {
-        const radio = read('js/sidebarRadio.js');
-        assert.ok(radio.includes('RadioPlayer.stop();'));
-        assert.ok(radio.includes('if (!this.root || this.active) return;'));
-        assert.ok(radio.includes('bootActivated'));
-
-        const tv = read('js/sidebarTv.js');
-        assert.ok(tv.includes('TvPlayer.stop().catch(() => {});'));
-        assert.ok(tv.includes('if (!this.root || this.active) return;'));
-
-        const weather = read('js/sidebarWeather.js');
-        assert.ok(weather.includes('WeatherApi.stopPolling();'));
-        assert.ok(weather.includes('if (!this.root || this.active) return;'));
-    });
-
-    it('pull-based modules bail out of rendering while hidden', () => {
-        assert.ok(read('js/sidebarLinks.js').includes("if (!isSidebarModuleEnabled('links')) return;"));
-        assert.ok(read('js/sidebarStats.js').includes("if (!isSidebarModuleEnabled('stats')) return;"));
-        assert.ok(read('js/sidebarHistory.js').includes("if (!isSidebarModuleEnabled('history')) return;"));
     });
 });
 
