@@ -1,6 +1,9 @@
 // test/freeIdentifierScan.test.js
-// Regression guard: every identifier used in js/*.js must resolve to an import,
-// a module-local declaration, a parameter, or a known browser/node global.
+// Regression guard: every identifier used in js/**/*.js must resolve to an
+// import, a module-local declaration, a parameter, or a known browser/node
+// global. The scan is recursive, so extracted modules in feature sub-folders
+// (js/board, js/storage, js/radioVisualizer, …) get the same protection as the
+// flat entry files.
 // Catches the "extraction dropped the import" bug class (e.g. isDragShape,
 // createId, showAppToast, RESIZE_HANDLE_*, grow, buildNotesExportPayload).
 import { describe, it } from 'node:test';
@@ -21,9 +24,30 @@ const BROWSER = [
     'FormData', 'XMLHttpRequest', 'AbortController', 'AbortSignal', 'Notification', 'matchMedia',
     'devicePixelRatio', 'DragEvent', 'DataTransfer', 'Node', 'Element', 'HTMLElement',
     'CanvasRenderingContext2D', 'screen', 'scrollTo', 'open', 'close', 'stop', 'print',
-    'isSecureContext', 'CSS', 'MathJax', 'postMessage', 'HTMLMediaElement', 'HTMLVideoElement', 'NodeFilter'
+    'isSecureContext', 'CSS', 'MathJax', 'postMessage', 'HTMLMediaElement', 'HTMLVideoElement', 'NodeFilter',
+    'indexedDB', 'SpeechSynthesisUtterance'
 ];
-const KNOWN = new Set([...Object.getOwnPropertyNames(globalThis), ...BROWSER, 'undefined', 'NaN', 'Infinity', 'globalThis', 'arguments']);
+// Vendor globals injected at runtime by `script.src = …` from js/tools/*, so
+// they are never imported. Keep this list to libraries the app actually loads.
+const VENDOR = [
+    'THREE', // js/tools/globe.js — cdnjs three.js r128
+    'L',     // js/tools/map.js — jsdelivr leaflet 1.9.4
+    'd3',    // js/tools/globe-tz.js — d3js.org d3 v7
+    'topojson' // js/tools/globe-tz.js — unpkg topojson@3
+];
+const KNOWN = new Set([...Object.getOwnPropertyNames(globalThis), ...BROWSER, ...VENDOR, 'undefined', 'NaN', 'Infinity', 'globalThis', 'arguments']);
+
+/** Recursively list module paths under `dir`, relative to it (POSIX separators). */
+function listModules(dir, rel = '') {
+    const out = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name.startsWith('.')) continue;
+        const nextRel = rel ? `${rel}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) out.push(...listModules(`${dir}/${entry.name}`, nextRel));
+        else if (entry.name.endsWith('.js')) out.push(nextRel);
+    }
+    return out;
+}
 
 function analyze(src) {
     let ast;
@@ -125,7 +149,7 @@ function analyze(src) {
 describe('free identifier scan across js modules', () => {
     it('every used identifier resolves (imports, locals, params, globals)', () => {
         const failures = [];
-        for (const f of readdirSync('js').filter((x) => x.endsWith('.js')).sort()) {
+        for (const f of listModules('js').sort()) {
             const r = analyze(readFileSync(`js/${f}`, 'utf8'));
             if (r.parseError) failures.push(`${f}: PARSE ERROR ${r.parseError}`);
             if (r.unresolved?.size) failures.push(`${f}: unresolved -> ${[...r.unresolved].sort().join(', ')}`);

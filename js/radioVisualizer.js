@@ -8,9 +8,32 @@ import {
     shouldUsePipPopout
 } from './popoutWindows.js';
 import { registerAppDocument, unregisterAppDocument } from './appDocuments.js';
+import { PALETTES } from './radioVisualizer/palettes.js';
+import {
+    DEFAULTS,
+    readVisualizerPrefs,
+    clamp,
+    alpha,
+    pickColor,
+    setGlow,
+    beatPulse,
+    ampScale,
+    shuffleNoRepeat,
+    smoothstep,
+    rgbaTuple,
+    lerpTuple,
+    cssRgba
+} from './radioVisualizer/settings.js';
+import {
+    DAY_CYCLE_MS,
+    UNDER_HORIZON_MS,
+    skyPaletteFrames,
+    blendedSkyStops,
+    dayCycleState
+} from './radioVisualizer/sky.js';
+import * as vizPrefs from './radioVisualizer/prefs.js';
 
 const VISUALIZER_POPOUT_NAME = 'magiclists-radio-visualizer';
-const VISUALIZER_PREFS_KEY = 'matrix_radio_visualizer_prefs';
 
 const SPACE_CRUISE_MS = 60_000;
 const SPACE_HYPER_ENGAGE_MS = 5_500;
@@ -18,35 +41,8 @@ const SPACE_HYPER_TRAVEL_MS = 30_000;
 const SPACE_HYPER_DISENGAGE_MS = 5_500;
 const SPACE_HYPER_CYCLE_MS = SPACE_CRUISE_MS + SPACE_HYPER_ENGAGE_MS + SPACE_HYPER_TRAVEL_MS + SPACE_HYPER_DISENGAGE_MS;
 
-const PALETTES = {
-    neon: ['#7dd3fc', '#c084fc', '#f472b6', '#fef08a', '#34d399'],
-    horizon: ['#00f0ff', '#ff2bd6', '#b8ff3c', '#7b5cff', '#ff9f1c'],
-    sunset: ['#f97316', '#fb7185', '#facc15', '#fda4af', '#fbbf24'],
-    aurora: ['#22d3ee', '#34d399', '#a3e635', '#60a5fa', '#c4b5fd'],
-    mono: ['#e2e8f0', '#cbd5e1', '#94a3b8', '#f8fafc', '#dbeafe'],
-    ocean: ['#38bdf8', '#2dd4bf', '#a5f3fc', '#67e8f9', '#bae6fd'],
-    vapor: ['#ff71ce', '#01cdfe', '#05ffa1', '#b967ff', '#fffb96'],
-    'dark-ocean': ['#0ea5e9', '#0c4a6e', '#155e75', '#22d3ee', '#082f49'],
-    'night-sky': ['#818cf8', '#1e1b4b', '#312e81', '#c4b5fd', '#0b1026']
-};
-
-const DEFAULTS = {
-    mode: 'mountains',
-    palette: 'horizon',
-    sensitivity: 1.0,
-    amplitude: 0.55,
-    density: 1,
-    speed: 1,
-    travel: 0.55, // journey pace: scroll + scenery timing (1 = base)
-    glow: 0.85,
-    background: 'dark',
-    bpm: 120
-};
-
 const ENERGY_FLOOR = 0.02;
 const ENERGY_SILENCE_MS = 1000;
-const DAY_CYCLE_MS = 65_000; // independent of travel pace
-const UNDER_HORIZON_MS = 5_000;
 const SCENE_HOLD_MS = 18_000; // at travel = 1
 const SEA_HOLD_MS = 60_000; // at travel = 1
 const SCENE_TRANSITION_MS = 3_000; // at travel = 1
@@ -64,22 +60,6 @@ const SPACE_NEBULA_FADE_OUT_MS = 4_000;
 const SPACE_NEBULA_END_MS = SPACE_NEBULA_START_MS + SPACE_NEBULA_FADE_IN_MS + SPACE_NEBULA_HOLD_MS + SPACE_NEBULA_FADE_OUT_MS;
 const SPACE_EARTH_CRUISE_SPAWN_MS = 38_000;
 const HYPER_WALL_COLORS = ['#67e8f9', '#38bdf8', '#a78bfa', '#f472b6', '#fb923c', '#facc15', '#34d399', '#818cf8'];
-
-function readVisualizerPrefs() {
-    try {
-        return JSON.parse(localStorage.getItem(VISUALIZER_PREFS_KEY) || 'null') || {};
-    } catch {
-        return {};
-    }
-}
-
-function writeVisualizerPrefs(data) {
-    try {
-        localStorage.setItem(VISUALIZER_PREFS_KEY, JSON.stringify(data));
-    } catch {
-        /* ignore quota */
-    }
-}
 
 /** Compact Neon Mountains recipe (full impl is much larger). */
 const NEON_MOUNTAINS_RECIPE = `// Neon Mountains — randomizer recipe
@@ -107,207 +87,6 @@ loop:
     sparse encounters: sailboat | ship | surfer
   birds every ~9–23s (V / gull / dart)
 `;
-
-function clamp(value, min, max) {
-    return Math.min(max, Math.max(min, value));
-}
-
-function alpha(hex, a) {
-    if (!hex || !/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(hex)) {
-        return `rgba(255,255,255,${a})`;
-    }
-    const full = hex.length === 4
-        ? hex.split('').map((ch, i) => (i === 0 ? ch : ch + ch)).join('')
-        : hex;
-    const value = parseInt(full.slice(1), 16);
-    const r = (value >> 16) & 255;
-    const g = (value >> 8) & 255;
-    const b = value & 255;
-    return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
-
-function pickColor(palette, index) {
-    return palette[index % palette.length] || palette[0];
-}
-
-function setGlow(ctx, palette, glow) {
-    ctx.shadowBlur = 8 + (glow || 0.65) * 18;
-    ctx.shadowColor = alpha(palette[0], 0.7);
-}
-
-function beatPulse(bpm, now = Date.now()) {
-    const tempo = clamp(Number(bpm) || 120, 10, 200);
-    const phase = ((now * tempo) / 60000) % 1;
-    const envelope = Math.pow(1 - phase, 2.4);
-    return { phase, pulse: envelope, tempo };
-}
-
-function ampScale(settings) {
-    return clamp(Number(settings.amplitude) || 0.55, 0.15, 1.5);
-}
-
-function shuffleNoRepeat(items, last) {
-    const pool = [...items];
-    for (let i = pool.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    if (pool.length > 1 && last && pool[0] === last) {
-        const swap = pool.findIndex((v, idx) => idx > 0 && v !== last);
-        if (swap > 0) [pool[0], pool[swap]] = [pool[swap], pool[0]];
-    }
-    return pool;
-}
-
-function smoothstep(edge0, edge1, x) {
-    const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
-    return t * t * (3 - 2 * t);
-}
-
-function hexToRgb(hex) {
-    if (!hex || !/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(hex)) {
-        return [255, 255, 255];
-    }
-    const full = hex.length === 4
-        ? hex.split('').map((ch, i) => (i === 0 ? ch : ch + ch)).join('')
-        : hex;
-    const value = parseInt(full.slice(1), 16);
-    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-}
-
-function rgbaTuple(hex, a) {
-    const [r, g, b] = hexToRgb(hex);
-    return [r, g, b, a];
-}
-
-function lerpTuple(a, b, t) {
-    return [
-        a[0] + (b[0] - a[0]) * t,
-        a[1] + (b[1] - a[1]) * t,
-        a[2] + (b[2] - a[2]) * t,
-        a[3] + (b[3] - a[3]) * t
-    ];
-}
-
-function cssRgba(tuple) {
-    return `rgba(${Math.round(tuple[0])}, ${Math.round(tuple[1])}, ${Math.round(tuple[2])}, ${tuple[3]})`;
-}
-
-function skyPaletteFrames(palette) {
-    const p0 = palette[0];
-    const p1 = palette[1];
-    const p2 = palette[2];
-    const p3 = palette[3] || palette[0];
-    const p4 = palette[4] || palette[2];
-    // Top-of-sky (stop 0) shifts hard per period so the whole vault changes, not just the horizon
-    const night = [
-        rgbaTuple('#010208', 1),
-        rgbaTuple('#07101f', 1),
-        rgbaTuple(p3, 0.28),
-        rgbaTuple(p0, 0.1),
-        rgbaTuple('#000000', 1)
-    ];
-    return {
-        night,
-        dawn: [
-            rgbaTuple('#3a1048', 1),
-            rgbaTuple(p1, 0.88),
-            rgbaTuple(p4, 0.82),
-            rgbaTuple(p0, 0.65),
-            rgbaTuple('#12081c', 1)
-        ],
-        day: [
-            rgbaTuple('#2a1870', 1),
-            rgbaTuple(p3, 0.9),
-            rgbaTuple(p0, 0.8),
-            rgbaTuple(p1, 0.55),
-            rgbaTuple('#0a1028', 1)
-        ],
-        sunset: [
-            rgbaTuple('#6b0a3a', 1),
-            rgbaTuple('#ff3d6e', 0.98),
-            rgbaTuple('#ff9f1c', 0.95),
-            rgbaTuple(p4, 0.88),
-            rgbaTuple('#1a060e', 1)
-        ],
-        dusk: [
-            rgbaTuple('#22065a', 1),
-            rgbaTuple('#9b2cff', 0.92),
-            rgbaTuple(p1, 0.78),
-            rgbaTuple(p3, 0.45),
-            rgbaTuple('#06020f', 1)
-        ]
-    };
-}
-
-function blendedSkyStops(palette, cycleT) {
-    const frames = skyPaletteFrames(palette);
-    const keys = [
-        { t: 0, name: 'night' },
-        { t: 0.08, name: 'dawn' },
-        { t: 0.22, name: 'day' },
-        { t: 0.42, name: 'day' },
-        { t: 0.52, name: 'sunset' },
-        { t: 0.62, name: 'dusk' },
-        { t: 0.78, name: 'night' },
-        { t: 1, name: 'night' }
-    ];
-    let i = 0;
-    while (i < keys.length - 1 && cycleT > keys[i + 1].t) i += 1;
-    const a = keys[i];
-    const b = keys[i + 1];
-    const u = smoothstep(a.t, b.t, cycleT);
-    const from = frames[a.name];
-    const to = frames[b.name];
-    return from.map((stop, idx) => lerpTuple(stop, to[idx], u));
-}
-
-function dayCycleState(now, cycleStart) {
-    const elapsed = ((now - cycleStart) % DAY_CYCLE_MS + DAY_CYCLE_MS) % DAY_CYCLE_MS;
-    const t = elapsed / DAY_CYCLE_MS; // 0..1
-    const underFrac = UNDER_HORIZON_MS / DAY_CYCLE_MS;
-    // Sun travels right→left, then sits under the left horizon before the night sky takes over
-    const sunTravelEnd = 0.52;
-    const sunUnderEnd = sunTravelEnd + underFrac;
-    let sunArc = 0;
-    let sunness = 0;
-    if (t < sunTravelEnd) {
-        sunArc = t / sunTravelEnd;
-        // Soft near-horizon so sky/sun don't snap off
-        sunness = clamp(Math.pow(Math.sin(sunArc * Math.PI), 0.85), 0, 1);
-    } else if (t < sunUnderEnd) {
-        sunArc = 1;
-        sunness = 0;
-    }
-
-    // Moon rises after sun is under, sets on the left, then also waits under horizon
-    const moonTravelStart = sunUnderEnd;
-    const moonTravelEnd = 1 - underFrac;
-    let moonArc = 0;
-    let moonness = 0;
-    if (t >= moonTravelStart && t < moonTravelEnd) {
-        moonArc = (t - moonTravelStart) / Math.max(0.001, moonTravelEnd - moonTravelStart);
-        moonness = clamp(Math.pow(Math.sin(moonArc * Math.PI), 0.85), 0, 1);
-    } else if (t >= moonTravelEnd) {
-        moonArc = 1;
-        moonness = 0;
-    }
-
-    // Dramatic wash strength for late day → night (peaks at sunset, eases through dusk)
-    const sunsetness = clamp(1 - Math.abs(t - sunTravelEnd) / 0.1, 0, 1);
-    const duskness = clamp(1 - Math.abs(t - (sunTravelEnd + 0.1)) / 0.12, 0, 1);
-
-    const dayness = clamp(sunness, 0, 1);
-    let period = 'night';
-    if (t < 0.22) period = 'dawn';
-    else if (t < sunTravelEnd - 0.06) period = 'day';
-    else if (t < sunTravelEnd + 0.06) period = 'sunset';
-    else if (t < moonTravelStart + 0.1) period = 'dusk';
-    return {
-        t, period, dayness, sunness, moonness, sunArc, moonArc, elapsed,
-        sunsetness, duskness
-    };
-}
 
 export const RadioVisualizer = {
     enabled: false,
@@ -356,93 +135,23 @@ export const RadioVisualizer = {
     _prefsLoaded: false,
 
     loadStoredPrefs() {
-        const stored = readVisualizerPrefs();
-        if (stored.settings && typeof stored.settings === 'object') {
-            this.setSettings(stored.settings, { persist: false });
-        }
-        if (stored.ui && typeof stored.ui === 'object') {
-            if (typeof stored.ui.settingsOpen === 'boolean') this.settingsOpen = stored.ui.settingsOpen;
-            if (typeof stored.ui.chromeMinimal === 'boolean') this.chromeMinimal = stored.ui.chromeMinimal;
-            if (typeof stored.ui.detailsOpen === 'boolean') this.detailsOpen = stored.ui.detailsOpen;
-        }
-        if (stored.layout && typeof stored.layout === 'object') {
-            this._storedLayout = stored.layout;
-        }
+        vizPrefs.loadStoredPrefs(this);
     },
 
     saveStoredPrefs() {
-        writeVisualizerPrefs({
-            settings: { ...this.settings },
-            ui: {
-                settingsOpen: !!this.settingsOpen,
-                chromeMinimal: !!this.chromeMinimal,
-                detailsOpen: !!this.detailsOpen
-            },
-            layout: this.getLayoutPrefs(),
-            open: !!this.enabled
-        });
+        vizPrefs.saveStoredPrefs(this);
     },
 
     getLayoutPrefs() {
-        if (this.savedDockRect) {
-            return { ...this.savedDockRect };
-        }
-        if (!this.modal) {
-            return this._storedLayout || {};
-        }
-        const canvas = this.modal.querySelector('[data-media-visualizer-canvas]');
-        const rect = this.modal.getBoundingClientRect();
-        const left = Number.parseFloat(this.modal.style.left);
-        const top = Number.parseFloat(this.modal.style.top);
-        return {
-            left: Number.isFinite(left) ? left : rect.left,
-            top: Number.isFinite(top) ? top : rect.top,
-            width: this.panelWidth || rect.width,
-            canvasHeight: this.canvasHeight || canvas?.getBoundingClientRect().height || 200
-        };
+        return vizPrefs.getLayoutPrefs(this);
     },
 
     applyStoredLayout(modal) {
-        const layout = this._storedLayout;
-        if (!layout || !modal) return;
-
-        const canvas = modal.querySelector('[data-media-visualizer-canvas]');
-        const width = clamp(Number(layout.width) || 720, 320, 1100);
-        const canvasHeight = clamp(Number(layout.canvasHeight) || 200, 120, 560);
-        const margin = 8;
-        const leftRaw = Number(layout.left);
-        const topRaw = Number(layout.top);
-        const left = Number.isFinite(leftRaw)
-            ? clamp(leftRaw, margin, Math.max(margin, window.innerWidth - 320))
-            : null;
-        const top = Number.isFinite(topRaw)
-            ? clamp(topRaw, margin, Math.max(margin, window.innerHeight - 60))
-            : null;
-
-        modal.style.width = `${width}px`;
-        if (left != null) modal.style.left = `${left}px`;
-        if (top != null) modal.style.top = `${top}px`;
-        if (canvas) canvas.style.height = `${canvasHeight}px`;
-        this.panelWidth = width;
-        this.canvasHeight = canvasHeight;
-        this.resizeCanvas();
+        vizPrefs.applyStoredLayout(this, modal);
     },
 
     applyStoredSettingsToControls(modal) {
-        const modeEl = modal.querySelector('[data-media-visualizer-mode]');
-        const paletteEl = modal.querySelector('[data-media-visualizer-palette]');
-        const sensitivityEl = modal.querySelector('[data-media-visualizer-sensitivity]');
-        const amplitudeEl = modal.querySelector('[data-media-visualizer-amplitude]');
-        const travelEl = modal.querySelector('[data-media-visualizer-travel]');
-        const bpmEl = modal.querySelector('[data-media-visualizer-bpm]');
-
-        if (modeEl) modeEl.value = this.settings.mode;
-        if (paletteEl) paletteEl.value = this.settings.palette;
-        if (sensitivityEl) sensitivityEl.value = String(this.settings.sensitivity);
-        if (amplitudeEl) amplitudeEl.value = String(this.settings.amplitude);
-        if (travelEl) travelEl.value = String(this.settings.travel);
-        if (bpmEl) bpmEl.value = String(this.settings.bpm);
-        this.syncControlLabels();
+        vizPrefs.applyStoredSettingsToControls(this, modal);
     },
 
     setCanvas(canvas) {
