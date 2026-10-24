@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:56:05.196Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T20:20:51.586Z
 
 ## CSS load order
 
@@ -210,6 +210,7 @@ alwaysApply: true
 | js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js, sidebarModules.js | — | — |
 | js/sync.js | cross-tab state sync — BroadcastChannel primary, storage-event insurance | app.js, api.js, layoutStorage.js, displayOptions.js, appTheme.js, popoutNote.js | — | — |
 | js/toolPanelPopout.js | tool panel popout open/focus/pop-in, DOM portal | toolPanelChrome.js, toolsManager.js, popoutWindows.js, appDocuments.js | — | — |
+| js/ui/gridPack.js | the grid packer - expansion classification, item sizing, the deterministic zero-gap rect solver behind sort/reset, and the spatial sort both the packer and the legacy migration use; no DOM writes, no state | ui.js, ui/spatial.js, ui/render.js | — | — |
 | js/uiTransitions.js | site-wide UI transition helpers — Smooth morph, FC fly/expand, chrome visibility | displayOptions.js, fileCabinet.js, magicFocus.js, app.js | — | — |
 | js/viewportCapture.js | best-effort viewport PNG capture for scribble copy | quickScribble.js, clipboard.js | — | — |
 
