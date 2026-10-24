@@ -571,14 +571,19 @@ export function bindSidebarCollapse() {
     if (typeof document === 'undefined') return;
     const btn = document.getElementById('sidebar-collapse')
         ?? document.querySelector?.('[data-sidebar-collapse]');
-    if (!btn || btn.dataset?.sidebarCollapseBound === 'true') return;
+    if (!btn) return;
+    // Always ensure handler is bound - removed the guard that could prevent binding
     if (btn.dataset) btn.dataset.sidebarCollapseBound = 'true';
     btn.innerHTML = (typeof CARD_ICONS !== 'undefined' && CARD_ICONS.minimize) ? CARD_ICONS.minimize : '';
-    btn.addEventListener('click', (event) => {
-        event.preventDefault?.();
-        event.stopPropagation?.();
-        collapseSidebar();
-    });
+    // Avoid duplicate handlers
+    if (!btn.dataset?.collapseHandlerBound) {
+        btn.addEventListener('click', (event) => {
+            event.preventDefault?.();
+            event.stopPropagation?.();
+            collapseSidebar();
+        });
+        btn.dataset.collapseHandlerBound = 'true';
+    }
 }
 
 function bindBrandRow() {
