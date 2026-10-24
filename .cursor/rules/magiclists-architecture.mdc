@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T18:51:57.190Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T18:57:30.561Z
 
 ## CSS load order
 
@@ -90,9 +90,10 @@ alwaysApply: true
 | js/drawingBoardSelection.js | magicCanvas selection session (box select, lasso drag, resize handles) | drawingBoard.js, lassoGeometry.js, canvasDocument.js | — | — |
 | js/drawingBoardToolbar.js | magicCanvas toolbar session (render, bind, menu chrome) | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | — | — |
 | js/editor.js | modal note editor overlay, save flow | noteSurface.js, noteQuickActions.js, editorModalChrome.js, sheet.js | item:selected_for_edit, editor:reveal_on_board | — |
-| js/fileCabinet.js | file cabinet mode, drag-to-file, filed chip rail | fileCabinet/order.js, noteSurface.js, dragdrop.js, layoutStorage.js | filecabinet:layout_changed | — |
+| js/fileCabinet.js | file cabinet facade - the public surface ui.js/shellResize.js/dragdrop.js import, plus the four board-side helpers that compose the split modules | fileCabinet/order.js, fileCabinet/layout.js, fileCabinet/chrome.js, fileCabinet/transfer.js, fileCabinet/render.js, fileCabinet/categoryRail.js, fileCabinet/drag.js, noteSurface.js, dragdrop.js | filecabinet:layout_changed | — |
 | js/fileCabinet/categoryRail.js | file cabinet category rail - folded-slot hover previews, rename/color/hide actions, empty-shelf toggles and dragging a whole shelf onto another desktop | fileCabinet.js, fileCabinet/render.js, fileCabinet/transfer.js, desktopManager.js | — | — |
 | js/fileCabinet/chrome.js | file cabinet chrome state - active/shut flags, persisted drawer height, the mount element and the drawer-height sync that reads them | fileCabinet.js, fileCabinet/layout.js, shellResize.js | — | — |
+| js/fileCabinet/drag.js | file cabinet drag layer - tab drags inside the rail, board<->cabinet filing ghosts, drop targeting, insert markers and the shut snap | fileCabinet.js, fileCabinet/layout.js, fileCabinet/chrome.js, fileCabinet/render.js, fileCabinet/categoryRail.js, fileCabinet/transfer.js, dragdrop.js | — | — |
 | js/fileCabinet/layout.js | file cabinet drawer metrics - cascade geometry, drawer height, UI scale and the stack positioner every rail layer reuses | fileCabinet.js, fileCabinet/chrome.js, fileCabinet/render.js, fileCabinet/drag.js, tileGeometry.js | — | — |
 | js/fileCabinet/order.js | file cabinet drawer ordering and filing decisions - which note sits in which drawer, at which position, and when a note counts as filed | fileCabinet.js, tileGeometry.js, boardSort.js, notePackage.js | — | — |
 | js/fileCabinet/render.js | file cabinet rail rendering - the folded chip rail, empty-shelf group and the open drawer columns, plus the tab drag handle every rendered note carries | fileCabinet.js, fileCabinet/layout.js, fileCabinet/order.js, noteSurfaceHtml.js | — | — |

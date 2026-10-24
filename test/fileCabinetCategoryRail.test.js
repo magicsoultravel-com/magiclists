@@ -282,9 +282,11 @@ describe('file cabinet category rail · shelf drag note ids', () => {
 describe('file cabinet category rail · module boundary', () => {
     const PUBLIC = [
         'buildFileCabinetRolloutStack', 'initFileCabinetFoldedHoverPreview',
-        'initFileCabinetCategoryActions', 'initFileCabinetCategoryColumnDrag'
+        'initFileCabinetCategoryActions'
     ];
     const NOT_PUBLIC = [
+        // private before the split too: only initFileCabinetDrag ever called it
+        'initFileCabinetCategoryColumnDrag',
         'readStoredCategoriesFromContext', 'createCategoryChipGhost',
         'collectFileCabinetCategoryNoteIds', 'assignFileCabinetItemsToDesktop'
     ];

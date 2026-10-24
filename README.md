@@ -138,3 +138,43 @@ The move also dropped a dead line: `saveFiledCabinetLayout` computed
 `normalizeViewMode(sortBy)` into a binding nothing read (the stored entry is
 only `w`/`h`/`x`/`y`), which is why it no longer takes a sort mode.
 
+#### The rest of the file, in dependency order
+
+The first slice was easy because ordering sits at the bottom of the graph. The
+drag layer sits at the top: `initFileCabinetDrag` calls the rail initializers,
+which call the renderer, which measures against the drawer geometry. Extracting
+the biggest chunk first would have made `drag.js` import from the facade that
+imports it, so the remaining slices went bottom-up, each green and committed on
+its own:
+
+| module | owns | facade |
+| --- | --- | --- |
+| `layout.js` | cascade geometry, drawer height, UI scale, stack positioner | 2589 → 2438 |
+| `chrome.js` | active/shut flags, persisted height, mount, drawer-height sync | 2438 → 2316 |
+| `transfer.js` | board↔drawer transfers, drawer→drawer move | 2316 → 2155 |
+| `render.js` | rail + open-drawer markup, tab drag handle | 2155 → 1907 |
+| `categoryRail.js` | fold/rename/color/hide/open-all, shelf→desktop drag | 1907 → 1390 |
+| `drag.js` | ghosts, drop targeting, insert markers, shut snap | 1390 → 331 |
+
+`drag.js` also holds the only mutable module state left in the split:
+`activeDropHighlightKey`. It moved with the two functions that read and write it
+(`applyFileCabinetDropHighlight`, `clearFileCabinetDropTargets`), so no other
+module has to hold a reference to it — the highlight cache stays one value in one
+module instead of being shared through the facade.
+
+Two cycles are deliberate and pre-existing, both deferred-binding only:
+`fileCabinet.js ↔ noteSurface.js` (which is why `transfer.js`, the module that
+edits live items, owns `moveItemBetweenCategories` and nothing in the facade
+calls into it at import time) and `fileCabinet.js ↔ shellResize.js` (chrome and
+render need the splitter/FAB chrome, `shellResize.js` needs the constants).
+`npm run check:modules` links the graph; the free-identifier scan proves every
+moved module resolves its own names.
+
+The payoff is measurable: the facade is 331 lines of exported surface plus four
+board-side helpers, and every extracted module has a characterization suite
+pinning the behaviour that used to be reachable only by dragging cards in a
+browser — `fileCabinetLayout`, `fileCabinetTransfer`, `fileCabinetCategoryRail`
+and `fileCabinetDrag` were all added during the split, taking the cabinet from
+zero drag coverage to 1012 tests overall.
+
+
