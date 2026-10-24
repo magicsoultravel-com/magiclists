@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T18:44:52.217Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T18:46:08.482Z
 
 ## CSS load order
 
@@ -91,6 +91,7 @@ alwaysApply: true
 | js/drawingBoardToolbar.js | magicCanvas toolbar session (render, bind, menu chrome) | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | — | — |
 | js/editor.js | modal note editor overlay, save flow | noteSurface.js, noteQuickActions.js, editorModalChrome.js, sheet.js | item:selected_for_edit, editor:reveal_on_board | — |
 | js/fileCabinet.js | file cabinet mode, drag-to-file, filed chip rail | fileCabinet/order.js, noteSurface.js, dragdrop.js, layoutStorage.js | filecabinet:layout_changed | — |
+| js/fileCabinet/chrome.js | file cabinet chrome state - active/shut flags, persisted drawer height, the mount element and the drawer-height sync that reads them | fileCabinet.js, fileCabinet/layout.js, shellResize.js | — | — |
 | js/fileCabinet/layout.js | file cabinet drawer metrics - cascade geometry, drawer height, UI scale and the stack positioner every rail layer reuses | fileCabinet.js, fileCabinet/chrome.js, fileCabinet/render.js, fileCabinet/drag.js, tileGeometry.js | — | — |
 | js/fileCabinet/order.js | file cabinet drawer ordering and filing decisions - which note sits in which drawer, at which position, and when a note counts as filed | fileCabinet.js, tileGeometry.js, boardSort.js, notePackage.js | — | — |
 | js/flowchart.js | flowchart note subsection model — per-note diagram doc, grid/snap prefs, attached labels, connectors | canvasDocument.js, noteModel.js, api.js, flowchartGeometry.js, flowchartUi.js | — | — |

@@ -266,3 +266,65 @@ describe('file cabinet shut state — cross-tab write-back regression', () => {
         assert.ok(parseFloat(mount.style.height) > 0, 'auto-fit height restored');
     });
 });
+
+// The active/shut/height state machine plus the mount and drawer-height sync now
+// live in js/fileCabinet/chrome.js. shellResize.js drives them through the
+// facade, and it compares nothing by identity — but it does import the storage
+// keys to decide snap-to-shut, so a duplicated key constant or a wrapper that
+// silently stopped calling syncFileCabinetShutChrome would only show up as a
+// cross-tab bug. Pin both.
+describe('file cabinet chrome · module boundary', () => {
+    const PUBLIC = [
+        'isFileCabinetActive', 'setFileCabinetActive', 'isFileCabinetShut',
+        'setFileCabinetShut', 'readFileCabinetHeight', 'writeFileCabinetHeight',
+        'applyFileCabinetShut', 'clearFileCabinetShut', 'ensureFileCabinetMount',
+        'syncFileCabinetDrawerHeight'
+    ];
+    const PUBLIC_CONSTS = [
+        'FILE_CABINET_KEY', 'FILE_CABINET_HEIGHT_KEY', 'FILE_CABINET_SHUT_KEY',
+        'FILE_CABINET_BOARD_MIN_HEIGHT', 'FILE_CABINET_SHUT_SNAP_PX'
+    ];
+
+    it('re-exports every chrome function as the very same object', async () => {
+        installGlobals();
+        const { fc } = await loadModules('chrome-boundary');
+        // no cache-buster: the facade imports this exact instance
+        const chrome = await import('../js/fileCabinet/chrome.js');
+
+        for (const name of PUBLIC) {
+            assert.equal(typeof chrome[name], 'function', `${name} missing from fileCabinet/chrome.js`);
+            assert.equal(fc[name], chrome[name], `${name} is wrapped instead of re-exported`);
+        }
+    });
+
+    it('shares the storage keys with the chrome module', async () => {
+        installGlobals();
+        const { fc } = await loadModules('chrome-keys');
+        const chrome = await import('../js/fileCabinet/chrome.js');
+
+        for (const name of PUBLIC_CONSTS) {
+            assert.equal(fc[name], chrome[name], `${name} drifted from the chrome module`);
+        }
+        assert.equal(chrome.FILE_CABINET_KEY, ACTIVE_KEY);
+        assert.equal(chrome.FILE_CABINET_SHUT_KEY, SHUT_KEY);
+        assert.equal(chrome.FILE_CABINET_HEIGHT_KEY, HEIGHT_KEY);
+    });
+
+    it('drives the shut chrome through the chrome module, not a private copy', async () => {
+        installGlobals();
+        const { fc } = await loadModules('chrome-drive');
+        const chrome = await import('../js/fileCabinet/chrome.js');
+        const storage = globalThis.localStorage;
+        const mount = activeDoc.mount;
+
+        chrome.setFileCabinetShut(true);
+        fc.syncFileCabinetDrawerHeight(mount);
+
+        assert.equal(storage.getItem(SHUT_KEY), 'true');
+        assert.equal(mount.style.height, '0px', 'facade sync must reach the chrome module state');
+
+        chrome.setFileCabinetShut(false);
+        fc.syncFileCabinetDrawerHeight(mount);
+        assert.equal(mount.dataset.shut, undefined, 'expand heals the chrome');
+    });
+});
