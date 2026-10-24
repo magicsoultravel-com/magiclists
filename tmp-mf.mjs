@@ -62,8 +62,8 @@ for (const name of spec.functions || []) {
     const node = ast.body.map((n) => n.declaration || n).find((n) => n && n.type === 'FunctionDeclaration' && n.id.name === name);
     const { start, end } = span(node);
     let chunk = srcLines.slice(start, end + 1);
-    chunk[0] = chunk[0].replace(/^function /, 'export function ');
-    out.push(chunk.join('\n'), '');
+    chunk[0] = chunk[0].replace(/^(async )?function /, (_m, a) => `export ${a || ''}function `);
+    out.push(chunk.join('\n').replace(/import\(\'\\.\//g, "import('../"), '');
     movedNames.push({ kind: 'function', name, startLine: start, endLine: end, node });
 }
 
