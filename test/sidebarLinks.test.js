@@ -138,6 +138,36 @@ describe('sidebarLinks · folders', () => {
         assert.equal(list.innerHTML.includes('class="link-thumb'), false);
     });
 
+    it('anchors the tile folder popover to the hovered folder', () => {
+        writeLinksPayload({
+            version: 2,
+            updatedAt: 1,
+            folders: [{ id: 'folder_work', name: 'Work' }],
+            links: makeLinks(2, 'folder', 'folder_work')
+        });
+
+        const vars = {};
+        const group = {
+            dataset: { folderCount: '2' },
+            getBoundingClientRect: () => ({ left: 8, width: 44 }),
+            style: {
+                setProperty(name, value) {
+                    vars[name] = value;
+                }
+            }
+        };
+        list.clientWidth = 204;
+        list.offsetWidth = 204;
+        list.getBoundingClientRect = () => ({ left: 0, width: 204 });
+        list.querySelectorAll = (selector) => (
+            selector === '.sidebar-links__folder-group' ? [group] : []
+        );
+
+        SidebarLinks.init();
+        assert.equal(vars['--folder-drawer-cols'], '2');
+        assert.equal(vars['--folder-drawer-left'], '0px');
+    });
+
     it('sizes and clamps the tile folder popover inside the sidebar width', () => {
         writeLinksPayload({
             version: 2,
@@ -166,7 +196,7 @@ describe('sidebarLinks · folders', () => {
         SidebarLinks.init();
         assert.equal(vars['--folder-drawer-cols'], '3');
         assert.equal(vars['--folder-drawer-cell'], '44px');
-        assert.equal(vars['--folder-drawer-left'], '49.4px');
+        assert.equal(vars['--folder-drawer-left'], '-100.6px');
     });
 
     it('caps only root links, never folder contents', () => {

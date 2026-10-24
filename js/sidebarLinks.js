@@ -125,7 +125,10 @@ function positionFolderDrawer(group) {
     const drawerWidth = (cols * cell) + ((cols - 1) * gap) + chrome;
     const groupLeft = (groupRect.left - listRect.left) / (scale || 1);
     const maxLeft = Math.max(0, listWidth - drawerWidth - 2);
-    const left = Math.round(Math.min(Math.max(groupLeft, 0), maxLeft) * 10) / 10;
+    const listLeft = Math.min(Math.max(groupLeft, 0), maxLeft);
+    /* The drawer is absolute inside the folder group, so convert from list
+       coordinates back to an offset from the hovered folder's own left edge. */
+    const left = Math.round((listLeft - groupLeft) * 10) / 10;
 
     group.style.setProperty('--folder-drawer-cols', `${cols}`);
     group.style.setProperty('--folder-drawer-cell', `${Math.round(cell * 100) / 100}px`);
