@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:04:52.080Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:06:55.643Z
 
 ## CSS load order
 
@@ -140,6 +140,7 @@ alwaysApply: true
 | js/noteSurfaceChecklist.js | checklist operations, drag/drop, state management | noteSurface.js, checklistSteps.js, noteBodyConversion.js, richText.js | — | — |
 | js/noteSurfaceEditing.js | note inline editing, emoji, text operations, zoom controls | noteSurface.js, noteSurfaceHtml.js, richText.js, emojiPicker.js, domEscape.js | — | — |
 | js/noteSurfaceHtml.js | note HTML building and rendering | noteSurface.js, noteModel.js, sheet.js, checklistSteps.js | — | — |
+| js/noteSurfaceHtml/body.js | note body markup - the content field, checklist/sheet/meeting bodies, side sections, visibility rules and the rich-text render helpers | noteSurfaceHtml.js, noteSurfaceHtml/checklistMarkup.js, sheet.js, richText.js | — | — |
 | js/noteSurfaceHtml/checklistMarkup.js | expanded checklist markup for a note body - open steps, the done section and the expand/collapse-all control | noteSurfaceHtml.js, checklistSteps.js, noteSurfaceChecklist.js | — | — |
 | js/noteSurfaceHtml/metaFooter.js | note card meta footer - created/modified dates, line count and payload size, plus the pure stat helpers behind them | noteSurfaceHtml.js, richText.js, sheet.js | — | — |
 | js/noteSurfaceHtml/quickActions.js | note card quick-action toolbar markup - the filed/open toggle, pin, color, media, planner, flowchart and more menu | noteSurfaceHtml.js, noteQuickActions.js, icons.js | — | — |
