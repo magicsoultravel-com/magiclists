@@ -394,6 +394,18 @@ export const DesktopManager = {
     }
 };
 
+/**
+ * True when the card lives on the desktop that is currently active - the spatial
+ * layer only moves cards it can see.
+ */
+export function isDesktopCard(card) {
+    // A card is a "desktop card" if it's on the active desktop
+    // This allows spatial behavior (drag, resize, etc.) to work on any active desktop
+    const cardDesktop = card?.dataset?.desktop;
+    const activeDesktop = DesktopManager.getActiveDesktop();
+    return cardDesktop === String(activeDesktop);
+}
+
 // Initialize - ensure defaults are loaded
 export function initDesktopManager() {
     loadState();

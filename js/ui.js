@@ -99,7 +99,7 @@ import {
     refreshBoardChecklistBody,
     refreshBoardEditorCard
 } from './noteSurfaceHtml.js';
-import { DesktopManager } from './desktopManager.js';
+import { DesktopManager, isDesktopCard } from './desktopManager.js';
 export { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS, DRAWING_ICONS } from './icons.js';
 export {
     deriveNoteTitle,
@@ -109,6 +109,7 @@ export {
     defaultStartDateTimeNow,
     normalizeItemForSave
 } from './noteModel.js';
+export { isDesktopCard };
 import {
     GRID_LAYOUT_KEY,
     GRID_PINS_KEY,
@@ -152,17 +153,7 @@ import {
     setBoardItem,
     writeActiveBoardViewMode
 } from './ui/boardState.js';
-
-function ensureSmallTile(item) {
-    if (!NoteSurface.canEditInline() || resolveTileSize(item) === 'small') return;
-    NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
-    item.tileSize = 'small';
-    setBoardItem(item);
-}
-
-function updateBoardItemsMap(item) {
-    setBoardItem(item);
-}
+import * as Spatial from './ui/spatial.js';
 
 function createGridDeps(ui) {
     return {
@@ -185,14 +176,6 @@ function noteRectHooks(ui, card) {
         isActivelyResizing: ui.isCardActivelyResizing(card),
         getTileSize: (c) => resolveTileSize(ui.resolveBoardItem(c?.dataset?.id))
     };
-}
-
-export function isDesktopCard(card) {
-    // A card is a "desktop card" if it's on the active desktop
-    // This allows spatial behavior (drag, resize, etc.) to work on any active desktop
-    const cardDesktop = card?.dataset?.desktop;
-    const activeDesktop = DesktopManager.getActiveDesktop();
-    return cardDesktop === String(activeDesktop);
 }
 
 export const UI = {
@@ -241,460 +224,104 @@ export const UI = {
         restoreViewSession(mode);
     },
 
-    resolveBoardItem(itemId) {
-        return getBoardItem(itemId);
-    },
+    resolveBoardItem(itemId) { return Spatial.resolveBoardItem(this, itemId); },
 
-    getSavedLayoutRect(card, item) {
-        const id = item?.id || card?.dataset?.id;
-        if (!id) return null;
-        return this.getGridLayout()[id] || null;
-    },
+    getSavedLayoutRect(card, item) { return Spatial.getSavedLayoutRect(this, card, item); },
 
-    resolveRememberedSpatialSize(saved, item) {
-        const remembered = geoReadRememberedSize(saved);
-        if (remembered) return remembered;
-        return geoResolveExpandedDefaultRect(resolveTileSize(item), null);
-    },
+    resolveRememberedSpatialSize(saved, item) { return Spatial.resolveRememberedSpatialSize(this, saved, item); },
 
-    resolveBoardExpandRect(card, item) {
-        const saved = this.getSavedLayoutRect(card, item);
-        const tileSize = resolveTileSize(item);
-        const remembered = geoReadRememberedSize(saved);
-        const size = remembered
-            ? remembered
-            : geoResolveExpandedDefaultRect(tileSize, null);
-        const pos = this.readNoteRect(card);
-        return { x: pos.x, y: pos.y, w: size.w, h: size.h };
-    },
+    resolveBoardExpandRect(card, item) { return Spatial.resolveBoardExpandRect(this, card, item); },
 
-    resolveBoardExpandPlacement(card, item) {
-        const sizeRect = this.resolveBoardExpandRect(card, item);
-        const canvas = card.closest('#app-canvas');
-        return this.findDesktopCenterSlot(sizeRect.w, sizeRect.h, canvas, 'grid', {
-            excludeId: item.id
-        });
-    },
+    resolveBoardExpandPlacement(card, item) { return Spatial.resolveBoardExpandPlacement(this, card, item); },
 
-    mergeSpatialLayoutEntry(prev, rect, tileSize = LEGACY_TILE_SIZE, {
-        updateRemembered = false,
-        rememberedW = null,
-        rememberedH = null
-    } = {}) {
-        const clamped = geoClampSpatialSize(rect.w, rect.h, tileSize);
-        const entry = {
-            w: Math.round(clamped.w),
-            h: Math.round(clamped.h)
-        };
-        if (Number.isFinite(rect.x)) entry.x = Math.round(rect.x);
-        if (Number.isFinite(rect.y)) entry.y = Math.round(rect.y);
-
-        let rw = rememberedW;
-        let rh = rememberedH;
-        if (updateRemembered && !isCollapsedSpatialSize(entry.w, entry.h, tileSize)) {
-            rw = entry.w;
-            rh = entry.h;
-        }
-        if (!Number.isFinite(rw) || !Number.isFinite(rh)) {
-            rw = prev?.rememberedW;
-            rh = prev?.rememberedH;
-        }
-        if (Number.isFinite(rw) && Number.isFinite(rh) && !isCollapsedSpatialSize(rw, rh, tileSize)) {
-            const mem = geoClampSpatialSize(rw, rh, tileSize);
-            entry.rememberedW = Math.round(mem.w);
-            entry.rememberedH = Math.round(mem.h);
-        }
-        if (isCollapsedSpatialSize(entry.w, entry.h, tileSize)) {
-            const small = getSmallRect(readTileSmallFootprint());
-            entry.w = small.w;
-            entry.h = small.h;
-        }
-        return entry;
+    mergeSpatialLayoutEntry(prev, rect, tileSize = LEGACY_TILE_SIZE, opts = {}) {
+        return Spatial.mergeSpatialLayoutEntry(this, prev, rect, tileSize, opts);
     },
 
     persistRememberedSpatialSize(itemId, w, h, tileSize = LEGACY_TILE_SIZE) {
-        if (!itemId || !Number.isFinite(w) || !Number.isFinite(h)) return;
-        if (isCollapsedSpatialSize(w, h, tileSize)) return;
-        const clamped = geoClampSpatialSize(w, h, tileSize);
-        const layout = this.getGridLayout();
-        const prev = layout[itemId] || {};
-        layout[itemId] = {
-            ...prev,
-            rememberedW: Math.round(clamped.w),
-            rememberedH: Math.round(clamped.h)
-        };
-        localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
+        return Spatial.persistRememberedSpatialSize(this, itemId, w, h, tileSize);
     },
 
-    resolveCardRect(card, item, { mode } = {}) {
-        const pos = card ? this.readNoteRect(card) : { x: 0, y: 0, w: 0, h: 0 };
-        const saved = this.getSavedLayoutRect(card, item);
-        if (mode === 'small' || mode === 'label') {
-            const small = getSmallRect(readTileSmallFootprint());
-            return { x: pos.x, y: pos.y, w: small.w, h: small.h };
-        }
-        if (mode === 'editor' && saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            return { x: pos.x, y: pos.y, w: saved.w, h: saved.h };
-        }
-        if (mode === 'remembered' || mode === 'toggleTarget' || mode === 'saved') {
-            const size = mode === 'saved' && saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)
-                ? geoClampSpatialSize(saved.w, saved.h, resolveTileSize(item))
-                : this.resolveRememberedSpatialSize(saved, item);
-            return { x: pos.x, y: pos.y, w: size.w, h: size.h };
-        }
-        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            const size = geoClampSpatialSize(saved.w, saved.h, resolveTileSize(item));
-            return { x: pos.x, y: pos.y, w: size.w, h: size.h };
-        }
-        const fallback = geoResolveSpatialFallbackRect(resolveTileSize(item));
-        return { x: pos.x, y: pos.y, w: fallback.w, h: fallback.h };
-    },
+    resolveCardRect(card, item, opts = {}) { return Spatial.resolveCardRect(this, card, item, opts); },
 
-    isGridMultiCellSize(w, h) {
-        const { cellW } = getGridMetrics();
-        return w > cellW + 2 || h > cellW + 2;
-    },
+    isGridMultiCellSize(w, h) { return Spatial.isGridMultiCellSize(this, w, h); },
 
-    getCardTileSize(card, item = null) {
-        const resolved = item || this.resolveBoardItem(card?.dataset?.id);
-        return resolveTileSize(resolved);
-    },
+    getCardTileSize(card, item = null) { return Spatial.getCardTileSize(this, card, item); },
 
-    applyCollapsedTileClasses(card, tileSize) {
-        card.classList.remove('tile-small', 'tile-large');
-        const size = normalizeTileSize(tileSize);
-        card.classList.add(size === 'small' ? 'tile-small' : 'tile-large');
-    },
+    applyCollapsedTileClasses(card, tileSize) { return Spatial.applyCollapsedTileClasses(this, card, tileSize); },
 
-    isSpatiallyCollapsed(card) {
-        if (!card) return true;
-        const { w, h } = this.readNoteRect(card);
-        const item = this.resolveBoardItem(card?.dataset?.id);
-        return isCollapsedSpatialSize(w, h, resolveTileSize(item));
-    },
+    isSpatiallyCollapsed(card) { return Spatial.isSpatiallyCollapsed(this, card); },
 
     isSavedLayoutExpanded(itemId, footprint = readTileSmallFootprint()) {
-        const saved = this.getGridLayout()[itemId];
-        if (!saved || !Number.isFinite(saved.w) || !Number.isFinite(saved.h)) return false;
-        const item = this.resolveBoardItem(itemId);
-        return !isCollapsedSpatialSize(saved.w, saved.h, resolveTileSize(item), footprint);
+        return Spatial.isSavedLayoutExpanded(this, itemId, footprint);
     },
 
-    syncSpatialCollapseState(card, item, w, h) {
-        if (!isDesktopCard(card)) return false;
-        card.classList.add('note-surface');
-        const atSmall = this.isSpatiallyCollapsed(card);
-        card.classList.toggle('spatial-at-small', atSmall);
-        const resolvedItem = item || this.resolveBoardItem(card?.dataset?.id);
-        const tier = geoInferTileTier(w, h, resolveTileSize(resolvedItem));
-        this.applyCollapsedTileClasses(card, tier);
-        return atSmall;
-    },
+    syncSpatialCollapseState(card, item, w, h) { return Spatial.syncSpatialCollapseState(this, card, item, w, h); },
 
-    syncSpatialToggleButton(card, atSmall) {
-        if (!isDesktopCard(card)) return;
-        const toggleBtn = card.querySelector('.card-act--toggle');
-        if (!toggleBtn) return;
-        if (atSmall === undefined) atSmall = this.isSpatiallyCollapsed(card);
-        const inFileCabinet = !!card.closest('#file-cabinet');
-        let expandTitle;
-        let lastIcon;
-        if (isFileCabinetActive()) {
-            const labels = getFileCabinetToggleLabels(inFileCabinet, atSmall);
-            expandTitle = labels.title;
-            lastIcon = labels.iconKey === 'expand' ? CARD_ICONS.expand : CARD_ICONS.collapse;
-        } else {
-            expandTitle = atSmall ? 'Expand' : 'Collapse to small';
-            lastIcon = atSmall ? CARD_ICONS.expand : CARD_ICONS.collapse;
-        }
-        toggleBtn.innerHTML = lastIcon;
-        toggleBtn.setAttribute('title', expandTitle);
-        toggleBtn.setAttribute('aria-label', expandTitle);
-    },
+    syncSpatialToggleButton(card, atSmall) { return Spatial.syncSpatialToggleButton(this, card, atSmall); },
 
-    bindBoardEditorFocusChrome(card) {
-        if (!isDesktopCard(card) || card.dataset.boardEditorFocusBound) return;
-        card.dataset.boardEditorFocusBound = '1';
-        card.addEventListener('focusin', (e) => {
-            if (e.target.closest('.editor-note-shell .card-inline-edit')) {
-                requestAnimationFrame(() => {
-                    card.classList.add('is-editing-inline');
-                    this.syncSpatialChromeForEditing(card);
-                });
-            }
-        });
-        card.addEventListener('focusout', () => {
-            requestAnimationFrame(() => {
-                if (!card.querySelector('.editor-note-shell .card-inline-edit:focus')) {
-                    card.classList.remove('is-editing-inline');
-                    this.syncSpatialChromeForEditing(card);
-                }
-            });
-        });
-    },
+    bindBoardEditorFocusChrome(card) { return Spatial.bindBoardEditorFocusChrome(this, card); },
 
     saveTileLayoutFromCard(card, item, rect, tileSize) {
-        const id = item?.id || card.dataset.id;
-        if (!id || !isDesktopCard(card)) return;
-        const updateRemembered = !isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item));
-        this.saveGridLayout(id, rect, { updateRemembered });
+        return Spatial.saveTileLayoutFromCard(this, card, item, rect, tileSize);
     },
 
     saveSpatialLayoutFromResize(card, item, tileSize) {
-        if (!card || !item) return;
-        const rect = this.readNoteRect(card);
-        this.saveTileLayoutFromCard(card, item, rect, tileSize || resolveTileSize(item));
+        return Spatial.saveSpatialLayoutFromResize(this, card, item, tileSize);
     },
 
-    collapseSnapPanelCard(card, item) {
-        this.finalizeDesktopCard(card);
-    },
+    collapseSnapPanelCard(card, item) { return Spatial.collapseSnapPanelCard(this, card, item); },
 
-    commitSpatialRect(card, item, rect, ctx = {}) {
-        const tier = ctx.tier ?? (isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item)) ? 'small' : 'large');
-        const normalizedTier = normalizeTileSize(tier);
-
-        if (NoteSurface.canEditInline() && normalizedTier !== resolveTileSize(item)) {
-            NoteSurface.mutateItem(item, (it) => {
-                it.tileSize = normalizedTier;
-            }, { preserveView: true, skipRerender: true });
-            item.tileSize = normalizedTier;
-            setBoardItem(item);
-        }
-
-        this.applyNoteRect(card, rect, { settling: false });
-        this.saveTileLayoutFromCard(card, item, rect, normalizedTier);
-        this.finalizeDesktopCard(card, { skipSizeReapply: !!ctx.skipSizeReapply });
-        const canvas = card.closest('#app-canvas');
-        if (ctx.scheduleExtents) {
-            this.scheduleBoardCanvasExtents(canvas);
-        }
-        // Compose: expand-only + bento. Allow-overlap and collapse never push neighbors.
-        if (canvas?.classList.contains('view-grid') && isBoardOverlayEnabled()) {
-            if (!isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item))) {
-                const reflowOpts = { animate: true };
-                if (ctx.actorRect) reflowOpts.actorRect = ctx.actorRect;
-                requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, reflowOpts));
-            }
-        }
-    },
+    commitSpatialRect(card, item, rect, ctx = {}) { return Spatial.commitSpatialRect(this, card, item, rect, ctx); },
 
     applyTileTierRect(card, item, nextTier, rect, ctx = {}) {
-        this.commitSpatialRect(card, item, rect, { ...ctx, tier: nextTier });
+        return Spatial.applyTileTierRect(this, card, item, nextTier, rect, ctx);
     },
 
     applySpatialToggleRect(card, item, rect, ctx = {}) {
-        this.commitSpatialRect(card, item, rect, { ...ctx, scheduleExtents: true, skipSizeReapply: true });
+        return Spatial.applySpatialToggleRect(this, card, item, rect, ctx);
     },
 
     collapseSpatialAtCurrentPos(card, item, ctx = {}) {
-        const pos = this.readNoteRect(card);
-        this.persistRememberedSpatialSize(item.id, pos.w, pos.h, resolveTileSize(item));
-        const small = getSmallRect(readTileSmallFootprint());
-        this.applySpatialToggleRect(card, item, { x: pos.x, y: pos.y, w: small.w, h: small.h }, ctx);
+        return Spatial.collapseSpatialAtCurrentPos(this, card, item, ctx);
     },
 
     collapseBoardCardToSmallFootprint(card, item, ctx = {}) {
-        if (!card || !item?.id || isFileCabinetActive() || this.isSpatiallyCollapsed(card)) return;
-        this.collapseSpatialAtCurrentPos(card, item, ctx);
+        return Spatial.collapseBoardCardToSmallFootprint(this, card, item, ctx);
     },
 
-    applyTileZoneToggle(card, item, ctx = {}) {
-        if (isFileCabinetActive()) {
-            this.applyFileCabinetZoneToggle(card, item, ctx);
-            return;
-        }
-
-        if (this.isSpatiallyCollapsed(card)) {
-            removeFromFileCabinetOrder(item.id);
-            // Use resolveBoardExpandRect to keep the current position and restore remembered size,
-            // instead of resolveBoardExpandPlacement which placed the card at the viewport center.
-            const rect = this.resolveBoardExpandRect(card, item);
-            this.applySpatialToggleRect(card, item, rect, { ...ctx, actorRect: rect });
-            this.raiseDesktopCard(card);
-            requestAnimationFrame(() => {
-                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            });
-        } else {
-            this.collapseSpatialAtCurrentPos(card, item, ctx);
-        }
-        const atSmall = this.isSpatiallyCollapsed(card);
-        this.syncSpatialToggleButton(card, atSmall);
-    },
+    applyTileZoneToggle(card, item, ctx = {}) { return Spatial.applyTileZoneToggle(this, card, item, ctx); },
 
     applyFileCabinetZoneToggle(card, item, ctx = {}) {
-        applyFileCabinetZoneToggle(card, item, ctx, this);
+        return Spatial.applyFileCabinetZoneToggle(this, card, item, ctx);
     },
 
-reapplySmallFootprintOnBoard() {
-        const canvas = document.getElementById('app-canvas');
-        if (!canvas) return;
-        const footprint = readTileSmallFootprint();
-        const smallRect = getSmallRect(footprint);
-        const activeDesktop = DesktopManager.getActiveDesktop();
-        canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
-            if (card.closest('#file-cabinet')) return;
-            const item = this.resolveBoardItem(card.dataset.id);
-            if (!item) return;
-            const rect = this.readNoteRect(card);
-            const wasSmall = isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item))
-                || resolveTileSize(item) === 'small';
-            if (!wasSmall) return;
-            const next = { x: rect.x, y: rect.y, w: smallRect.w, h: smallRect.h };
-            this.applyNoteRect(card, next, { settling: false });
-            ensureSmallTile(item);
-            this.saveTileLayoutFromCard(card, item, next, 'small');
-            this.finalizeDesktopCard(card);
-        });
-        this.scheduleBoardCanvasExtents(canvas);
-        requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
-        if (isFileCabinetActive()) {
-            window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
-        }
-    },
+    reapplySmallFootprintOnBoard() { return Spatial.reapplySmallFootprintOnBoard(this); },
 
     reapplyBoardMetricsOnBoard(prevMetrics, nextMetrics) {
-        const canvas = document.getElementById('app-canvas');
-        if (!canvas) return;
-        const footprint = readTileSmallFootprint();
-
-        const migrateRect = (rect) => {
-            if (!rect || !Number.isFinite(rect.w) || !Number.isFinite(rect.h)) return rect;
-            const wCells = Math.max(1, Math.round((rect.w + prevMetrics.gap) / prevMetrics.strideX));
-            const hCells = Math.max(1, Math.round((rect.h + prevMetrics.gap) / prevMetrics.strideY));
-            const next = {
-                w: gridCellsToSpanW(wCells, nextMetrics),
-                h: gridCellsToSpanH(hCells, nextMetrics)
-            };
-            if (Number.isFinite(rect.x) && Number.isFinite(rect.y)) {
-                const xCells = Math.round((rect.x - prevMetrics.origin) / prevMetrics.strideX);
-                const yCells = Math.round((rect.y - prevMetrics.origin) / prevMetrics.strideY);
-                next.x = nextMetrics.origin + xCells * nextMetrics.strideX;
-                next.y = nextMetrics.origin + yCells * nextMetrics.strideY;
-            }
-            return next;
-        };
-
-        canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
-            if (card.closest('#file-cabinet')) return;
-            const item = this.resolveBoardItem(card.dataset.id);
-            if (!item) return;
-            let rect = migrateRect(this.readNoteRect(card));
-            const { packW, maxH, origin, edgePad } = this.getGridBoardBounds(canvas);
-            rect = this.snapNoteRect(rect, { maxW: packW, maxH, origin, edgePad });
-            this.applyNoteRect(card, rect, { settling: false });
-            this.saveTileLayoutFromCard(card, item, rect, this.getCardTileSize(card, item));
-            this.finalizeDesktopCard(card);
-        });
-
-        this.scheduleBoardCanvasExtents(canvas);
-        requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
-        if (isFileCabinetActive()) {
-            window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
-        }
+        return Spatial.reapplyBoardMetricsOnBoard(this, prevMetrics, nextMetrics);
     },
 
-    clampNoteToBoardEdges(rect, opts) {
-        return clampNoteToBoardEdgesCore(rect, opts);
-    },
+    clampNoteToBoardEdges(rect, opts) { return Spatial.clampNoteToBoardEdges(this, rect, opts); },
 
-    // Preserve a saved card's position VERBATIM — never clamp to packW/maxH.
-    // This allows cards saved beyond the visible width to overflow naturally,
-    // producing a horizontal scrollbar on zoom-in instead of being forced
-    // back inside the (shrinking) packing width.
-    preserveSavedBoardRect(rect) {
-        if (!rect) return rect;
-        return {
-            x: Math.max(0, rect.x),
-            y: Math.max(0, rect.y),
-            w: rect.w,
-            h: rect.h
-        };
-    },
+    preserveSavedBoardRect(rect) { return Spatial.preserveSavedBoardRect(this, rect); },
 
     gridBoardRectForCard(card, savedRect, isExpanded, itemId = null) {
-        // 1. Safely resolve the ID whether a card exists or the ID is passed directly
-        const id = itemId || card?.dataset?.id;
-        
-        // 2. Safely resolve the base rect
-        const base = savedRect && Number.isFinite(savedRect.x) && Number.isFinite(savedRect.w)
-            ? { x: savedRect.x, y: savedRect.y, w: savedRect.w, h: savedRect.h }
-            : (card ? this.readNoteRect(card) : { x: 0, y: 0, w: 0, h: 0 });
-
-        if (isExpanded) {
-            const item = this.resolveBoardItem(id);
-            const tileSize = this.getCardTileSize(card, item);
-            const expandedMin = geoResolveExpandedDefaultRect(tileSize, savedRect);
-            if (base.w >= expandedMin.w && base.h >= expandedMin.h) return base;
-            return {
-                ...base,
-                w: expandedMin.w,
-                h: expandedMin.h
-            };
-        }
-        
-        const item = this.resolveBoardItem(id);
-        return this.gridTileRect(this.getCardTileSize(card, item), base, savedRect);
+        return Spatial.gridBoardRectForCard(this, card, savedRect, isExpanded, itemId);
     },
 
-    gridTileRect(tileSize, base, saved) {
-        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            if (isCollapsedSpatialSize(saved.w, saved.h, tileSize)) {
-                const small = getSmallRect(readTileSmallFootprint());
-                return { ...base, w: small.w, h: small.h };
-            }
-            const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
-            return { ...base, w: clamped.w, h: clamped.h };
-        }
-        const defaults = geoGetTileDefaultRect(tileSize);
-        return { ...base, w: defaults.w, h: defaults.h };
-    },
+    gridTileRect(tileSize, base, saved) { return Spatial.gridTileRect(this, tileSize, base, saved); },
 
-    syncCardDraggable(card) {
-        card.removeAttribute('draggable');
-    },
+    syncCardDraggable(card) { return Spatial.syncCardDraggable(this, card); },
 
-    isGridBoardCard(card) {
-        return isDesktopCard(card);
-    },
+    isGridBoardCard(card) { return Spatial.isGridBoardCard(this, card); },
 
     updateSingleCard(canvas, item, hiddenCategories = []) {
-        if (!canvas || !item?.id) return false;
-        const card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
-        if (!card) return false;
-
-        // Keep the board lookup map on the same live item object AppState holds.
-        updateBoardItemsMap(item);
-
-        // Capture canvas scroll position before full re-render to prevent view jump
-        const canvasScrollTop = canvas.scrollTop || 0;
-        const canvasScrollLeft = canvas.scrollLeft || 0;
-
-        let activeCategories = readStoredCategories()
-            .filter((cat) => !hiddenCategories.includes(cat.name));
-        const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
-
-        const activeEdit = document.activeElement?.closest?.('.card-inline-edit');
-        const isActivelyEditing = !!(activeEdit && card.contains(activeEdit));
-
-        if (isActivelyEditing) {
-            refreshBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
-        } else {
-            renderBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
-        }
-        applyItemCardTheme(card, item);
-        applyCardCategoryBand(card, categoryColor);
-        this.finalizeDesktopCard(card);
-
-        // Restore canvas scroll position after full re-render
-        canvas.scrollTop = canvasScrollTop;
-        canvas.scrollLeft = canvasScrollLeft;
-
-        return true;
+        return Spatial.updateSingleCard(this, canvas, item, hiddenCategories);
     },
 
     updateBoardItemsMap(item) {
-        updateBoardItemsMap(item);
+        return Spatial.updateBoardItemsMap(item);
     },
 
     render(canvas, items, viewMode, hiddenCategories = [], renderOptions = {}) {
@@ -1466,7 +1093,7 @@ findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
 
         sorted.forEach((item) => {
             if (!item?.id) return;
-            ensureSmallTile(item);
+            Spatial.ensureSmallTile(item);
 
             let x = startX + col * colStride;
             let y = startY + row * rowStride;
