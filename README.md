@@ -213,5 +213,53 @@ One trap, recorded because it cost a red build: a name used **only** by a local
 before deciding what is unused will delete real bindings (`buildChecklistRowHtml`);
 treat re-export blocks as usage, and let the free-identifier scan be the judge.
 
+#### The facade that was still doing six jobs
 
+`js/noteSurfaceChecklist.js` (1332 lines) was the next one, and it is the middle
+case: it does hold mutable state (the collapse cache) and it does wire events, so
+it is not a pure-markup module — but five of its six jobs are independent enough
+to leave one at a time. It ends as a 49-line barrel.
 
+| module | owns | facade |
+| --- | --- | --- |
+| `noteSurfaceChecklist/rows.js` | markup for one step row: checkbox, text, collapse chevron, indent/outdent, copy/delete, tree guides | 1332 → 1256 |
+| `noteSurfaceChecklist/collapse.js` | collapsed groups + done sections, expand/collapse-all toolbar, the 1s read cache | 1256 → 1140 |
+| `noteSurfaceChecklist/targeting.js` | which rows are on screen, whether a row is a collapsed group, where a pointer lands | 1140 → 1049 |
+| `noteSurfaceChecklist/ops.js` | insert/remove plus the Backspace/Delete/Enter key paths | 1049 → 655 |
+| `noteSurfaceChecklist/drag.js` | pointer drag: ghosts, insert bounds, one committed reorder | 655 → 379 |
+| `noteSurfaceChecklist/interactions.js` | the delegated click/change/keydown handler, the drag hit-test | 379 → 49 |
+
+The order is the dependency graph read bottom-up, same as the cabinet: `rows` and
+`collapse` have no sibling dependencies, `targeting` reads `collapse`, `ops` needs
+both (`insertStepRowInDom` renders through the row builder, Enter consults the
+collapsed keys), and `drag`/`interactions` sit on top of everything. Extracting
+the 284-line click handler first would have had it importing from the facade that
+imports it.
+
+Three things this split taught that the earlier ones did not:
+
+- **A performance cache can become an API.** The one-second collapse cache was
+  four file-local bindings; after the move `drag.js` is the only thing that calls
+  `getCachedChecklistCollapsedKeys`/`invalidateChecklistCache`, so they had to be
+  exported by `collapse.js`. Because the cache is time-based rather than
+  write-through, a drop that opens a group *must* invalidate it explicitly — the
+  reset state is pinned by test rather than left to the TTL.
+- **Queries deserve their own module.** `getActiveRows`, `isCollapsedGroupRow` and
+  `findStepInsertionPosition` mutate nothing, so they fit neither `collapse`
+  (state) nor `ops` (mutation). Left in either, `drag.js` and `interactions.js`
+  would each have needed a private copy. `targeting.js` is 103 lines and both
+  import it — and it is the module where "visible" finally has a definition
+  worth testing (collapsed group, other item's collapse key, shut done section,
+  ghost rows without a step id).
+- **Cross-module drift is testable.** `isChecklistInteraction` is a hard-coded
+  selector list that has to keep matching classes the markup emits — if it slips,
+  drag steals the pointer from a control nobody claims any more. The suite now
+  renders a row and the expanded-checklist body and asserts every claimed class
+  is still emitted. Same idea as the export-surface diff, applied to selectors
+  instead of names.
+
+The barrel check got one line stricter than the `noteSurfaceHtml` version: after
+the last slice the facade must contain no `import` at all, not merely no
+`function`/`const` — a re-export block needs a local import only if something
+still uses the name, so a leftover `import` is the tell that code is trying to
+move back in.

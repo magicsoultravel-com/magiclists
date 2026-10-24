@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:32:42.684Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:35:37.025Z
 
 ## CSS load order
 
@@ -137,9 +137,10 @@ alwaysApply: true
 | js/notePopoutBridge.js | note popout window open/focus, edit claims, BroadcastChannel sync | popoutNote.js, app.js, noteQuickActions.js, popoutWindows.js | — | — |
 | js/noteQuickActions.js | board + modal note quick-action DOM binding | noteSurface.js, ui.js, editor.js | — | — |
 | js/noteSurface.js | note card DOM, inline edit, checklist interactions, item mutations | checklistSteps.js, richText.js, sheet.js, noteBodyConversion.js, noteQuickActions.js, noteSurfaceHtml.js, noteSurfaceEditing.js, noteSurfaceChecklist.js | item:mutation_requested | — |
-| js/noteSurfaceChecklist.js | checklist operations, drag/drop, state management | noteSurface.js, checklistSteps.js, noteBodyConversion.js, richText.js | — | — |
+| js/noteSurfaceChecklist.js | checklist operations, drag/drop, state management | noteSurface.js, checklistSteps.js, noteBodyConversion.js, richText.js, noteSurfaceChecklist/collapse.js, noteSurfaceChecklist/ops.js | — | — |
 | js/noteSurfaceChecklist/collapse.js | which checklist groups are collapsed - the localStorage-backed state, the expand/collapse-all toolbar and the short-lived read cache used on drag/render hot paths | noteSurfaceChecklist.js, noteSurfaceChecklist/targeting.js, noteSurfaceChecklist/drag.js, checklistSteps.js | — | — |
 | js/noteSurfaceChecklist/drag.js | pointer drag for checklist steps - ghosts, drop targeting with computed insert bounds, and the reorder/indent intent that lands as one committed operation | noteSurfaceChecklist.js, noteSurfaceChecklist/targeting.js, noteSurfaceChecklist/collapse.js, noteSurfaceChecklist/ops.js, checklistSteps.js | — | — |
+| js/noteSurfaceChecklist/interactions.js | the delegated click/change/keydown handler behind a rendered checklist - checkbox toggles with done-section moves, copy, delete, indent/outdent, collapse, add-step and the Enter/arrow key paths | noteSurfaceChecklist.js, noteSurfaceChecklist/ops.js, noteSurfaceChecklist/collapse.js, noteSurfaceChecklist/targeting.js, dragdrop.js | — | — |
 | js/noteSurfaceChecklist/ops.js | checklist step operations - insert, remove, and the Backspace/Delete/Enter key handling that edits the tree in place with surgical DOM updates | noteSurfaceChecklist.js, noteSurfaceChecklist/rows.js, noteSurfaceChecklist/collapse.js, checklistSteps.js | — | — |
 | js/noteSurfaceChecklist/rows.js | markup for one checklist step row - checkbox, text, collapse chevron, indent/outdent, copy and delete controls, tree guides | noteSurfaceChecklist.js, noteSurfaceHtml/checklistMarkup.js, checklistSteps.js | — | — |
 | js/noteSurfaceChecklist/targeting.js | queries against the rendered step list - which rows are currently visible, whether a row is a collapsed group, and where a pointer/drop lands in the visible order | noteSurfaceChecklist.js, noteSurfaceChecklist/collapse.js, noteSurfaceChecklist/drag.js | — | — |
