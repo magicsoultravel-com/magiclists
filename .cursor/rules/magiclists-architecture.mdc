@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:29:22.489Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:30:30.422Z
 
 ## CSS load order
 
@@ -140,6 +140,7 @@ alwaysApply: true
 | js/noteSurfaceChecklist.js | checklist operations, drag/drop, state management | noteSurface.js, checklistSteps.js, noteBodyConversion.js, richText.js | — | — |
 | js/noteSurfaceChecklist/collapse.js | which checklist groups are collapsed - the localStorage-backed state, the expand/collapse-all toolbar and the short-lived read cache used on drag/render hot paths | noteSurfaceChecklist.js, noteSurfaceChecklist/targeting.js, noteSurfaceChecklist/drag.js, checklistSteps.js | — | — |
 | js/noteSurfaceChecklist/rows.js | markup for one checklist step row - checkbox, text, collapse chevron, indent/outdent, copy and delete controls, tree guides | noteSurfaceChecklist.js, noteSurfaceHtml/checklistMarkup.js, checklistSteps.js | — | — |
+| js/noteSurfaceChecklist/targeting.js | queries against the rendered step list - which rows are currently visible, whether a row is a collapsed group, and where a pointer/drop lands in the visible order | noteSurfaceChecklist.js, noteSurfaceChecklist/collapse.js, noteSurfaceChecklist/drag.js | — | — |
 | js/noteSurfaceEditing.js | note inline editing, emoji, text operations, zoom controls | noteSurface.js, noteSurfaceHtml.js, richText.js, emojiPicker.js, domEscape.js | — | — |
 | js/noteSurfaceHtml.js | note HTML facade - re-exports the card/body/shell/checklist builders from js/noteSurfaceHtml/*; NoteSurface and magicFocus.js import the whole surface from here | noteSurfaceHtml/card.js, noteSurfaceHtml/shell.js, noteSurfaceHtml/body.js, noteSurfaceHtml/checklistMarkup.js, noteSurfaceHtml/metaFooter.js, noteSurfaceHtml/quickActions.js, noteSurface.js | — | — |
 | js/noteSurfaceHtml/body.js | note body markup - the content field, checklist/sheet/meeting bodies, side sections, visibility rules and the rich-text render helpers | noteSurfaceHtml.js, noteSurfaceHtml/checklistMarkup.js, sheet.js, richText.js | — | — |
