@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T15:56:31.033Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T16:01:11.578Z
 
 ## CSS load order
 
@@ -75,6 +75,8 @@ alwaysApply: true
 | js/desktopManager.js | multi-desktop state management, desktop assignment, persistence | — | — | — |
 | js/dragdrop.js | board drag-drop, resize, grid snap | layoutStorage.js, ui.js, fileCabinet.js | board:visibility_changed | — |
 | js/drawingBoard.js | magicCanvas drawing board, workspace drawing mode | canvasDocument.js, drawingToolbarMenu.js, layoutStorage.js | — | — |
+| js/drawingBoard/geometry.js | magicCanvas stroke geometry - point thinning, squared distance, pointer pressure | drawingBoard.js, drawingBoardCore.js | — | — |
+| js/drawingBoard/prefs.js | magicCanvas brush style and tool preferences in localStorage (matrix_drawing_prefs) | drawingBoard.js, drawingBoardCore.js, canvasBrushes.js | — | — |
 | js/drawingBoardBackup.js | magicCanvas backup/restore payload (document + prefs + toolbar) | drawingBoard.js, canvasDocument.js, layoutStorage.js | — | — |
 | js/drawingBoardClipboard.js | magicCanvas clipboard session (Ctrl+C/X/V, Delete, selection serialization) | drawingBoard.js, mediaPasteCatcher.js, canvasDocument.js, flowchart.js | — | — |
 | js/drawingBoardCore.js | magicCanvas shared board constants (brush widths, menu items) | drawingBoard.js, drawingBoardToolbar.js, canvasBrushes.js | — | — |
