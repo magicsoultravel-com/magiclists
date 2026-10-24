@@ -1,4 +1,4 @@
-﻿/** @module {"owns":"application orchestration, event bus listeners, workspace init", "related":["api.js","ui.js","layoutStorage.js"], "events":["item:mutation_requested","item:selected_for_edit","board:visibility_changed","calendar:add_note"]} */
+/** @module {"owns":"application orchestration, event bus listeners, workspace init", "related":["api.js","ui.js","layoutStorage.js"], "events":["item:mutation_requested","item:selected_for_edit","board:visibility_changed","calendar:add_note"]} */
 import { API } from './api.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { createDefaultNote } from './noteModel.js';
