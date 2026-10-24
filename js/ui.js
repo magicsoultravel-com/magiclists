@@ -155,58 +155,9 @@ import {
 } from './ui/boardState.js';
 import * as Spatial from './ui/spatial.js';
 
-function createGridDeps(ui) {
-    return {
-        getGridBoardBounds,
-        getGridLayout: () => ui.getGridLayout(),
-        saveGridLayout: (id, rect, opts) => ui.saveGridLayout(id, rect, opts),
-        getBoardPins: () => ui.getBoardPins(),
-        gridBoardRectForCard: (card, saved, isExpanded) => ui.gridBoardRectForCard(card, saved, isExpanded),
-        isSavedLayoutExpanded: (id) => ui.isSavedLayoutExpanded(id),
-        readNoteRect: (card) => ui.readNoteRect(card),
-        applyNoteRect: (card, rect, opts) => ui.applyNoteRect(card, rect, opts),
-        finalizeDesktopCard: (card, opts) => ui.finalizeDesktopCard(card, opts),
-        scheduleBoardCanvasExtents: (canvas) => ui.scheduleBoardCanvasExtents(canvas)
-    };
-}
-
-function noteRectHooks(ui, card) {
-    return {
-        normalizeCollapsed: true,
-        isActivelyResizing: ui.isCardActivelyResizing(card),
-        getTileSize: (c) => resolveTileSize(ui.resolveBoardItem(c?.dataset?.id))
-    };
-}
-
 export const UI = {
-    flushAllInlineEditsFromCanvas(canvas, items, { forceFlush = false, skipItemId = null, skipItemIds = null } = {}) {
-        if (!canvas || !Array.isArray(items)) return;
-        const byId = new Map(items.map((item) => [item.id, item]));
-        const skip = new Set();
-        if (skipItemId) skip.add(skipItemId);
-        if (skipItemIds) {
-            for (const id of skipItemIds) {
-                if (id) skip.add(id);
-            }
-        }
-        const activeDesktop = DesktopManager.getActiveDesktop();
-        canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
-            const item = byId.get(card.dataset.id);
-            if (!item) return;
-            // While modal / Focus / popout owns this note, board card DOM is stale.
-            if (skip.has(item.id)) return;
-            NoteSurface.commitFocusedInlineField(card, item);
-            // During view reset, force flush to ensure all pending changes are saved
-            // even if there's a pending focus state that would otherwise skip
-            if (!forceFlush && card.dataset.pendingFocusStepId) return;
-            const shell = card.querySelector('.editor-note-shell');
-            if (!shell) return;
-            const beforeItem = NoteSurface.snapshotItem(item);
-            NoteSurface.syncItemBodyFromDom(shell, item);
-            if (JSON.stringify(beforeItem) !== JSON.stringify(NoteSurface.snapshotItem(item))) {
-                NoteSurface.emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
-            }
-        });
+    flushAllInlineEditsFromCanvas(canvas, items, opts = {}) {
+        return Spatial.flushAllInlineEditsFromCanvas(this, canvas, items, opts);
     },
 
     getActiveBoardViewMode() {
@@ -214,15 +165,10 @@ export const UI = {
     },
 
     persistViewSessionForMode(mode, canvas = document.getElementById('app-canvas')) {
-        persistViewSession(mode, {
-            canvas,
-            flushLayout: (c, m) => this.flushLayoutFromCanvas(c, m)
-        });
+        return Spatial.persistViewSessionForMode(this, mode, canvas);
     },
 
-    restoreViewSessionForMode(mode) {
-        restoreViewSession(mode);
-    },
+    restoreViewSessionForMode(mode) { return Spatial.restoreViewSessionForMode(this, mode); },
 
     resolveBoardItem(itemId) { return Spatial.resolveBoardItem(this, itemId); },
 
@@ -539,278 +485,51 @@ export const UI = {
         card.classList.toggle('is-board-pinned', this.isBoardPinned(card.dataset.id));
     },
 
-    setupFreeformChrome(card) {
-        const shell = card.querySelector('.editor-note-shell');
-        mountFloatChrome(card, {
-            resizable: true,
-            mode: 'note',
-            insertBefore: shell
-        });
-    },
+    setupFreeformChrome(card) { return Spatial.setupFreeformChrome(this, card); },
 
-    syncSpatialChromeForEditing(card) {
-        if (!card?.querySelector?.('.ff-chrome') || !isDesktopCard(card)) return;
-        const layer = card.querySelector('.ff-resize-layer');
-        const gutters = card.querySelectorAll('.ff-drag-gutter');
-        const disableChrome = card.classList.contains('is-editing-inline');
-        if (layer) {
-            layer.style.pointerEvents = disableChrome ? 'none' : '';
-            layer.style.zIndex = disableChrome ? '0' : '';
-            layer.querySelectorAll('.ff-resize').forEach((handle) => {
-                handle.style.pointerEvents = disableChrome ? 'none' : '';
-                handle.style.zIndex = disableChrome ? '0' : '';
-            });
-        }
-        gutters.forEach((g) => {
-            g.style.pointerEvents = disableChrome ? 'none' : '';
-        });
-    },
+    syncSpatialChromeForEditing(card) { return Spatial.syncSpatialChromeForEditing(this, card); },
 
-    readFreeformCardSize(card) {
-        const { w, h } = this.readNoteRect(card);
-        return {
-            w: Math.round(w) || FREEFORM_DEFAULT_W,
-            h: Math.round(h) || FREEFORM_DEFAULT_H
-        };
-    },
+    readFreeformCardSize(card) { return Spatial.readFreeformCardSize(this, card); },
 
-    clearFreeformCustomSize(itemId) {
-        const sizes = this.getFreeformSizes();
-        if (!sizes[itemId]) return;
-        delete sizes[itemId];
-        localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
-    },
+    clearFreeformCustomSize(itemId) { return Spatial.clearFreeformCustomSize(this, itemId); },
 
-    applyFreeformDimensions(card, w, h) {
-        card.style.setProperty('width', `${w}px`, 'important');
-        card.style.setProperty('height', `${h}px`, 'important');
-        card.style.setProperty('min-width', `${w}px`, 'important');
-        card.style.setProperty('max-width', `${w}px`, 'important');
-        card.style.setProperty('min-height', `${h}px`, 'important');
-        card.style.setProperty('max-height', `${h}px`, 'important');
-    },
+    applyFreeformDimensions(card, w, h) { return Spatial.applyFreeformDimensions(this, card, w, h); },
 
-    isCardActivelyResizing(card) {
-        if (!card) return false;
-        return card.classList.contains('is-tier-resizing')
-            || card.classList.contains('is-freeform-resizing')
-            || card.classList.contains('is-grid-resizing');
-    },
+    isCardActivelyResizing(card) { return Spatial.isCardActivelyResizing(this, card); },
 
-    /** Canonical desktop card finalizer — syncs collapse classes, chrome, saved size, toggle label. */
-    finalizeDesktopCard(card, { skipSizeReapply = false } = {}) {
-        if (!isDesktopCard(card)) return;
-        const item = this.resolveBoardItem(card.dataset.id);
-        this.setupFreeformChrome(card);
-        if (!skipSizeReapply) {
-            this.applyDesktopSize(card);
-        }
-        const { w, h } = this.readNoteRect(card);
-        const atSmall = this.syncSpatialCollapseState(card, item, w, h);
-        this.syncSpatialChromeForEditing(card);
-        this.syncSpatialToggleButton(card, atSmall);
-    },
+    finalizeDesktopCard(card, opts = {}) { return Spatial.finalizeDesktopCard(this, card, opts); },
 
-    updateDesktopCard(card, item, { dimensions = null } = {}) {
-        if (!isDesktopCard(card)) return;
+    updateDesktopCard(card, item, opts = {}) { return Spatial.updateDesktopCard(this, card, item, opts); },
 
-        const canvas = card.closest('#app-canvas');
+    focusPendingBoardField(card) { return Spatial.focusPendingBoardField(this, card); },
 
-        if (dimensions) {
-            this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
-        } else {
-            this.applyDesktopSize(card);
-        }
-
-        this.finalizeDesktopCard(card);
-
-        // Bento-only push; skip when Allow-overlap or spatially collapsed.
-        if (canvas?.classList.contains('view-grid') && isBoardOverlayEnabled()) {
-            const rect = this.readNoteRect(card);
-            if (!isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item))) {
-                requestAnimationFrame(() => {
-                    this.reflowGridBoard(canvas, item.id, { animate: true });
-                });
-            }
-        }
-    },
-
-    focusPendingBoardField(card) {
-        const field = card?.dataset?.pendingFocusField;
-        if (!field) return;
-        delete card.dataset.pendingFocusField;
-        requestAnimationFrame(() => {
-            let el = null;
-            if (field === 'content') {
-                el = card.querySelector('.editor-note-body .card-inline-edit[data-field="content"]')
-                    || card.querySelector('.editor-note-body .card-inline-edit[data-field="step-text"]')
-                    || card.querySelector('.editor-note-header .card-inline-edit[data-field="title"]');
-            } else {
-                el = card.querySelector('.editor-note-header .card-inline-edit[data-field="title"]');
-            }
-            if (el) NoteSurface.focusInlineEdit(el, 'start');
-        });
-    },
-
-    markNoteCollapsed(itemId) {
-        if (!itemId) return;
-        const small = getSmallRect(readTileSmallFootprint());
-        const item = this.resolveBoardItem(itemId);
-        const tileSize = resolveTileSize(item);
-        const grid = this.getGridLayout();
-        if (grid[itemId]) {
-            const prev = grid[itemId];
-            grid[itemId] = this.mergeSpatialLayoutEntry(prev, {
-                x: prev.x,
-                y: prev.y,
-                w: small.w,
-                h: small.h
-            }, tileSize, { updateRemembered: false });
-            localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(grid));
-        }
-        const sizes = this.getFreeformSizes();
-        if (sizes[itemId]) {
-            const prev = sizes[itemId];
-            sizes[itemId] = this.mergeSpatialLayoutEntry(prev, { w: small.w, h: small.h }, tileSize, { updateRemembered: false });
-            localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
-            const pos = this.getFreeformPositions()[itemId];
-            if (pos) this.saveFreeformPosition(itemId, pos.x, pos.y);
-        }
-    },
+    markNoteCollapsed(itemId) { return Spatial.markNoteCollapsed(this, itemId); },
 
     collapseBoardCardIfExpanded(card, item, hiddenCategories = []) {
-        if (!card || !item?.id) return;
-        if (!this.isSpatiallyCollapsed(card)) {
-            this.collapseBoardCardToSmallFootprint(card, item);
-        }
+        return Spatial.collapseBoardCardIfExpanded(this, card, item, hiddenCategories);
     },
 
-    getFreeformPositions() {
-        try {
-            return JSON.parse(localStorage.getItem(FREEFORM_POSITIONS_KEY) || '{}');
-        } catch {
-            return {};
-        }
-    },
+    getFreeformPositions() { return Spatial.getFreeformPositions(this); },
 
-    saveFreeformPosition(itemId, x, y) {
-        const positions = this.getFreeformPositions();
-        positions[itemId] = { x: Math.round(x), y: Math.round(y) };
-        localStorage.setItem(FREEFORM_POSITIONS_KEY, JSON.stringify(positions));
-    },
+    saveFreeformPosition(itemId, x, y) { return Spatial.saveFreeformPosition(this, itemId, x, y); },
 
-    getFreeformSizes() {
-        try {
-            return JSON.parse(localStorage.getItem(FREEFORM_SIZES_KEY) || '{}');
-        } catch {
-            return {};
-        }
-    },
+    getFreeformSizes() { return Spatial.getFreeformSizes(this); },
 
-    saveFreeformSize(itemId, w, h, { updateRemembered = false } = {}) {
-        const sizes = this.getFreeformSizes();
-        const prev = sizes[itemId] || {};
-        const item = this.resolveBoardItem(itemId);
-        sizes[itemId] = this.mergeSpatialLayoutEntry(prev, { w, h }, resolveTileSize(item), { updateRemembered });
-        localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
-    },
+    saveFreeformSize(itemId, w, h, opts = {}) { return Spatial.saveFreeformSize(this, itemId, w, h, opts); },
 
-    saveFreeformSizeFromCard(card) {
-        if (!isDesktopCard(card)) return;
-        const { w, h } = this.readFreeformCardSize(card);
-        this.saveFreeformSize(card.dataset.id, w, h, {
-            updateRemembered: !isCollapsedSpatialSize(w, h, resolveTileSize(this.resolveBoardItem(card.dataset.id)))
-        });
-    },
+    saveFreeformSizeFromCard(card) { return Spatial.saveFreeformSizeFromCard(this, card); },
 
-    flushLayoutFromCanvas(canvas, _viewMode) {
-        if (!canvas) return;
-        const activeDesktop = DesktopManager.getActiveDesktop();
-        canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
-            const id = card.dataset.id;
-            if (!id) return;
-            this.saveGridLayout(id, this.readNoteRect(card));
-        });
-    },
+    flushLayoutFromCanvas(canvas, _viewMode) { return Spatial.flushLayoutFromCanvas(this, canvas, _viewMode); },
 
-    migrateFreeformLayoutToGrid(items) {
-        const positions = this.getFreeformPositions();
-        const sizes = this.getFreeformSizes();
-        const hasFreeformData = Object.keys(positions).length > 0 || Object.keys(sizes).length > 0;
-        if (!hasFreeformData) return false;
+    migrateFreeformLayoutToGrid(items) { return Spatial.migrateFreeformLayoutToGrid(this, items); },
 
-        const visible = BoardOperations.getVisibleItems(Array.isArray(items) ? items : []);
-        const pinnedIds = new Set(this.getBoardPins());
-        const itemsById = new Map(visible.map((item) => [item.id, item]));
-        const getSourceRect = (item) => {
-            const freePos = positions[item?.id];
-            const freeSaved = sizes[item?.id];
-            if (freePos && freeSaved && Number.isFinite(freePos.x) && Number.isFinite(freeSaved.w)) {
-                return { x: freePos.x, y: freePos.y, w: freeSaved.w, h: freeSaved.h };
-            }
-            const gridSaved = this.getGridLayout()[item.id];
-            if (gridSaved && Number.isFinite(gridSaved.x)) {
-                return { ...gridSaved };
-            }
-            const metrics = getGridMetrics();
-            return { x: metrics.origin + metrics.edgePad, y: metrics.origin + metrics.edgePad, w: 0, h: 0 };
-        };
-        const { collapsed, expanded } = this.partitionCanvasItemsByExpansion(visible, 'grid');
-        const canvas = document.getElementById('app-canvas');
-        this.packGridBoard(canvas, GridPack.sortItemsSpatially(collapsed, getSourceRect), GridPack.sortItemsSpatially(expanded, getSourceRect), {
-            pinnedIds,
-            layoutMode: 'freeform',
-            direction: 'horizontal',
-            persistOnly: true,
-            animate: false,
-            save: true,
-            itemsById
-        });
-
-        try {
-            localStorage.removeItem(FREEFORM_POSITIONS_KEY);
-            localStorage.removeItem(FREEFORM_SIZES_KEY);
-        } catch {
-            /* ignore */
-        }
-        return true;
-    },
-
-    applyDesktopLayoutModeSwitch(canvas) {
-        if (!canvas) return;
-        writeActiveBoardViewMode('grid');
-        canvas.classList.add('view-grid');
-        canvas.classList.remove('view-freeform');
-        canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
-            this.finalizeDesktopCard(card);
-        });
-        this.updateDesktopScrollPolicy(canvas);
-        this.updateBoardCanvasExtents(canvas);
-    },
+    applyDesktopLayoutModeSwitch(canvas) { return Spatial.applyDesktopLayoutModeSwitch(this, canvas); },
 
     convertDesktopLayoutForModeChange(_canvas, _fromMode, _toMode, _items) {
-        /* legacy no-op — freeform mode removed */
+        return Spatial.convertDesktopLayoutForModeChange(this, _canvas, _fromMode, _toMode, _items);
     },
 
-    resolveFreeformSourceRect(item, canvas) {
-        const freePos = this.getFreeformPositions()[item?.id];
-        const freeSaved = this.getFreeformSizes()[item?.id];
-        const card = canvas?.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-        if (card) {
-            const pos = this.readNoteRect(card);
-            const size = this.readFreeformCardSize(card);
-            return { x: pos.x, y: pos.y, w: size.w, h: size.h };
-        }
-        if (freePos && freeSaved && Number.isFinite(freePos.x) && Number.isFinite(freeSaved.w)) {
-            return { x: freePos.x, y: freePos.y, w: freeSaved.w, h: freeSaved.h };
-        }
-        const gridSaved = this.getGridLayout()[item.id];
-        if (gridSaved && Number.isFinite(gridSaved.x)) {
-            return { ...gridSaved };
-        }
-        const metrics = getGridMetrics();
-        return { x: metrics.origin + metrics.edgePad, y: metrics.origin + metrics.edgePad, w: 0, h: 0 };
-    },
+    resolveFreeformSourceRect(item, canvas) { return Spatial.resolveFreeformSourceRect(this, item, canvas); },
 
     isItemLayoutExpanded(item, mode) { return GridPack.isItemLayoutExpanded(this, item, mode); },
 
@@ -844,328 +563,87 @@ export const UI = {
 
     resetBoardLayout(sortBy, items, opts = {}) { return GridPack.resetBoardLayout(this, sortBy, items, opts); },
 
-    getGridLayout() {
-        try {
-            return JSON.parse(localStorage.getItem(GRID_LAYOUT_KEY) || '{}');
-        } catch {
-            return {};
-        }
-    },
+    getGridLayout() { return Spatial.getGridLayout(this); },
 
-    saveGridLayout(itemId, rect, { updateRemembered = false } = {}) {
-        if (!itemId || !rect) return;
-        const layout = this.getGridLayout();
-        const prev = layout[itemId] || {};
-        const item = this.resolveBoardItem(itemId);
-        layout[itemId] = this.mergeSpatialLayoutEntry(prev, rect, resolveTileSize(item), { updateRemembered });
-        localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
-    },
+    saveGridLayout(itemId, rect, opts = {}) { return Spatial.saveGridLayout(this, itemId, rect, opts); },
 
-    saveFiledCabinetLayout(itemId, rect, sortBy) {
-        saveFiledCabinetLayout(itemId, rect, sortBy);
-    },
+    saveFiledCabinetLayout(itemId, rect, sortBy) { return Spatial.saveFiledCabinetLayout(this, itemId, rect, sortBy); },
 
     saveCompactBoardLayout(itemId, slot, _sortBy) {
-        if (!itemId || !slot) return;
-        const small = getSmallRect(readTileSmallFootprint());
-
-
-        const rect = {
-            x: Math.round(slot.x),
-            y: Math.round(slot.y),
-            w: small.w,
-            h: small.h
-        };
-
-        const layout = this.getGridLayout();
-        const gridEntry = this.mergeSpatialLayoutEntry({}, rect, 'small', { updateRemembered: false });
-        delete gridEntry.customCompact;
-        layout[itemId] = gridEntry;
-        localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
+        return Spatial.saveCompactBoardLayout(this, itemId, slot, _sortBy);
     },
 
-    removeGridLayout(itemId) {
-        const layout = this.getGridLayout();
-        if (!layout[itemId]) return;
-        delete layout[itemId];
-        localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
-    },
+    removeGridLayout(itemId) { return Spatial.removeGridLayout(this, itemId); },
 
-    getBoardPins() {
-        try {
-            const raw = JSON.parse(localStorage.getItem(GRID_PINS_KEY) || '[]');
-            return Array.isArray(raw) ? raw : [];
-        } catch {
-            return [];
-        }
-    },
+    getBoardPins() { return Spatial.getBoardPins(this); },
 
-    getGridPins() {
-        return this.getBoardPins();
-    },
+    getGridPins() { return Spatial.getGridPins(this); },
 
-    isBoardPinned(itemId) {
-        return !!itemId && this.getBoardPins().includes(itemId);
-    },
+    isBoardPinned(itemId) { return Spatial.isBoardPinned(this, itemId); },
 
-    isGridPinned(itemId) {
-        return this.isBoardPinned(itemId);
-    },
+    isGridPinned(itemId) { return Spatial.isGridPinned(this, itemId); },
 
-    toggleBoardPin(itemId) {
-        if (!itemId) return false;
-        const pins = this.getBoardPins();
-        const idx = pins.indexOf(itemId);
-        if (idx >= 0) {
-            pins.splice(idx, 1);
-        } else {
-            pins.push(itemId);
-        }
-        localStorage.setItem(GRID_PINS_KEY, JSON.stringify(pins));
-        return idx < 0;
-    },
+    toggleBoardPin(itemId) { return Spatial.toggleBoardPin(this, itemId); },
 
-    toggleGridPin(itemId) {
-        return this.toggleBoardPin(itemId);
-    },
+    toggleGridPin(itemId) { return Spatial.toggleGridPin(this, itemId); },
 
-    getGridBoardBounds(canvas) {
-        return getGridBoardBounds(canvas);
-    },
+    getGridBoardBounds(canvas) { return Spatial.getGridBoardBounds(this, canvas); },
 
-    getLiveBoardBounds(canvas) {
-        return getLiveBoardBounds(canvas);
-    },
+    getLiveBoardBounds(canvas) { return Spatial.getLiveBoardBounds(this, canvas); },
 
-    getDesktopBoardPane(canvas) {
-        return getDesktopBoardPane(canvas);
-    },
+    getDesktopBoardPane(canvas) { return Spatial.getDesktopBoardPane(this, canvas); },
 
-    ensureDesktopBoardPane(canvas) {
-        return ensureDesktopBoardPane(canvas);
-    },
+    ensureDesktopBoardPane(canvas) { return Spatial.ensureDesktopBoardPane(this, canvas); },
 
-    scheduleBoardCanvasExtents(canvas) {
-        scheduleBoardCanvasExtentsCore(canvas, (c) => this.updateBoardCanvasExtents(c));
-    },
+    scheduleBoardCanvasExtents(canvas) { return Spatial.scheduleBoardCanvasExtents(this, canvas); },
 
-    updateBoardCanvasExtents(canvas) {
-        updateBoardCanvasExtentsCore(canvas, {
-            readCardRect: (card) => readNoteRectCore(card, noteRectHooks(this, card))
-        });
-    },
+    updateBoardCanvasExtents(canvas) { return Spatial.updateBoardCanvasExtents(this, canvas); },
 
-    updateDesktopScrollPolicy(canvas) {
-        updateDesktopScrollPolicy(canvas);
-    },
+    updateDesktopScrollPolicy(canvas) { return Spatial.updateDesktopScrollPolicy(this, canvas); },
 
-    applyDesktopSize(card) {
-        if (!isDesktopCard(card)) return;
-        if (card.dataset.tierResizePreview === '1') return;
-        const saved = this.getGridLayout()[card.dataset.id];
-        const item = this.resolveBoardItem(card.dataset.id);
-        let w;
-        let h;
-        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            const tileSize = this.getCardTileSize(card, item);
-            const footprint = readTileSmallFootprint();
-            if (isCollapsedSpatialSize(saved.w, saved.h, tileSize)) {
-                const small = getSmallRect(footprint);
-                w = small.w;
-                h = small.h;
-            } else {
-                const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
-                w = clamped.w;
-                h = clamped.h;
-            }
-        } else {
-            const compact = this.gridTileRect(
-                this.getCardTileSize(card, item),
-                { x: 0, y: 0, w: getGridMetrics().cellW, h: getGridMetrics().cellH },
-                saved
-            );
-            w = compact.w;
-            h = compact.h;
-        }
-        this.applyFreeformDimensions(card, w, h);
-    },
+    applyDesktopSize(card) { return Spatial.applyDesktopSize(this, card); },
 
-    clampGridResize(w, h, { packW } = {}) {
-        const footprint = readTileSmallFootprint();
-        const { cellW, canvasGridW } = getGridMetrics();
-        const minW = cellW;
-        const minH = getGridSnapMinH(footprint);
-        const maxCellsW = Math.max(1, geoSpanToCellsW(packW || canvasGridW));
-
-        if (isCollapsedSpatialSize(w, h)) {
-            const small = getSmallRect(footprint);
-            let wCells = Math.max(1, geoSpanToCellsW(Math.max(minW, small.w)));
-            wCells = Math.min(wCells, maxCellsW);
-            return {
-                w: geoCellsToSpanW(wCells),
-                h: small.h
-            };
-        }
-
-        let wCells = Math.max(1, geoSpanToCellsW(Math.max(minW, w)));
-        let hCells = Math.max(1, geoSpanToCellsH(Math.max(minH, h)));
-        wCells = Math.min(wCells, maxCellsW);
-        return {
-            w: geoCellsToSpanW(wCells),
-            h: geoCellsToSpanH(hCells)
-        };
-    },
+    clampGridResize(w, h, opts = {}) { return Spatial.clampGridResize(this, w, h, opts); },
 
     computeGridBoardLayout(canvas, actorId, actorRect = null) {
-        return computeGridBoardLayoutCore(createGridDeps(this), canvas, actorId, actorRect);
+        return Spatial.computeGridBoardLayout(this, canvas, actorId, actorRect);
     },
 
-    clearSnapPanelPreview(panelEl) {
-        clearSnapPanelPreview(panelEl);
-    },
+    clearSnapPanelPreview(panelEl) { return Spatial.clearSnapPanelPreview(this, panelEl); },
 
     applyGridBoardLayout(canvas, layout, opts = {}) {
-        return applyGridBoardLayoutCore(createGridDeps(this), canvas, layout, opts);
+        return Spatial.applyGridBoardLayout(this, canvas, layout, opts);
     },
 
-    clearGridLayoutPreview(canvas) {
-        clearSnapPanelPreview(canvas);
+    clearGridLayoutPreview(canvas) { return Spatial.clearGridLayoutPreview(this, canvas); },
+
+    findDesktopCenterSlot(w, h, canvas, viewMode, opts = {}) {
+        return Spatial.findDesktopCenterSlot(this, w, h, canvas, viewMode, opts);
     },
 
-findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
-        const host = canvas || document.getElementById('app-canvas');
-        if (!host) return { x: 8, y: 8, w, h };
-        const mode = viewMode || readActiveBoardViewMode();
+    updateGridScrollPolicy(canvas, opts = {}) { return Spatial.updateGridScrollPolicy(this, canvas, opts); },
 
-        const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(host);
-        const { viewportH, scrollY } = getGridViewportBounds(host);
-        const activeDesktop = DesktopManager.getActiveDesktop();
-        let rect = {
-            x: origin + Math.max(0, (packW - w) / 2),
-            y: origin + scrollY + Math.max(0, (viewportH - h) / 2),
-            w,
-            h
-        };
-        rect = this.snapNoteRect(rect, { maxW: packW, maxH, origin, edgePad });
-        const placed = [...host.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`)]
-            .filter((c) => c.dataset.id !== excludeId && !c.closest('#file-cabinet'))
-            .map((c) => this.readNoteRect(c));
-        if (placed.some((p) => rectsOverlapCore(rect, p))) {
-            rect = findNearestGridSlotCore(rect, w, h, placed, { packW, origin, maxH, edgePad });
-        }
-        return rect;
-    },
-
-    updateGridScrollPolicy(canvas, { forcing = false } = {}) {
-        if (!canvas?.classList.contains('view-grid')) return;
-        canvas.classList.toggle('is-grid-forcing', forcing);
-        this.scheduleBoardCanvasExtents(canvas);
-        this.updateDesktopScrollPolicy(canvas);
-    },
-
-    reflowGridBoard(canvas, actorId, opts = {}) {
-        reflowGridBoardCore(createGridDeps(this), canvas, actorId, opts);
-    },
+    reflowGridBoard(canvas, actorId, opts = {}) { return Spatial.reflowGridBoard(this, canvas, actorId, opts); },
 
     repackBoardLayoutStorage(mode, items, canvas) {
-        const resolvedMode = normalizeViewMode(mode);
-        const small = getSmallRect(readTileSmallFootprint());
-        const sorted = [...(items || [])].sort((a, b) => {
-            const aTime = Number(a.created_at || a.updated_at || 0);
-            const bTime = Number(b.created_at || b.updated_at || 0);
-            return aTime - bTime;
-        });
-        const bounds = canvas ? this.getLiveBoardBounds(canvas) : null;
-        const metrics = getGridMetrics();
-        const origin = bounds?.origin ?? metrics.origin;
-        const packW = bounds?.packW ?? Math.max(metrics.canvasGridW, 640);
-        const edgePad = bounds?.edgePad ?? metrics.edgePad;
-
-        // Collapse every note to the small tile and lay them out on a strict,
-        // zero-gap grid (adjacent tiles, no 8px re-snap) so all rows/columns
-        // align with no spaces between them.
-        const startX = origin + edgePad;
-        const startY = origin + edgePad;
-        const colStride = small.w;
-        const rowStride = small.h;
-        let col = 0;
-        let row = 0;
-
-        sorted.forEach((item) => {
-            if (!item?.id) return;
-            Spatial.ensureSmallTile(item);
-
-            let x = startX + col * colStride;
-            let y = startY + row * rowStride;
-            if (col > 0 && x + small.w > startX + packW) {
-                col = 0;
-                row += 1;
-                x = startX;
-                y = startY + row * rowStride;
-            }
-
-            this.saveCompactBoardLayout(item.id, { x, y, w: small.w, h: small.h }, resolvedMode);
-            col += 1;
-        });
+        return Spatial.repackBoardLayoutStorage(this, mode, items, canvas);
     },
 
-    initDesktopCardStack(card, orderIndex = 0) {
-        if (!isDesktopCard(card)) return;
-        const z = orderIndex + 1;
-        card.style.setProperty('z-index', String(z), 'important');
-        syncDesktopStackSeq(z);
-    },
+    initDesktopCardStack(card, orderIndex = 0) { return Spatial.initDesktopCardStack(this, card, orderIndex); },
 
-    raiseDesktopCard(card) {
-        if (!isDesktopCard(card)) return;
-        raiseDesktopElement(card);
-        const frontClass = 'is-grid-front';
-        card.classList.add(frontClass);
-        card.closest('#app-canvas')?.querySelectorAll(`.mini-card.${frontClass}`).forEach((other) => {
-            if (other !== card) other.classList.remove(frontClass);
-        });
-    },
+    raiseDesktopCard(card) { return Spatial.raiseDesktopCard(this, card); },
 
-    snapNotePosition(rect, opts) {
-        return snapNotePositionCore(rect, opts);
-    },
+    snapNotePosition(rect, opts) { return Spatial.snapNotePosition(this, rect, opts); },
 
-    snapNoteRect(rect, opts) {
-        return snapNoteRectCore(rect, opts);
-    },
+    snapNoteRect(rect, opts) { return Spatial.snapNoteRect(this, rect, opts); },
 
-    readNoteRect(card) {
-        return readNoteRectCore(card, noteRectHooks(this, card));
-    },
+    readNoteRect(card) { return Spatial.readNoteRect(this, card); },
 
-    applyNoteRect(card, rect, { settling = false } = {}) {
-        applyNoteRectCore(card, rect, {
-            settling,
-            applyDimensions: (c, w, h) => this.applyFreeformDimensions(c, w, h)
-        });
-    },
+    applyNoteRect(card, rect, opts = {}) { return Spatial.applyNoteRect(this, card, rect, opts); },
 
-    getCollapsedCategories() {
-        try {
-            return JSON.parse(localStorage.getItem('matrix_collapsed_categories') || '[]');
-        } catch {
-            return [];
-        }
-    },
+    getCollapsedCategories() { return Spatial.getCollapsedCategories(this); },
 
-    isCategoryCollapsed(categoryName) {
-        return this.getCollapsedCategories().includes(categoryName);
-    },
+    isCategoryCollapsed(categoryName) { return Spatial.isCategoryCollapsed(this, categoryName); },
 
-    toggleCategoryCollapsed(categoryName) {
-        const collapsed = this.getCollapsedCategories();
-        const idx = collapsed.indexOf(categoryName);
-        if (idx >= 0) {
-            collapsed.splice(idx, 1);
-        } else {
-            collapsed.push(categoryName);
-        }
-        localStorage.setItem('matrix_collapsed_categories', JSON.stringify(collapsed));
-        return idx < 0;
-    }
+    toggleCategoryCollapsed(categoryName) { return Spatial.toggleCategoryCollapsed(this, categoryName); },
 };
