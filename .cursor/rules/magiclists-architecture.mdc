@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:38:58.674Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:40:03.209Z
 
 ## CSS load order
 
@@ -109,6 +109,7 @@ alwaysApply: true
 | js/linksOverlay.js | Links manager floating panel: folders, add/edit/delete, drag reorder/move, favicon refresh, tile/list views, opt-in thum.io screenshots | linksStore.js, linksModel.js, sidebarLinks.js, desktopFloatChrome.js | links:changed, links:previews_changed, links:manage_requested | — |
 | js/linksStore.js | links localStorage CRUD, folder CRUD/moves, scoped manual reorder, dedup rejection, device-local preview ids, link change events | linksModel.js, backup.js, sync.js, sidebarLinks.js, linksOverlay.js | links:changed, links:previews_changed | — |
 | js/magicFocus.js | magic focus workspace mode — split panes, setup DnD, planner block hosting (table/chart/kanban/wbs) | app.js, noteQuickActions.js, drawingBoard.js, plannerUi.js, noteSurface.js | — | — |
+| js/magicFocus/layout.js | preset-to-grid translation - the CSS grid-template strings and the splitter descriptors each preset needs (columns, rows, areas, and where each handle sits) | magicFocus.js, magicFocus/model.js, magicFocus/splitters.js | — | — |
 | js/magicFocus/model.js | the focus layout model - block catalogue, preset tables, zone/ratio/zoom normalisation and the configured check; no DOM, no state | magicFocus.js, magicFocus/layout.js, magicFocus/setup.js | — | — |
 | js/mediaAttachments.js | note↔media attachment helpers | mediaLibrary.js, noteSurface.js, mediaLibraryOverlay.js | — | — |
 | js/mediaBackup.js | media library backup export/import (meta JSON, embeds, ZIP) | mediaLibrary.js, backup.js | — | — |
