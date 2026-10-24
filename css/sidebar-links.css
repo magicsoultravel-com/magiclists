@@ -215,7 +215,15 @@
     border: 1px solid color-mix(in srgb, var(--text-main, #eee) 14%, transparent);
     border-top: 2px solid color-mix(in srgb, var(--accent, #3b82f6) 54%, transparent);
     border-radius: 8px;
-    background: var(--surface-elevated, var(--bg-surface, #1a1a1e));
+    /* Theme-derived tray fill: card elevation plus a faint accent wash so the
+       popover separates from the sidebar in both dark and light themes. */
+    background:
+        radial-gradient(
+            120% 90% at 20% 0%,
+            color-mix(in srgb, var(--accent, #3b82f6) 10%, transparent),
+            transparent 70%
+        ),
+        color-mix(in srgb, var(--bg-card, #26262b) 94%, var(--bg-surface, #121214));
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
