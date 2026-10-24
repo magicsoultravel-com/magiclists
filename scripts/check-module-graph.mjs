@@ -11,12 +11,16 @@
  * Nothing is evaluated (link() only resolves and creates bindings), so modules
  * that touch `document`/`window` at import time are safe to inspect.
  *
+ * `import('./x.js')` is resolved lazily by the engine, so link() never sees it;
+ * every literal dynamic specifier is resolved separately below.
+ *
  * Run: node --experimental-vm-modules scripts/check-module-graph.mjs
  */
 import fs from 'fs';
 import path from 'path';
 import vm from 'vm';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { parse } from 'acorn';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -77,10 +81,63 @@ for (const file of files) {
     }
 }
 
+// V8 resolves `import('./x.js')` lazily, so module.link() never sees dynamic
+// specifiers: a file that keeps a stale `import('./sibling.js')` after being
+// moved into a sub-folder links cleanly and only fails at runtime (that is how
+// js/drawingBoard/document.js broke its note-save sync). Resolve every literal
+// dynamic specifier ourselves.
+function dynamicSpecifiers(source) {
+    const specs = [];
+    const ast = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowAwaitOutsideFunction: true });
+    walk(ast, (node) => {
+        if (node.type !== 'ImportExpression') return;
+        const arg = node.source;
+        if (arg && arg.type === 'Literal' && typeof arg.value === 'string') specs.push(arg.value);
+    });
+    return specs;
+}
+
+function walk(node, visit) {
+    visit(node);
+    for (const key of Object.keys(node)) {
+        const value = node[key];
+        if (Array.isArray(value)) {
+            for (const child of value) {
+                if (child && typeof child === 'object' && typeof child.type === 'string') walk(child, visit);
+            }
+        } else if (value && typeof value === 'object' && typeof value.type === 'string') {
+            walk(value, visit);
+        }
+    }
+}
+
+let dynamicCount = 0;
+for (const file of files) {
+    const identifier = pathToFileURL(file).href;
+    let specs;
+    try {
+        specs = dynamicSpecifiers(fs.readFileSync(file, 'utf8'));
+    } catch (error) {
+        failures.push({ file: relative(identifier), message: `cannot scan dynamic imports: ${error.message}` });
+        continue;
+    }
+    for (const specifier of specs) {
+        dynamicCount += 1;
+        if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
+            failures.push({ file: relative(identifier), message: `dynamic import of bare specifier "${specifier}" is not supported` });
+            continue;
+        }
+        const resolved = new URL(specifier, identifier);
+        if (!fs.existsSync(fileURLToPath(resolved))) {
+            failures.push({ file: relative(identifier), message: `cannot resolve dynamic import "${specifier}"` });
+        }
+    }
+}
+
 if (failures.length) {
     console.error(`[modules] ${failures.length} module(s) fail to link:`);
     for (const failure of failures) console.error(`  ${failure.file}\n    ${failure.message}`);
     process.exit(1);
 }
 
-console.log(`[modules] ${files.length} modules link cleanly`);
+console.log(`[modules] ${files.length} modules link cleanly (${dynamicCount} dynamic imports resolved)`);

@@ -111,13 +111,13 @@ export async function flushSave(board) {
         const item = board.noteCanvasItem;
         if (!item) return;
         const doc = JSON.parse(JSON.stringify(board.doc));
-        const { mutateItem } = await import('./noteSurfaceMutations.js');
+        const { mutateItem } = await import('../noteSurfaceMutations.js');
         mutateItem(item, (it) => {
             it.canvas = doc;
             // Drawing implies the note canvas should be visible on board/modal.
             it.canvasHidden = false;
         }, { preserveView: true, skipRerender: true });
-        import('./noteAttachmentsUi.js').then(({ syncNoteCanvasDom }) => {
+        import('../noteAttachmentsUi.js').then(({ syncNoteCanvasDom }) => {
             syncNoteCanvasDom(item);
         }).catch(() => {});
         return;
@@ -126,14 +126,14 @@ export async function flushSave(board) {
         const item = board.flowchartItem;
         if (!item) return;
         const doc = JSON.parse(JSON.stringify(board.doc));
-        const { mutateItem } = await import('./noteSurfaceMutations.js');
+        const { mutateItem } = await import('../noteSurfaceMutations.js');
         mutateItem(item, (it) => {
             if (!it.flowchart) return;
             it.flowchart.doc = doc;
             // Drawing implies the flowchart should be visible on board/modal.
             it.flowchartHidden = false;
         }, { preserveView: true, skipRerender: true });
-        import('./flowchartUi.js').then(({ syncNoteFlowchartDom }) => {
+        import('../flowchartUi.js').then(({ syncNoteFlowchartDom }) => {
             syncNoteFlowchartDom(item);
         }).catch(() => {});
         return;

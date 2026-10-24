@@ -85,7 +85,7 @@ export async function addMediaImageToNoteCanvas(item, mediaId) {
     const images = getNoteCanvasImages(item);
     if (images.some((img) => img.mediaId === mediaId)) return null;
 
-    const img = await (await import('./canvasImages.js')).loadImage(mediaId);
+    const img = await (await import('../canvasImages.js')).loadImage(mediaId);
     if (!img) return null;
 
     const size = initialImageSize(img.naturalWidth, img.naturalHeight);
