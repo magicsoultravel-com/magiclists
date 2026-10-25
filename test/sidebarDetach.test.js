@@ -17,21 +17,25 @@ import {
     writeSidebarDetach
 } from '../js/sidebarPrefs.js';
 import {
+    SIDEBAR_COMPACT_CLASSES,
     SIDEBAR_DETACH_ENABLED,
     SIDEBAR_DETACH_HANDLE_SEL,
     applyDetachedGeometry,
+    collapseSidebar,
     detachSidebar,
     initSidebarDetach,
     isDetached,
     isSidebarDetachEnabled,
     readDetachedGeometry,
     reattachSidebar,
+    resetDetachedGeometry,
     setSidebarDetachEnabled,
     sidebarDetach
 } from '../js/sidebarDetach.js';
 import { initShellResize } from '../js/shellResize.js';
 import { resetStableBoardLayoutWidth } from '../js/board/boardExtents.js';
 import { ToolsManager } from '../js/toolsManager.js';
+import * as sidebarModules from '../js/sidebarModules.js';
 
 const SURFACE_RECT = { left: 260, top: 40, width: 1000, height: 700 };
 const MARGIN = 8;
@@ -215,16 +219,22 @@ function createEnv() {
     };
 
     const toggle = makeEl({ id: 'sidebar-detach-toggle', classes: ['sidebar-detach-toggle'] });
+    const collapse = makeEl({ id: 'sidebar-collapse', classes: ['sidebar-collapse'] });
     const byId = {
         'desktop-surface': surface,
         'side-panel': panel,
-        'sidebar-detach-toggle': toggle
+        'sidebar-detach-toggle': toggle,
+        'sidebar-collapse': collapse
     };
     const documentListeners = new Map();
     const doc = {
         body: makeEl({ classes: [] }),
         getElementById: (id) => byId[id] ?? null,
-        querySelector: (selector) => (selector === '[data-sidebar-detach-toggle]' ? toggle : null),
+        querySelector: (selector) => {
+            if (selector === '[data-sidebar-detach-toggle]') return toggle;
+            if (selector === '[data-sidebar-collapse]') return collapse;
+            return null;
+        },
         createElement: () => makeEl(),
         addEventListener(type, fn) {
             if (!documentListeners.has(type)) documentListeners.set(type, []);
@@ -258,7 +268,7 @@ function createEnv() {
         }
     };
 
-    return { surface, panel, toggle, brandRow, document: doc, window: win };
+    return { surface, panel, toggle, collapse, brandRow, document: doc, window: win };
 }
 
 const env = createEnv();
@@ -268,13 +278,27 @@ globalThis.window = env.window;
 /** Fresh DOM for the same page — persisted storage is left untouched. */
 function resetPanelDom() {
     const { panel } = env;
-    panel.classList.remove('is-detached', 'is-detached--sized', 'is-detached-dragging', 'is-collapsed');
+    // Fresh DOM: strip every detach/compact class and re-arm the tray controls —
+    // the idempotent bind guards live on the elements, so a reload must clear them.
+    panel.classList.remove(
+        'is-detached',
+        'is-detached--sized',
+        'is-detached-dragging',
+        'is-collapsed',
+        ...SIDEBAR_COMPACT_CLASSES
+    );
     ['--sidebar-width', '--sidebar-ui-scale', 'left', 'top', 'height', 'width'].forEach((prop) => {
         panel.style.removeProperty(prop);
     });
     panel.offsetWidth = SIDEBAR_DEFAULT_WIDTH;
     panel.offsetHeight = 320;
     panel.children.length = 0;
+
+    env.collapse.listeners.click = [];
+    env.collapse.dataset = {};
+    env.collapse.innerHTML = '';
+    env.collapse.title = '';
+    env.collapse.attrs = {};
 
     env.document.body.classList.remove(
         'is-sidebar-detached',
@@ -665,6 +689,117 @@ describe('sidebarDetach · toggle button wiring', () => {
     });
 });
 
+
+describe('sidebarDetach · compact strip collapse', () => {
+    /** Fire the tray control the way a real click would (from the button itself). */
+    const clickCollapse = () => {
+        const handlers = (env.collapse.listeners.click || []).slice();
+        handlers.forEach((handler) => handler({ preventDefault: () => {}, stopPropagation: () => {} }));
+        return handlers.length;
+    };
+
+    it('collapses the floating sidebar to the brand-row strip and expands it back', () => {
+        const panel = boot({ dockedWidth: 400 });
+        detachSidebar();
+        applyDetachedGeometry({ width: 300, height: 420 });
+        assert.equal(panel.style.getPropertyValue('height'), '420px');
+
+        assert.equal(clickCollapse(), 1, 'exactly one listener owns the tray control');
+        assert.equal(panel.classList.contains('is-compact'), true);
+        assert.equal(panel.classList.contains('is-detached'), true, 'the strip is still the floating panel');
+        assert.equal(panel.classList.contains('is-detached--sized'), false);
+        assert.equal(panel.style.getPropertyValue('height'), '', 'strip is auto-height');
+
+        clickCollapse();
+        assert.equal(panel.classList.contains('is-compact'), false);
+        assert.equal(panel.style.getPropertyValue('height'), '420px');
+        assert.equal(readDetachedGeometry().height, 420, 'the pre-collapse height comes back');
+        assert.equal(readSidebarDetach().geometry.height, 420, 'and is persisted again');
+    });
+
+    it('binds exactly one listener no matter how often init runs (double-bind regression)', () => {
+        const panel = boot({ dockedWidth: 400 });
+        detachSidebar();
+        initSidebarDetach();
+        initSidebarDetach();
+
+        assert.equal(env.collapse.listeners.click.length, 1);
+        clickCollapse();
+        // Two listeners on the same element would collapse and immediately expand
+        // again — the exact bug this regression test exists for.
+        assert.equal(panel.classList.contains('is-compact'), true, 'one click must not toggle twice');
+    });
+
+    it('flips the tray control into an expand affordance while compact', () => {
+        boot({ dockedWidth: 400 });
+        detachSidebar();
+        assert.equal(env.collapse.title, 'Collapse sidebar');
+        assert.equal(env.collapse.attrs['aria-expanded'], 'true');
+
+        clickCollapse();
+        assert.equal(env.collapse.title, 'Expand sidebar');
+        assert.equal(env.collapse.attrs['aria-label'], 'Expand sidebar');
+        assert.equal(env.collapse.attrs['aria-expanded'], 'false');
+        assert.match(env.collapse.innerHTML, /M6 2\.2v7\.6/, 'maximize glyph replaces minimize');
+    });
+
+    it('is a no-op while docked so the docked panel cannot lose its modules', () => {
+        const panel = boot({ dockedWidth: 400 });
+        assert.equal(collapseSidebar(), false);
+        assert.equal(panel.classList.contains('is-compact'), false);
+
+        clickCollapse();
+        assert.equal(panel.classList.contains('is-compact'), false);
+        assert.equal(env.collapse.title, 'Collapse sidebar');
+    });
+
+    it('reattaching drops the strip so the docked panel comes back expanded', () => {
+        const panel = boot({ dockedWidth: 400 });
+        detachSidebar();
+        assert.equal(collapseSidebar(), true);
+        assert.equal(panel.classList.contains('is-compact'), true);
+
+        reattachSidebar();
+        assert.equal(isDetached(), false);
+        assert.equal(panel.classList.contains('is-compact'), false);
+        assert.equal(env.collapse.title, 'Collapse sidebar');
+    });
+
+    it('starts expanded again on the next detach', () => {
+        const panel = boot({ dockedWidth: 400 });
+        detachSidebar();
+        collapseSidebar();
+        reattachSidebar();
+        detachSidebar();
+
+        assert.equal(panel.classList.contains('is-compact'), false);
+        assert.equal(panel.style.getPropertyValue('height'), '');
+    });
+
+    it('does not resurrect a discarded height when expanding again', () => {
+        const panel = boot({ dockedWidth: 400 });
+        detachSidebar();
+        applyDetachedGeometry({ width: 300, height: 420 });
+        collapseSidebar();
+
+        resetDetachedGeometry(); // double-click on the brand row while compact
+        collapseSidebar(); // expand again
+
+        assert.equal(panel.classList.contains('is-compact'), false);
+        assert.equal(panel.style.getPropertyValue('height'), '');
+        assert.equal(panel.classList.contains('is-detached--sized'), false);
+    });
+
+    it('keeps a single owner: the modules registry no longer exports a competing collapse', () => {
+        // The original bug was two binders on one element (sidebarDetach +
+        // sidebarModules), each guarded by a DIFFERENT dataset key, so both
+        // attached: one click toggled the strip on and straight back off.
+        assert.equal(typeof sidebarModules.bindSidebarCollapse, 'undefined');
+        assert.equal(typeof sidebarModules.collapseSidebar, 'undefined');
+        assert.equal(typeof sidebarModules.isSidebarCompact, 'undefined');
+        assert.equal(typeof sidebarModules.setSidebarCompact, 'undefined');
+    });
+});
 
 describe('sidebarDetach · reload with a persisted detach', () => {
     it('restores the floating panel geometry across a reload', () => {

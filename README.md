@@ -73,6 +73,24 @@ modules:
 | Emergency off switch: `false` makes the init return before binding anything or re-applying a stored detached state (it also clears the persisted flag and hides the toggle) | `SIDEBAR_DETACH_ENABLED` in `js/sidebarDetach.js` |
 | Microtask-batched `MutationObserver` fake reproduces the loop in `node --test`; a storm guard turns a regression into a fast failure instead of a hung runner | `test/sidebarDetach.test.js` |
 
+### One binder per tray control
+
+`#sidebar-collapse` is bound **once**, by `bindSidebarCollapse()` in
+`js/sidebarDetach.js`. A second listener on the same element toggles
+`.is-compact` on and straight back off, so the click looks dead — and
+`stopPropagation()` cannot help, because sibling listeners on the same element
+still run. That is why `initAllSidebarModules()` owns only the module-level tray
+controls (`#sidebar-collapse-all`, `#sidebar-reset-size`,
+`#sidebar-reattach-all`).
+
+Compact mode itself is detached-only: `.is-compact` hides the module list and
+chrome, and the tray control is `display: none` while docked, so
+`setSidebarCompact()` no-ops unless the panel is floating and `reattachSidebar()`
+clears the strip. The collapse remembers the sized height and re-applies it
+through `applyDetachedGeometry()` on expand, so a corner resize survives the
+trip through the one-row strip (and is re-persisted rather than written as
+`height: null` by the next drag).
+
 ## Splitting a big module: facade + session modules
 
 `js/drawingBoard.js` was 1874 lines of one object literal. It is now 939 lines of

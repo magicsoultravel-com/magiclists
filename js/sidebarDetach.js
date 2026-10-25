@@ -1,5 +1,5 @@
 /**
- * @module {"owns":"detached (floating) sidebar mode: toggle, drag, corner resize, clamping, persisted geometry","related":["shellResize.js","sidebarPrefs.js","hamburger.js","sync.js","board/boardExtents.js"],"events":["sidebar:width_changed","tools:desktop_bounds_changed"]}
+ * @module {"owns":"detached (floating) sidebar mode: toggle, drag, corner resize, clamping, persisted geometry, compact strip collapse","related":["shellResize.js","sidebarPrefs.js","hamburger.js","sync.js","board/boardExtents.js"],"events":["sidebar:width_changed","tools:desktop_bounds_changed"]}
  */
 import {
     readSidebarDetach,
@@ -16,13 +16,19 @@ import {
     resetSidebarWidthToDefault
 } from './shellResize.js';
 import { CARD_ICONS } from './icons.js';
-import { SidePanel } from './hamburger.js';
 
 export const SIDEBAR_DETACHED_CLASS = 'is-detached';
 export const SIDEBAR_DETACHED_SIZED_CLASS = 'is-detached--sized';
 export const SIDEBAR_DETACH_TOGGLE_SEL = '[data-sidebar-detach-toggle]';
 export const SIDEBAR_DETACH_HANDLE_SEL = '[data-sidebar-detach-resize]';
 export const SIDEBAR_DETACHED_MIN_HEIGHT = 120;
+
+/**
+ * Strip classes for the compact single-row floating sidebar. The CSS rules that
+ * hide the module list / chrome (shell-sidebar.css) key off exactly these names,
+ * so keep the two lists in sync.
+ */
+export const SIDEBAR_COMPACT_CLASSES = ['is-compact', 'is-collapsed-strip', 'is-minimized', 'is-single-row'];
 
 /**
  * Build-time default for detached mode. `false` ships a build where the floating
@@ -53,6 +59,8 @@ let lastDragEndAt = 0;
 let detachEnabled = SIDEBAR_DETACH_ENABLED;
 let reclamping = false;
 let reclampBudget = 0;
+/** Sized height captured when collapsing, re-applied when expanding again. */
+let preCompactHeight = null;
 
 export function isSidebarDetachEnabled() {
     return detachEnabled;
@@ -228,6 +236,7 @@ export function applyDetachedGeometry(geometry = null) {
 /** Reset the floating sidebar's width and height to their defaults. */
 export function resetDetachedSize() {
     if (!isDetached()) return false;
+    preCompactHeight = null;
     const current = readDetachedGeometry();
     const applied = applyDetachedGeometry({
         width: SIDEBAR_DEFAULT_WIDTH,
@@ -283,6 +292,9 @@ export function syncSidebarDetachToggle() {
  */
 export function resetDetachedGeometry() {
     if (!isDetached()) return false;
+    // A reset replaces the remembered height too, or expanding a compact strip
+    // afterwards would resurrect the size the user just discarded.
+    preCompactHeight = null;
     const applied = applyDetachedGeometry(null);
     writeSidebarDetach(true, applied);
     return true;
@@ -309,13 +321,15 @@ export function detachSidebar({ geometry = null, persist = true } = {}) {
     // One frame with transitions off: the board has already reclaimed the flex
     // space by the time the panel paints at 220px, so there is no two-frame snap.
     body?.classList.add('is-sidebar-detached', 'is-sidebar-detaching');
-    el.classList.remove('is-collapsed');
+    el.classList.remove('is-collapsed', ...SIDEBAR_COMPACT_CLASSES);
+    preCompactHeight = null;
     el.classList.add(SIDEBAR_DETACHED_CLASS);
     syncNavToggleChrome();
 
     const applied = applyDetachedGeometry(geometry);
     if (persist) writeSidebarDetach(true, applied);
     syncSidebarDetachToggle();
+    syncSidebarCollapseButton();
 
     // Leaving the flow hides the splitter, resets the board packing width and
     // re-clamps the file cabinet; it also broadcasts tools:desktop_bounds_changed.
@@ -329,7 +343,15 @@ export function reattachSidebar({ persist = true } = {}) {
     const el = getPanel();
     if (!el || !isDetached()) return false;
 
-    el.classList.remove(SIDEBAR_DETACHED_CLASS, SIDEBAR_DETACHED_SIZED_CLASS, 'is-detached-dragging');
+    el.classList.remove(
+        SIDEBAR_DETACHED_CLASS,
+        SIDEBAR_DETACHED_SIZED_CLASS,
+        'is-detached-dragging',
+        ...SIDEBAR_COMPACT_CLASSES
+    );
+    // Compact is detached-only: a docked panel must never keep the strip rules,
+    // they hide the module list with no visible control left to undo it.
+    preCompactHeight = null;
     el.style.removeProperty('left');
     el.style.removeProperty('top');
     el.style.removeProperty('height');
@@ -342,6 +364,7 @@ export function reattachSidebar({ persist = true } = {}) {
 
     if (persist) writeSidebarDetach(false);
     syncSidebarDetachToggle();
+    syncSidebarCollapseButton();
 
     // Re-entering the flow restores the STORED docked width (applyStoredSidebarWidth
     // inside onShellDockChanged) and fires sidebar:width_changed for module reflow.
@@ -537,29 +560,68 @@ export function bindSidebarCollapseAll() {
     // Collapse-all is module-level; sidebarDetach only ensures binding hook exists.
 }
 
-const SIDEBAR_COMPACT_CLASSES = ['is-compact', 'is-collapsed-strip', 'is-minimized', 'is-single-row'];
-
 export function isSidebarCompact() {
     if (typeof document === 'undefined') return false;
-    const panel = document.getElementById('side-panel');
+    const panel = getPanel();
     return !!panel && SIDEBAR_COMPACT_CLASSES.some((cls) => panel.classList.contains(cls));
 }
 
+/** Tray control reads "collapse" while expanded and "expand" while compact. */
+function syncSidebarCollapseButton() {
+    if (typeof document === 'undefined') return;
+    const btn = document.getElementById('sidebar-collapse')
+        ?? document.querySelector?.('[data-sidebar-collapse]');
+    if (!btn) return;
+    const compact = isSidebarCompact();
+    btn.innerHTML = compact ? (CARD_ICONS.maximize ?? '') : (CARD_ICONS.minimize ?? '');
+    const label = compact ? 'Expand sidebar' : 'Collapse sidebar';
+    btn.title = label;
+    btn.setAttribute?.('aria-label', label);
+    btn.setAttribute?.('aria-expanded', compact ? 'false' : 'true');
+}
+
+/**
+ * Collapse/expand the FLOATING sidebar into its brand-row strip.
+ *
+ * Detached-only by design: the strip rules hide the module list and chrome, and
+ * the tray control is `display: none` while docked — a docked collapse would be a
+ * dead end, so it is a no-op there instead.
+ */
 export function setSidebarCompact(collapsed) {
     if (typeof document === 'undefined') return false;
-    const panel = document.getElementById('side-panel');
-    if (!panel) return false;
-    SIDEBAR_COMPACT_CLASSES.forEach((cls) => panel.classList.toggle(cls, !!collapsed));
-    if (collapsed) {
-        panel.style.removeProperty('height');
-        panel.classList.remove('is-detached--sized');
+    const panel = getPanel();
+    if (!panel || !isDetached()) return false;
+    const next = !!collapsed;
+    if (next === isSidebarCompact()) {
+        syncSidebarCollapseButton();
+        return next;
     }
-    return !!collapsed;
+
+    if (next) {
+        // The strip is auto-height, so remember the sized height: without it the
+        // next drag persists height:null and a corner resize is lost for good.
+        preCompactHeight = readDetachedGeometry().height;
+        SIDEBAR_COMPACT_CLASSES.forEach((cls) => panel.classList.add(cls));
+        panel.style.removeProperty('height');
+        panel.classList.remove(SIDEBAR_DETACHED_SIZED_CLASS);
+    } else {
+        SIDEBAR_COMPACT_CLASSES.forEach((cls) => panel.classList.remove(cls));
+        const restore = preCompactHeight;
+        preCompactHeight = null;
+        if (restore) {
+            // Re-apply through the clamping path: the restored height can push the
+            // panel past the board edge, and this re-persists the geometry too.
+            const applied = applyDetachedGeometry({ ...readDetachedGeometry(), height: restore });
+            writeSidebarDetach(true, applied ?? readDetachedGeometry());
+        }
+    }
+    syncSidebarCollapseButton();
+    return next;
 }
 
 export function collapseSidebar() {
-    const next = !isSidebarCompact();
-    return setSidebarCompact(next);
+    if (!isDetached()) return false;
+    return setSidebarCompact(!isSidebarCompact());
 }
 export const collapseSidebarPanel = collapseSidebar;
 export const collapseSidebarToOneRow = collapseSidebar;
@@ -567,23 +629,27 @@ export const minimizeSidebar = collapseSidebar;
 export const toggleSidebarCompact = collapseSidebar;
 export const toggleSidebarCollapse = collapseSidebar;
 
+/**
+ * Bind the collapse-sidebar tray control — the ONLY binder.
+ *
+ * A second listener on the same element (the duplicate this module used to share
+ * with sidebarModules.bindSidebarCollapse) toggles the class straight back, which
+ * is why the click looked dead. stopPropagation cannot help: sibling listeners on
+ * the same element still run. One owner, one guard key, one listener.
+ */
 export function bindSidebarCollapse() {
     if (typeof document === 'undefined') return;
     const btn = document.getElementById('sidebar-collapse')
         ?? document.querySelector?.('[data-sidebar-collapse]');
     if (!btn) return;
-    // Always ensure handler is bound - removed the guard that could prevent binding
+    syncSidebarCollapseButton();
+    if (btn.dataset?.sidebarCollapseBound === 'true') return;
     if (btn.dataset) btn.dataset.sidebarCollapseBound = 'true';
-    btn.innerHTML = (typeof CARD_ICONS !== 'undefined' && CARD_ICONS.minimize) ? CARD_ICONS.minimize : '';
-    // Avoid duplicate handlers
-    if (!btn.dataset?.collapseHandlerBound) {
-        btn.addEventListener('click', (event) => {
-            event.preventDefault?.();
-            event.stopPropagation?.();
-            collapseSidebar();
-        });
-        btn.dataset.collapseHandlerBound = 'true';
-    }
+    btn.addEventListener('click', (event) => {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        collapseSidebar();
+    });
 }
 
 function bindBrandRow() {

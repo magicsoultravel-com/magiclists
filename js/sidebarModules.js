@@ -7,7 +7,7 @@ import {
     SIDEBAR_MODULE_CHROME_IGNORE
 } from './sidebarUndock.js';
 import { readModuleDock, writeModuleDock, writeSidebarSection } from './sidebarPrefs.js';
-import { bindToggleCollapsable, SidePanel } from './hamburger.js';
+import { bindToggleCollapsable } from './hamburger.js';
 import { resetDetachedSize, isDetached } from './sidebarDetach.js';
 import { resetSidebarWidthToDefault } from './shellResize.js';
 import { RadioPopover } from './radioPopover.js';
@@ -389,48 +389,6 @@ export function bindSidebarResetSize() {
     });
 }
 
-const SIDEBAR_COMPACT_CLASSES = ['is-compact', 'is-collapsed-strip', 'is-minimized', 'is-single-row'];
-
-export function isSidebarCompact() {
-    const panel = (typeof document !== 'undefined') ? document.getElementById('side-panel') : null;
-    return !!panel && SIDEBAR_COMPACT_CLASSES.some((cls) => panel.classList.contains(cls));
-}
-
-/** Collapse/expand the floating sidebar into a single-row compact strip. */
-export function setSidebarCompact(collapsed) {
-    if (typeof document === 'undefined') return false;
-    const panel = document.getElementById('side-panel');
-    if (!panel) return false;
-    SIDEBAR_COMPACT_CLASSES.forEach((cls) => panel.classList.toggle(cls, !!collapsed));
-    if (collapsed) {
-        panel.style.removeProperty('height');
-        panel.classList.remove('is-detached--sized');
-    }
-    return !!collapsed;
-}
-
-export function collapseSidebar() {
-    const next = !isSidebarCompact();
-    return setSidebarCompact(next);
-}
-export const collapseSidebarPanel = collapseSidebar;
-export const collapseSidebarToOneRow = collapseSidebar;
-export const minimizeSidebar = collapseSidebar;
-export const toggleSidebarCompact = collapseSidebar;
-export const toggleSidebarCollapse = collapseSidebar;
-
-export function bindSidebarCollapse() {
-    const btn = document.getElementById('sidebar-collapse')
-        ?? document.querySelector?.('[data-sidebar-collapse]');
-    if (!btn || btn.dataset?.bound === 'true') return;
-    btn.dataset.bound = 'true';
-    btn.innerHTML = CARD_ICONS.minimize ?? '';
-    btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        collapseSidebar();
-    });
-}
-
 export function bindSidebarReattachAll() {
     const btn = document.getElementById('sidebar-reattach-all');
     if (!btn || btn.dataset.bound === 'true') return;
@@ -490,7 +448,6 @@ export function initAllSidebarModules() {
     bindSidebarReattachAll();
     bindSidebarCollapseAll();
     bindSidebarResetSize();
-    bindSidebarCollapse();
 
     window.addEventListener(SIDEBAR_MODULES_CHANGED_EVENT, (e) => {
         const modules = normalizeSidebarModules(e.detail?.modules || readSidebarModules());
