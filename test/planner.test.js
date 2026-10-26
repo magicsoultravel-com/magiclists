@@ -678,6 +678,64 @@ describe('planner Kanban', () => {
         assert.equal(layout.labels[0], 'Preparation');
     });
 
+    it('labels child cards with the parent pack name and leaves roots blank', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Design Pack');
+        togglePlannerWorkPack(planner, 0);
+        addPlannerPackChild(planner, 0);
+        setPlannerField(planner.sheet, 1, 'name', 'Wireframes');
+        addPlannerPackChild(planner, 0);
+        setPlannerField(planner.sheet, 2, 'name', 'Mockups');
+        setPlannerField(planner.sheet, 3, 'name', 'Solo Root');
+
+        const cards = derivePlannerKanbanCards(planner);
+        // The pack parent itself never becomes a card; only children carry the name.
+        assert.deepEqual(cards.map((c) => c.name), ['Wireframes', 'Mockups', 'Solo Root']);
+        assert.deepEqual(cards.map((c) => c.parentName), ['Design Pack', 'Design Pack', '']);
+    });
+
+    it('renders the parent pack label inside the Kanban meta strip only', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Design Pack');
+        togglePlannerWorkPack(planner, 0);
+        addPlannerPackChild(planner, 0);
+        setPlannerField(planner.sheet, 1, 'name', 'Wireframes');
+        setPlannerField(planner.sheet, 1, 'start', '2026-03-02');
+        setPlannerField(planner.sheet, 1, 'stop', '2026-03-06');
+
+        const html = renderPlannerKanbanHtml(planner, { canEdit: false });
+        // Slot + flyout both carry the label.
+        assert.equal((html.match(/planner-kanban__card-parent/g) || []).length, 2);
+        assert.ok(/<span class="planner-kanban__card-meta"><span class="planner-kanban__card-row"[^>]*>[^<]*<\/span><span class="planner-kanban__card-parent" title="Parent: Design Pack">Design Pack<\/span><span class="planner-kanban__card-date planner-kanban__card-date--start"/.test(html));
+
+        // WBS keeps its historical absolute meta markup — no flex strip, no label.
+        const wbsHtml = renderPlannerWbsHtml(planner, { canEdit: false });
+        assert.ok(!wbsHtml.includes('planner-wbs__card-parent'));
+        assert.ok(!wbsHtml.includes('planner-wbs__card-meta'));
+
+        // A root card gets the strip (so the date stays right-aligned) but no label.
+        const rootPlanner = createEmptyPlanner();
+        setPlannerField(rootPlanner.sheet, 0, 'name', 'Solo');
+        setPlannerField(rootPlanner.sheet, 0, 'start', '2026-03-02');
+        const rootHtml = renderPlannerKanbanHtml(rootPlanner, { canEdit: false });
+        assert.ok(!rootHtml.includes('planner-kanban__card-parent'));
+        assert.ok(/<span class="planner-kanban__card-meta"><span class="planner-kanban__card-row"[^>]*>[^<]*<\/span><span class="planner-kanban__card-date planner-kanban__card-date--start"/.test(rootHtml));
+    });
+
+    it('omits the parent label when the pack parent has no name', () => {
+        const planner = createEmptyPlanner();
+        togglePlannerWorkPack(planner, 0);
+        addPlannerPackChild(planner, 0);
+        setPlannerField(planner.sheet, 1, 'name', 'Orphan child');
+
+        const cards = derivePlannerKanbanCards(planner);
+        assert.equal(cards.length, 1);
+        assert.equal(cards[0].parentName, '');
+        const html = renderPlannerKanbanHtml(planner, { canEdit: false });
+        assert.ok(html.includes('planner-kanban__card-meta'));
+        assert.ok(!html.includes('planner-kanban__card-parent'));
+    });
+
     it('uses category color by default and keeps full comments for CSS clamp', () => {
         const planner = createEmptyPlanner();
         const id0 = planner.rowIds[0];

@@ -1428,6 +1428,7 @@
 }
 
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-row,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-parent,
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-date,
 .planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-row,
 .planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-date {
@@ -1526,6 +1527,7 @@ body.is-planner-wbs-drag-active .planner-wbs__card-slot {
 }
 
 .planner-kanban__card-row,
+.planner-kanban__card-parent,
 .planner-kanban__card-date,
 .planner-wbs__card-row,
 .planner-wbs__card-date {
@@ -1563,7 +1565,53 @@ body.is-planner-wbs-drag-active .planner-wbs__card-slot {
     max-width: 55%;
 }
 
+/*
+ * Kanban meta strip: id + parent pack + start date share one flex row, so a long
+ * pack name ellipsizes instead of sliding under the right-aligned date. The stop
+ * date stays on its own bottom line. WBS keeps the absolute spans above.
+ */
+.planner-kanban__card-meta {
+    position: absolute;
+    top: 0.18rem;
+    left: 0.28rem;
+    right: 0.28rem;
+    z-index: 3;
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    min-width: 0;
+    pointer-events: none;
+}
+
+.planner-kanban__card-meta > .planner-kanban__card-row,
+.planner-kanban__card-meta > .planner-kanban__card-parent,
+.planner-kanban__card-meta > .planner-kanban__card-date--start {
+    position: static;
+    top: auto;
+    right: auto;
+    left: auto;
+}
+
+/* Row id keeps its historical max-width: 20% guard. */
+.planner-kanban__card-meta > .planner-kanban__card-row {
+    flex: 0 0 auto;
+}
+
+/* The only shrinking item in the strip — the date stays pinned right. */
+.planner-kanban__card-meta > .planner-kanban__card-parent {
+    flex: 1 1 auto;
+    min-width: 0;
+    /* Re-enable hit-testing so the "Parent: …" title tooltip can fire. */
+    pointer-events: auto;
+}
+
+.planner-kanban__card-meta > .planner-kanban__card-date--start {
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
 .planner-kanban__card-flyout .planner-kanban__card-row,
+.planner-kanban__card-flyout .planner-kanban__card-parent,
 .planner-kanban__card-flyout .planner-kanban__card-date,
 .planner-wbs__card-flyout .planner-wbs__card-row,
 .planner-wbs__card-flyout .planner-wbs__card-date {
@@ -1906,6 +1954,7 @@ textarea.planner-wbs__card-comment:focus {
 
 .planner-kanban__card.is-urgent .planner-kanban__card-comment,
 .planner-kanban__card.is-urgent .planner-kanban__card-row,
+.planner-kanban__card.is-urgent .planner-kanban__card-parent,
 .planner-kanban__card.is-urgent .planner-kanban__card-date,
 .planner-wbs__card.is-urgent .planner-wbs__card-comment,
 .planner-wbs__card.is-urgent .planner-wbs__card-row,
@@ -1916,6 +1965,7 @@ textarea.planner-wbs__card-comment:focus {
 
 .planner-kanban__card.is-muted .planner-kanban__card-comment,
 .planner-kanban__card.is-muted .planner-kanban__card-row,
+.planner-kanban__card.is-muted .planner-kanban__card-parent,
 .planner-kanban__card.is-muted .planner-kanban__card-date,
 .planner-wbs__card.is-muted .planner-wbs__card-comment,
 .planner-wbs__card.is-muted .planner-wbs__card-row,
@@ -1978,6 +2028,7 @@ textarea.planner-wbs__card-comment:focus {
 .has-custom-bg .planner-kanban__column-count,
 .has-custom-bg .planner-kanban__card-comment,
 .has-custom-bg .planner-kanban__card-row,
+.has-custom-bg .planner-kanban__card-parent,
 .has-custom-bg .planner-kanban__card-date {
     color: var(--card-muted);
 }

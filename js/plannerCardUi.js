@@ -41,6 +41,12 @@ export function renderPlannerCardHtml(planner, card, {
         ? `<span class="${block}card-date ${block}card-date--stop" title="Stop ${escapeAttr(stopLabel)}">${escapeHTML(stopLabel)}</span>`
         : '';
     const rowHtml = `<span class="${block}card-row" title="Row ${escapeAttr(label)}">${escapeHTML(label)}</span>`;
+    // Kanban is flat (packs stay off the board), so the parent pack name is the only
+    // place a child card records its hierarchy. WBS keeps its historical markup.
+    const parentName = mode === 'kanban' ? String(card.parentName || '') : '';
+    const parentHtml = parentName
+        ? `<span class="${block}card-parent" title="Parent: ${escapeAttr(parentName)}">${escapeHTML(parentName)}</span>`
+        : '';
     const commentRaw = String(card.comments || '');
     const comment = commentRaw.trim();
     const nameText = String(card.name || '');
@@ -80,7 +86,11 @@ ${indent}</span>`
     const flyoutCommentHtml = comment
         ? `<span class="${block}card-comment">${escapeHTML(comment)}</span>`
         : '';
-    const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
+    // Kanban wraps id + parent + start date in one flex strip so the parent label can
+    // never run under the right-aligned date. Stop date stays on its own bottom line.
+    const metaHtml = mode === 'kanban'
+        ? `<span class="${block}card-meta">${rowHtml}${parentHtml}${startHtml}</span>${stopHtml}`
+        : `${rowHtml}${parentHtml}${startHtml}${stopHtml}`;
     const slotBody = `${metaHtml}
 ${indent}<div class="${block}card-top">${slotNameHtml}</div>
 ${indent}${slotCommentHtml}`;

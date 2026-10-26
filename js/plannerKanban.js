@@ -310,9 +310,42 @@ function isHiddenId(planner, rowId) {
 }
 
 /**
+ * Local mirror of planner.getPlannerPackParentRow — planner.js imports this module,
+ * so importing it back would create a cycle. Children (level 1) are always contiguous
+ * after their pack parent, which is the nearest preceding level-0 row.
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {number} pack parent row index, or -1 when the row is not a pack child
+ */
+function packParentRowFor(planner, row) {
+    const rowIds = Array.isArray(planner?.rowIds) ? planner.rowIds : [];
+    const levelAt = (r) => {
+        const id = String(rowIds[r] ?? '');
+        return id ? (Number(planner?.rowLevelById?.[id]) || 0) : 0;
+    };
+    if (levelAt(row) !== 1) return -1;
+    let packRow = row - 1;
+    while (packRow >= 0 && levelAt(packRow) === 1) packRow -= 1;
+    if (packRow < 0) return -1;
+    return isPackId(planner, String(rowIds[packRow] ?? '')) ? packRow : -1;
+}
+
+/**
+ * Parent pack name for a child row ('' for roots, orphans and blank pack names).
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {string}
+ */
+function packParentNameFor(planner, row) {
+    const packRow = packParentRowFor(planner, row);
+    if (packRow < 0 || !planner?.sheet) return '';
+    return cellTrim(planner.sheet, packRow, NAME_COL);
+}
+
+/**
  * Cards with a non-empty name (empty-name / pack / hidden rows stay off the board).
  * @param {object|null|undefined} planner
- * @returns {Array<{ row: number, rowId: string, id: string, name: string, start: string, stop: string, category: string, comments: string, categoryColor: string, cardColor: string, emphasis: string, collapsed: boolean }>}
+ * @returns {Array<{ row: number, rowId: string, id: string, name: string, parentName: string, start: string, stop: string, category: string, comments: string, categoryColor: string, cardColor: string, emphasis: string, collapsed: boolean }>}
  */
 export function derivePlannerKanbanCards(planner) {
     const sheet = planner?.sheet;
@@ -333,6 +366,8 @@ export function derivePlannerKanbanCards(planner) {
             rowId,
             id: rowId,
             name,
+            // Packs never become cards, so a child card only shows the pack name here.
+            parentName: packParentNameFor(planner, r),
             start: cellTrim(sheet, r, START_COL),
             stop: cellTrim(sheet, r, STOP_COL),
             category,
