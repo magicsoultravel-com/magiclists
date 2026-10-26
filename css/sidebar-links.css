@@ -255,6 +255,12 @@
     background: var(--bg-hover, rgba(255, 255, 255, 0.06));
 }
 
+/* Match the sidebar module-header hover: title turns accent on hover/focus. */
+.sidebar-links__tile:hover .sidebar-links__tile-title,
+.sidebar-links__tile:focus-within .sidebar-links__tile-title {
+    color: var(--accent, #3b82f6);
+}
+
 .sidebar-links__tile-main {
     display: flex;
     flex-direction: column;
@@ -321,6 +327,7 @@
 }
 
 .sidebar-links__tile-title {
+    transition: color 0.15s ease;
     width: 100%;
     overflow: hidden;
     color: var(--text-main, #eee);
