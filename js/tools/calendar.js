@@ -15,6 +15,7 @@ export const CalendarTool = {
 
     destroy() {
         Calendar.onInlineClose = null;
+        Calendar.closeEventsList?.();
         if (Calendar.mountZone) Calendar.mountZone.innerHTML = '';
         Calendar.inlineMode = false;
     }

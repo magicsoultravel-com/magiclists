@@ -61,10 +61,14 @@
 .calendar-year-weekdays,
 .calendar-year-days {
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    /* The leading gutter carries the ISO week number; the seven day columns
+       share whatever is left at 1fr, so the cells keep their existing footprint
+       and the mini months neither grow nor overlap. */
+    grid-template-columns: var(--calendar-week-gutter, 1rem) repeat(7, minmax(0, 1fr));
 }
 
 .calendar-month-grid {
+    --calendar-week-gutter: 1.05rem;
     gap: 1px;
     max-width: min(100%, 560px);
     margin: 0 auto;
@@ -81,6 +85,31 @@
 .calendar-weekday {
     padding: 0.1rem;
     font-size: 0.55rem;
+}
+
+/* Week-number gutter cells: deliberately quiet, not clickable, and sized so two
+   digits fit inside the reserved column at both grid scales. */
+.calendar-week-number,
+.calendar-year-week-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1;
+    user-select: none;
+    cursor: default;
+}
+
+.calendar-week-number {
+    font-size: 0.5rem;
+    opacity: 0.62;
+}
+
+.calendar-year-week-number {
+    font-size: 0.42rem;
+    opacity: 0.55;
 }
 
 .calendar-year-month,
@@ -117,6 +146,21 @@
 .calendar-note-item:hover {
     border-color: var(--accent);
     background: rgba(255, 255, 255, 0.045);
+}
+
+/* Sundays and the holidays of the selected country stay readable without a
+   wash: only the day number turns red, so note colours and the card background
+   are left alone. */
+.cal-text--default {
+    color: var(--text-main);
+}
+
+.cal-text--white {
+    color: #fff;
+}
+
+.cal-text--red {
+    color: #f87171;
 }
 
 .calendar-day-number {
@@ -184,6 +228,7 @@
 
 .calendar-year-weekdays,
 .calendar-year-days {
+    --calendar-week-gutter: 0.8rem;
     gap: 1px;
 }
 
@@ -263,6 +308,13 @@
 .calendar-notes-title {
     margin: 0;
     font-size: 0.82rem;
+}
+
+/* Close button of the day popout. .card-act already supplies the 16px icon
+   button; only the flex sizing needs pinning down so the title cannot squeeze
+   it out of the header. */
+.calendar-notes-close {
+    flex: 0 0 auto;
 }
 
 .tool-mount--calendar .calendar-holiday-select {

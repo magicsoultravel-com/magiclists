@@ -3,7 +3,36 @@ import { readStoredCategories, resolveCategoryColor, UNCATEGORIZED_COLOR } from 
 import { CARD_ICONS } from './icons.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { stripRichText } from './richText.js';
-import { escapeHTML } from './domEscape.js';
+import { escapeHTML, escapeAttr } from './domEscape.js';
+import { isoWeekNumber } from './plannerGantt.js';
+
+/**
+ * Split a month into Sunday-start week rows.
+ *
+ * The month grid and the year-view mini months both render from this, so the
+ * two views cannot drift apart on padding cells, and the ISO week number is
+ * taken from the row's Monday - by definition the Monday of the ISO week that
+ * owns the whole row.
+ * @param {number} year
+ * @param {number} month 0-based month index
+ * @returns {Array<{week: number, cells: Array<number|null>}>}
+ */
+export function buildMonthWeekRows(year, month) {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const rows = [];
+
+    for (let start = 1 - firstDayIndex; start <= daysInMonth; start += 7) {
+        const cells = [];
+        for (let i = 0; i < 7; i++) {
+            const day = start + i;
+            cells.push(day >= 1 && day <= daysInMonth ? day : null);
+        }
+        rows.push({ week: isoWeekNumber(new Date(year, month, start + 1)), cells });
+    }
+
+    return rows;
+}
 
 export const Calendar = {
     overlay: null,
@@ -17,6 +46,8 @@ export const Calendar = {
     items: [],
     hiddenCategories: [],
     autoSaveTimer: null,
+    eventsModal: null,
+    eventsModalBinding: null,
     
     isItemCalendarHidden(itemId) {
         try {
@@ -69,6 +100,7 @@ export const Calendar = {
     close() {
         const stepModals = document.querySelectorAll('.step-date-modal');
         stepModals.forEach(modal => modal.remove());
+        this.closeEventsList();
 
         if (this.mountZone) this.mountZone.innerHTML = '';
 
@@ -108,10 +140,16 @@ export const Calendar = {
         }
     },
     
-    shouldShowRed(date) {
-        const dayOfWeek = date.getDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) return true;
-        return Holidays.isHoliday(date) !== null;
+    /**
+     * Sundays and the holidays of the country selected in the toolbar carry the
+     * subtle red tint. Saturdays used to be tinted as well; they are ordinary
+     * days again.
+     * @param {Date} date
+     * @returns {{isRed: boolean, holidayName: string|null}}
+     */
+    getRedDayInfo(date) {
+        const holidayName = Holidays.isHoliday(date) || null;
+        return { isRed: date.getDay() === 0 || holidayName !== null, holidayName };
     },
     
     isToday(date) {
@@ -282,6 +320,69 @@ export const Calendar = {
                 this.render();
             });
         });
+
+        this.bindGridEvents();
+    },
+
+    /**
+     * One delegated click handler for every day / hour cell in the grid.
+     *
+     * The cells used to be bound one by one inside `setTimeout(…, 10)` with
+     * `document.querySelectorAll`, and nothing deduped them: two renders inside
+     * the same tick (the tool opening, a category toggle, a quick prev/next)
+     * left a second listener on every cell, so one click opened two copies of
+     * the events popout - and the visible copy's close button then pointed at
+     * the *first* popup, i.e. it did nothing. Delegation makes that impossible:
+     * `render()` replaces the grid HTML first, and a single listener survives.
+     */
+    bindGridEvents() {
+        const grid = this.mountZone?.querySelector('#calendar-grid');
+        if (!grid) return;
+
+        grid.addEventListener('click', (e) => {
+            const monthTitle = e.target.closest('.calendar-year-month-title');
+            if (monthTitle) {
+                e.stopPropagation();
+                const month = parseInt(monthTitle.dataset.month, 10);
+                this.currentDate = new Date(this.currentDate.getFullYear(), month, 1);
+                this.currentView = 'month';
+                this.render();
+                return;
+            }
+
+            const hourNote = e.target.closest('.calendar-hour-note');
+            if (hourNote) {
+                e.stopPropagation();
+                const note = this.items.find(i => i.id === hourNote.dataset.parent);
+                if (note) {
+                    window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: note }));
+                }
+                return;
+            }
+
+            const dayEl = e.target.closest('.calendar-day, .calendar-year-day');
+            if (dayEl) {
+                const clickedDate = new Date(
+                    parseInt(dayEl.dataset.year, 10),
+                    parseInt(dayEl.dataset.month, 10),
+                    parseInt(dayEl.dataset.day, 10)
+                );
+                const events = this.getEventsForDate(clickedDate);
+                if (events.length > 0) {
+                    this.showEventsList(events, clickedDate);
+                } else {
+                    window.dispatchEvent(new CustomEvent('calendar:add_note', { detail: clickedDate }));
+                }
+                return;
+            }
+
+            const hourEl = e.target.closest('.calendar-hour');
+            if (hourEl) {
+                const newDate = new Date(this.currentDate);
+                newDate.setHours(parseInt(hourEl.dataset.hour, 10), 0, 0, 0);
+                window.dispatchEvent(new CustomEvent('calendar:add_note', { detail: newDate }));
+            }
+        });
     },
     
     getTitle() {
@@ -308,206 +409,173 @@ export const Calendar = {
     renderMonthView() {
         const year = this.currentDate.getFullYear();
         const month = this.currentDate.getMonth();
-        const firstDay = new Date(year, month, 1);
-        const startDay = firstDay.getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        
-        let grid = '<div class="calendar-month-grid">';
         const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+        let grid = '<div class="calendar-month-grid">';
+        grid += '<div class="calendar-week-number calendar-week-number--header" aria-hidden="true"></div>';
         weekdays.forEach(day => {
             grid += `<div class="calendar-weekday">${day}</div>`;
         });
-        
-        for (let i = 0; i < startDay; i++) {
-            grid += `<div class="calendar-empty-cell"></div>`;
-        }
-        
-        for (let d = 1; d <= daysInMonth; d++) {
-            const currentDate = new Date(year, month, d);
-            const events = this.getEventsForDate(currentDate);
-            const hasEvents = events.length > 0;
-            const isRed = this.shouldShowRed(currentDate);
-            const isToday = this.isToday(currentDate);
-            
-            let gradient = '';
-            let numberClass = 'cal-text--default';
-            let todayClass = '';
-            
-            if (hasEvents && events.length === 1) {
-                gradient = `background: ${events[0].color};`;
-                numberClass = 'cal-text--white';
-            } else if (hasEvents && events.length > 1) {
-                const colors = events.map(e => e.color);
-                const angleStep = 360 / colors.length;
-                const stops = colors.map((color, idx) => `${color} ${idx * angleStep}deg ${(idx + 1) * angleStep}deg`).join(', ');
-                gradient = `background: conic-gradient(from 0deg, ${stops});`;
-                numberClass = 'cal-text--white';
-            } else if (isRed) {
-                numberClass = 'cal-text--red';
-            }
-            
-            if (isToday && !hasEvents) {
-                todayClass = 'calendar-day-today';
-            } else if (isToday && hasEvents) {
-                todayClass = 'calendar-day-today';
-            }
-            
-            grid += `
-                <div class="calendar-day ${todayClass}" data-year="${year}" data-month="${month}" data-day="${d}" style="${gradient}">
+
+        buildMonthWeekRows(year, month).forEach(({ week, cells }) => {
+            grid += `<div class="calendar-week-number" title="ISO week ${week}" aria-label="Week ${week}">${week}</div>`;
+
+            cells.forEach((d) => {
+                if (d === null) {
+                    grid += `<div class="calendar-empty-cell"></div>`;
+                    return;
+                }
+
+                const currentDate = new Date(year, month, d);
+                const events = this.getEventsForDate(currentDate);
+                const hasEvents = events.length > 0;
+                const { isRed, holidayName } = this.getRedDayInfo(currentDate);
+                const isToday = this.isToday(currentDate);
+
+                let gradient = '';
+                let numberClass = 'cal-text--default';
+                let todayClass = '';
+
+                if (hasEvents && events.length === 1) {
+                    gradient = `background: ${events[0].color};`;
+                    numberClass = 'cal-text--white';
+                } else if (hasEvents && events.length > 1) {
+                    const colors = events.map(e => e.color);
+                    const angleStep = 360 / colors.length;
+                    const stops = colors.map((color, idx) => `${color} ${idx * angleStep}deg ${(idx + 1) * angleStep}deg`).join(', ');
+                    gradient = `background: conic-gradient(from 0deg, ${stops});`;
+                    numberClass = 'cal-text--white';
+                } else if (isRed) {
+                    numberClass = 'cal-text--red';
+                }
+
+                if (isToday) {
+                    todayClass = 'calendar-day-today';
+                }
+
+                const classes = ['calendar-day', todayClass].filter(Boolean).join(' ');
+                const title = holidayName && !hasEvents ? ` title="${escapeAttr(holidayName)}"` : '';
+
+                grid += `
+                <div class="${classes}" data-year="${year}" data-month="${month}" data-day="${d}" style="${gradient}"${title}>
                     <div class="calendar-day-number ${numberClass}">${d}</div>
                     ${hasEvents ? `<div class="calendar-day-notes-count" aria-label="${events.length} event${events.length === 1 ? '' : 's'}"></div>` : ''}
                 </div>
             `;
-        }
-        
-        grid += '</div>';
-        
-        setTimeout(() => {
-            document.querySelectorAll('.calendar-day').forEach(el => {
-                el.addEventListener('click', (e) => {
-                    const year = parseInt(el.dataset.year);
-                    const month = parseInt(el.dataset.month);
-                    const day = parseInt(el.dataset.day);
-                    const clickedDate = new Date(year, month, day);
-                    const events = this.getEventsForDate(clickedDate);
-                    if (events.length > 0) {
-                        this.showEventsList(events, clickedDate);
-                    } else {
-                        window.dispatchEvent(new CustomEvent('calendar:add_note', { detail: clickedDate }));
-                    }
-                });
             });
-        }, 10);
-        
+        });
+
+        grid += '</div>';
+
         return grid;
     },
     
     renderYearView() {
         const year = this.currentDate.getFullYear();
+        const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
         let grid = '<div class="calendar-year-grid">';
-        
+
         for (let m = 0; m < 12; m++) {
             const monthDate = new Date(year, m, 1);
             const daysInMonth = new Date(year, m + 1, 0).getDate();
-            const firstDayIndex = new Date(year, m, 1).getDay();
-            
+
             let hasAnyEvents = false;
             const dayEvents = {};
             for (let d = 1; d <= daysInMonth; d++) {
-                const currentDate = new Date(year, m, d);
-                const events = this.getEventsForDate(currentDate);
+                const events = this.getEventsForDate(new Date(year, m, d));
                 if (events.length > 0) {
                     hasAnyEvents = true;
                     dayEvents[d] = events;
                 }
             }
-            
-            const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
             const titleClass = hasAnyEvents ? 'calendar-year-month-title-highlight' : 'calendar-year-month-title-normal';
-            
+
             let monthHtml = `
                 <div class="calendar-year-month">
                     <div class="calendar-year-month-title ${titleClass}" data-month="${m}">
                         ${monthDate.toLocaleDateString('default', { month: 'short' })}
                     </div>
                     <div class="calendar-year-weekdays">
+                        <div class="calendar-year-week-number calendar-year-week-number--header" aria-hidden="true"></div>
                         ${weekdays.map(day => `<div class="calendar-year-weekday">${day}</div>`).join('')}
                     </div>
                     <div class="calendar-year-days">
             `;
-            
-            for (let i = 0; i < firstDayIndex; i++) {
-                monthHtml += `<div class="calendar-year-empty-cell"></div>`;
-            }
-            
-            for (let d = 1; d <= daysInMonth; d++) {
-                const hasEvents = dayEvents[d] && dayEvents[d].length > 0;
-                const currentDate = new Date(year, m, d);
-                const isToday = this.isToday(currentDate);
-                let gradient = '';
-                let textClass = 'cal-text--default';
-                let weightClass = '';
-                let todayClass = '';
-                
-                if (hasEvents && dayEvents[d].length === 1) {
-                    gradient = `background: ${dayEvents[d][0].color};`;
-                    textClass = 'cal-text--white';
-                    weightClass = 'calendar-year-day-bold';
-                } else if (hasEvents && dayEvents[d].length > 1) {
-                    const colors = dayEvents[d].map(e => e.color);
-                    const angleStep = 360 / colors.length;
-                    const stops = colors.map((color, idx) => `${color} ${idx * angleStep}deg ${(idx + 1) * angleStep}deg`).join(', ');
-                    gradient = `background: conic-gradient(from 0deg, ${stops});`;
-                    textClass = 'cal-text--white';
-                    weightClass = 'calendar-year-day-bold';
-                } else {
-                    if (this.shouldShowRed(currentDate)) {
+
+            buildMonthWeekRows(year, m).forEach(({ week, cells }) => {
+                monthHtml += `<div class="calendar-year-week-number" title="ISO week ${week}" aria-label="Week ${week}">${week}</div>`;
+
+                cells.forEach((d) => {
+                    if (d === null) {
+                        monthHtml += `<div class="calendar-year-empty-cell"></div>`;
+                        return;
+                    }
+
+                    const hasEvents = dayEvents[d] && dayEvents[d].length > 0;
+                    const currentDate = new Date(year, m, d);
+                    const isToday = this.isToday(currentDate);
+                    const { isRed, holidayName } = this.getRedDayInfo(currentDate);
+                    let gradient = '';
+                    let textClass = 'cal-text--default';
+                    let weightClass = '';
+                    let todayClass = '';
+
+                    if (hasEvents && dayEvents[d].length === 1) {
+                        gradient = `background: ${dayEvents[d][0].color};`;
+                        textClass = 'cal-text--white';
+                        weightClass = 'calendar-year-day-bold';
+                    } else if (hasEvents && dayEvents[d].length > 1) {
+                        const colors = dayEvents[d].map(e => e.color);
+                        const angleStep = 360 / colors.length;
+                        const stops = colors.map((color, idx) => `${color} ${idx * angleStep}deg ${(idx + 1) * angleStep}deg`).join(', ');
+                        gradient = `background: conic-gradient(from 0deg, ${stops});`;
+                        textClass = 'cal-text--white';
+                        weightClass = 'calendar-year-day-bold';
+                    } else if (isRed) {
                         textClass = 'cal-text--red';
                     }
-                }
-                
-                if (isToday && !hasEvents) {
-                    todayClass = 'calendar-year-day-today';
-                } else if (isToday && hasEvents) {
-                    todayClass = 'calendar-year-day-today';
-                }
-                
-                monthHtml += `
-                    <div class="calendar-year-day ${weightClass} ${todayClass}" data-year="${year}" data-month="${m}" data-day="${d}" style="${gradient}">
+
+                    if (isToday) {
+                        todayClass = 'calendar-year-day-today';
+                    }
+
+                    const classes = ['calendar-year-day', weightClass, todayClass].filter(Boolean).join(' ');
+                    const title = holidayName && !hasEvents ? ` title="${escapeAttr(holidayName)}"` : '';
+
+                    monthHtml += `
+                    <div class="${classes}" data-year="${year}" data-month="${m}" data-day="${d}" style="${gradient}"${title}>
                         <span class="${textClass}">${d}</span>
                     </div>
                 `;
-            }
-            
+                });
+            });
+
             monthHtml += `
                     </div>
                 </div>
             `;
-            
+
             grid += monthHtml;
         }
-        
+
         grid += '</div>';
-        
-        setTimeout(() => {
-            document.querySelectorAll('.calendar-year-month-title').forEach(el => {
-                el.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const month = parseInt(el.dataset.month);
-                    this.currentDate = new Date(year, month, 1);
-                    this.currentView = 'month';
-                    this.render();
-                });
-            });
-            
-            document.querySelectorAll('.calendar-year-day').forEach(el => {
-                el.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const year = parseInt(el.dataset.year);
-                    const month = parseInt(el.dataset.month);
-                    const day = parseInt(el.dataset.day);
-                    const clickedDate = new Date(year, month, day);
-                    const events = this.getEventsForDate(clickedDate);
-                    if (events.length > 0) {
-                        this.showEventsList(events, clickedDate);
-                    } else {
-                        window.dispatchEvent(new CustomEvent('calendar:add_note', { detail: clickedDate }));
-                    }
-                });
-            });
-        }, 10);
-        
+
         return grid;
     },
     
     showEventsList(events, date) {
+        // Never stack two popouts: a stale copy would own the shared close id
+        // and leave the visible copy's X unbound.
+        this.closeEventsList();
+
         const modal = document.createElement('div');
         modal.className = 'calendar-notes-modal';
         
         modal.innerHTML = `
             <div class="calendar-notes-header">
                 <h4 class="calendar-notes-title">Events for ${date.toLocaleDateString()}</h4>
-                <button type="button" class="card-act card-act--close" id="close-notes-list" title="Close" aria-label="Close"></button>
+                <button type="button" class="card-act card-act--close calendar-notes-close" data-close-events title="Close" aria-label="Close">${CARD_ICONS.close}</button>
             </div>
             <div class="calendar-notes-list">
                 ${events.map(event => `
@@ -520,20 +588,50 @@ export const Calendar = {
         `;
         
         document.body.appendChild(modal);
-        modal.querySelector('#close-notes-list').innerHTML = CARD_ICONS.close;
-        
-        modal.querySelectorAll('.calendar-note-item').forEach(el => {
-            el.addEventListener('click', () => {
-                const parentId = el.dataset.parent;
-                const note = this.items.find(i => i.id === parentId);
-                if (note) {
-                    window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: note }));
-                    modal.remove();
-                }
-            });
-        });
-        
-        document.getElementById('close-notes-list').addEventListener('click', () => modal.remove());
+        this.eventsModal = modal;
+
+        const binding = new AbortController();
+        this.eventsModalBinding = binding;
+
+        modal.addEventListener('click', (e) => {
+            if (e.target.closest('[data-close-events]')) {
+                e.stopPropagation();
+                this.closeEventsList();
+                return;
+            }
+
+            const item = e.target.closest('.calendar-note-item');
+            if (!item) return;
+
+            const note = this.items.find(i => i.id === item.dataset.parent);
+            if (note) {
+                window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: note }));
+                this.closeEventsList();
+            }
+        }, { signal: binding.signal });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') this.closeEventsList();
+        }, { signal: binding.signal });
+
+        // Click anywhere outside the popout to dismiss it (a click on a day cell
+        // closes this popout first and then opens that day's own popout).
+        document.addEventListener('pointerdown', (e) => {
+            if (!modal.contains(e.target)) this.closeEventsList();
+        }, { signal: binding.signal });
+    },
+
+    /** Close the day popout, if one is open. Safe to call at any time. */
+    closeEventsList() {
+        if (this.eventsModalBinding) {
+            this.eventsModalBinding.abort();
+            this.eventsModalBinding = null;
+        }
+        if (this.eventsModal) {
+            this.eventsModal.remove();
+            this.eventsModal = null;
+        }
+        document.querySelectorAll('.calendar-notes-modal').forEach(modal => modal.remove());
     },
     
     renderDayView() {
@@ -579,30 +677,8 @@ export const Calendar = {
             `;
         }
         timeline += '</div>';
-        
-        setTimeout(() => {
-            document.querySelectorAll('.calendar-hour').forEach(el => {
-                el.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('calendar-hour-note')) return;
-                    const hour = parseInt(el.dataset.hour);
-                    const newDate = new Date(date);
-                    newDate.setHours(hour, 0, 0, 0);
-                    window.dispatchEvent(new CustomEvent('calendar:add_note', { detail: newDate }));
-                });
-            });
-            
-            document.querySelectorAll('.calendar-hour-note').forEach(el => {
-                el.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const parentId = el.dataset.parent;
-                    const note = this.items.find(i => i.id === parentId);
-                    if (note) {
-                        window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: note }));
-                    }
-                });
-            });
-        }, 10);
-        
+
+        // Hour cells and hour notes are wired by bindGridEvents().
         return timeline;
     }
 };

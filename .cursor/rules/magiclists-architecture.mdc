@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-26T21:37:38.067Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-28T22:52:24.156Z
 
 ## CSS load order
 
