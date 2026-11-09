@@ -1,10 +1,11 @@
 // test/drawingBoardLifecycle.test.js
 // Guards for js/drawingBoard/lifecycle.js — the session enter/exit seam that
 // used to live inside js/drawingBoard.js.
-// Bug classes covered here: a mode flag left behind on exit (so the next note
-// opened in flowchart mode, or the workspace reopened with a stale noteId), an
-// exit path that skips the save flush, and an entry path that forgets to clear
-// the gesture-scoped history flags.
+// Bug classes covered here: a mode flag left behind on exit (so the workspace
+// reopened with a stale noteId), an exit path that skips the save flush, and an
+// entry path that forgets to clear the gesture-scoped history flags or the
+// diagram gesture state (a stranded bend/endpoint drag survives into the next
+// session and eats the first pointerdown).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as LifecycleSession from '../js/drawingBoard/lifecycle.js';
@@ -74,9 +75,6 @@ function makeBoard(overrides = {}) {
         activeTool: 'pointer',
         activeStyle: 'pen',
         isNoteCanvasMode: false,
-        isFlowchartMode: false,
-        flowchartRouting: 'curve',
-        flowchartItem: null,
         activeNoteId: null,
         noteCanvasItem: null,
         cropState: null,
@@ -99,7 +97,6 @@ function makeBoard(overrides = {}) {
         history: { count: 0, clear() { this.count += 1; } },
         flushSave: async () => { calls.push(['flushSave']); },
         updateNoteToolbarChrome: () => { calls.push(['updateNoteToolbarChrome']); },
-        exitFlowchart: () => { calls.push(['exitFlowchart']); },
         exitNoteCanvas: () => { calls.push(['exitNoteCanvas']); },
         shrinkInfiniteIfNeeded: record('shrinkInfiniteIfNeeded'),
         renderToolbar: record('renderToolbar'),
@@ -107,7 +104,6 @@ function makeBoard(overrides = {}) {
         resize: record('resize'),
         redraw: record('redraw'),
         redrawBackground: record('redrawBackground'),
-        bindFlowBendEvents: record('bindFlowBendEvents'),
         ...overrides
     };
 }
@@ -256,72 +252,11 @@ describe('drawingBoard lifecycle — activateForNote', () => {
 
         assert.equal(board.docOwner, 'note');
         assert.equal(board.isNoteCanvasMode, true);
-        assert.equal(board.isFlowchartMode, false);
-        assert.equal(board.flowchartItem, null);
         assert.equal(board.activeNoteId, 'note-1');
         assert.equal(board.noteCanvasItem, item);
         assert.ok(Array.isArray(board.doc.pages), 'normalizeNoteCanvas produced a document');
         assert.equal(called(board, 'redrawBackground'), 1, 'note canvas repaints the background layer');
-        assert.equal(called(board, 'bindFlowBendEvents'), 0, 'flow bend wiring is flowchart-only');
-    });
-});
-
-describe('drawingBoard lifecycle — openNoteFlowchart', () => {
-    it('creates the flowchart on first use and forces a snapped dot grid', async () => {
-        const board = makeBoard();
-        const item = { id: 'note-1' };
-        const { patches } = entryStubs();
-
-        await withStubs(patches, () => LifecycleSession.openNoteFlowchart(board, item));
-
-        assert.ok(item.flowchart, 'a flowchart was created lazily');
-        assert.equal(item.flowchartHidden, false);
-        assert.equal(board.docOwner, 'flowchart');
-        assert.equal(board.isFlowchartMode, true);
-        assert.equal(board.isNoteCanvasMode, false);
-        assert.equal(board.noteCanvasItem, null);
-        assert.equal(board.flowchartItem, item);
-        assert.equal(board.flowchartRouting, 'straight');
-        assert.equal(board.activeNoteId, 'note-1');
-        assert.equal(board.activeTool, 'rect', 'new diagrams open with a shape tool');
-        assert.equal(board.brandEl.textContent, 'magicCanvas · Flowchart');
-        assert.equal(item.flowchart.grid.type, 'dots');
-        assert.equal(item.flowchart.grid.snap, true);
-        assert.equal(item.flowchart.grid.visible, true);
-        assert.equal(board.doc, item.flowchart.doc);
-        assert.equal(called(board, 'redrawBackground'), 1);
-    });
-
-    it('normalizes an existing malformed flowchart and clamps the grid size', async () => {
-        const board = makeBoard();
-        const item = { id: 'note-2', flowchart: { version: 1, doc: null, grid: { size: 0, snap: false, visible: false } } };
-        const { patches } = entryStubs();
-
-        await withStubs(patches, () => LifecycleSession.openNoteFlowchart(board, item));
-
-        assert.ok(item.flowchart.doc && Array.isArray(item.flowchart.doc.pages));
-        assert.equal(item.flowchart.grid.size, 8, 'size 0 snaps to the smallest grid step');
-        assert.equal(item.flowchart.grid.snap, true, 'snap is forced on entry');
-        assert.equal(item.flowchart.grid.visible, true);
-        assert.equal(item.flowchartHidden, undefined, 'an existing flowchart keeps its hidden flag');
-    });
-
-    it('falls back to the default grid size when normalization yields no size', async () => {
-        const board = makeBoard();
-        const item = { id: 'note-3', flowchart: null };
-        const { patches } = entryStubs();
-
-        await withStubs(patches, () => LifecycleSession.openNoteFlowchart(board, item));
-
-        assert.equal(item.flowchart.grid.size, 24);
-        assert.equal(item.flowchart.grid.type, 'dots');
-    });
-
-    it('ignores items without an id', async () => {
-        const board = makeBoard();
-        await LifecycleSession.openNoteFlowchart(board, {});
-        assert.equal(board.active, false);
-        assert.equal(board.docOwner, null);
+        assert.equal(board.cropState, null, 'a stale crop must not survive entry');
     });
 });
 
@@ -345,22 +280,7 @@ describe('drawingBoard lifecycle — exit routing', () => {
         });
     });
 
-    it('exitFlowchart dispatches only while in flowchart mode', async () => {
-        const item = { id: 'flow-1' };
-        await withWindow(async (events) => {
-            LifecycleSession.exitFlowchart(makeBoard({ isFlowchartMode: false, flowchartItem: item }));
-            assert.equal(events.length, 0);
-            LifecycleSession.exitFlowchart(makeBoard({ isFlowchartMode: true, flowchartItem: item }));
-            assert.equal(events.length, 1);
-            assert.equal(events[0].detail.item, item);
-        });
-    });
-
-    it('exitFromToolbar prefers flowchart mode over note canvas mode', () => {
-        const both = makeBoard({ isFlowchartMode: true, isNoteCanvasMode: true });
-        LifecycleSession.exitFromToolbar(both);
-        assert.deepEqual(both.calls, [['exitFlowchart']]);
-
+    it('exitFromToolbar routes note-canvas to exitNoteCanvas', () => {
         const noteOnly = makeBoard({ isNoteCanvasMode: true });
         LifecycleSession.exitFromToolbar(noteOnly);
         assert.deepEqual(noteOnly.calls, [['exitNoteCanvas']]);
@@ -370,7 +290,6 @@ describe('drawingBoard lifecycle — exit routing', () => {
         assert.deepEqual(idle.calls, [], 'idle boards route nowhere');
     });
 });
-
 
 describe('drawingBoard lifecycle — deactivate', () => {
     it('is a no-op for an already idle board', async () => {
@@ -419,10 +338,14 @@ describe('drawingBoard lifecycle — deactivate', () => {
         assert.equal(board.hoverHandle, null);
         assert.equal(board.selectedStrokes.size, 0);
         assert.equal(board.isNoteCanvasMode, false);
-        assert.equal(board.isFlowchartMode, false);
         assert.equal(board.activeNoteId, null);
         assert.equal(board.noteCanvasItem, null);
-        assert.equal(board.flowchartItem, null);
+        assert.equal(board.flowConnect, null, 'an in-flight connector drag must not survive teardown');
+        assert.equal(board.flowBendDrag, null);
+        assert.equal(board.flowEndpointDrag, null);
+        assert.equal(board.flowLabelEl, null, 'an open label editor must not outlive the board');
+        assert.equal(board.flowLabelTarget, null);
+        assert.equal(board.flowShapesCache, null);
         assert.equal(board.doc, null);
         assert.equal(board.docOwner, null);
         assert.equal(board.history.count, 1);

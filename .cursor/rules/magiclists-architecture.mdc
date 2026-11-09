@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-28T22:52:24.156Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-09T19:43:16.179Z
 
 ## CSS load order
 
@@ -55,7 +55,7 @@ alwaysApply: true
 | --- | --- | --- | --- | --- |
 | js/api.js | item CRUD and matrix_database localStorage persistence | noteModel.js, layoutStorage.js, sync.js | — | — |
 | js/app.js | application orchestration, event bus listeners, workspace init | api.js, ui.js, layoutStorage.js | item:mutation_requested, item:selected_for_edit, board:visibility_changed, calendar:add_note | — |
-| js/app/drawingMode.js | the workspace-mode switches - notes board, file cabinet, note-canvas and flowchart - plus leaving drawing when the focus editor opens and migrating a freeform overlay layout on the way out | ../app.js, state.js, listeners.js, ../drawingBoard.js | board:visibility_changed, workspace:mode_changed | — |
+| js/app/drawingMode.js | the workspace-mode switches - notes board, file cabinet and note-canvas - plus leaving drawing when the focus editor opens and migrating a freeform overlay layout on the way out | ../app.js, state.js, listeners.js, ../drawingBoard.js | board:visibility_changed, workspace:mode_changed | — |
 | js/app/listeners.js | every DOM/window listener the Application binds - the boot wiring in setupCoreListeners plus the undo, popout-claim, cross-tab-sync, quick-action, scribble, drawing and layout-reset setups, each moved together with the handlers it registers | ../app.js, state.js, services.js, drawingMode.js | item:selected_for_edit, board:visibility_changed, editor:reveal_on_board, category:hide_requested, category:renamed, desktop:changed | — |
 | js/app/services.js | the Application service calls - auth session checks, the repair log, the category store load/alias/sync pipeline, the workspace counter, the backup and export commands with the backup panel that exposes them, and the category/login commands | ../app.js, state.js, listeners.js, backup.js | category:renamed, category:hide_requested | — |
 | js/app/state.js | the cached workspace state the Application sessions share - user, items, categories, hidden categories, workspace mode and view settings; the one mutable store behind every session | ../app.js, listeners.js, services.js, drawingMode.js | — | — |
@@ -84,14 +84,14 @@ alwaysApply: true
 | js/drawingBoard/geometry.js | magicCanvas stroke geometry - point thinning, squared distance, pointer pressure | drawingBoard.js, drawingBoardCore.js | — | — |
 | js/drawingBoard/history.js | magicCanvas undo/redo stacks and their toolbar wiring | drawingBoard.js, drawingBoardCore.js, drawingBoard/document.js | — | — |
 | js/drawingBoard/input.js | magicCanvas pointer and keyboard input - press routing, stroke drafting, gesture end and shortcuts | drawingBoard.js, drawingBoard/geometry.js, drawingBoardSelection.js, drawingBoardCrop.js, drawingBoardFlowchart.js, drawingBoardClipboard.js, canvasViewport.js, lassoGeometry.js | — | — |
-| js/drawingBoard/lifecycle.js | magicCanvas session enter/exit (workspace, note canvas, flowchart) and toolbar chrome lifecycle | drawingBoard.js, drawingBoard/prefs.js, canvasViewport.js, flowchart.js, noteModel.js | — | — |
-| js/drawingBoard/prefs.js | magicCanvas brush style and tool preferences in localStorage (matrix_drawing_prefs) | drawingBoard.js, drawingBoardCore.js, canvasBrushes.js | — | — |
+| js/drawingBoard/lifecycle.js | magicCanvas session enter/exit (workspace, note canvas) and toolbar chrome lifecycle | drawingBoard.js, drawingBoard/prefs.js, canvasViewport.js, noteModel.js | — | — |
+| js/drawingBoard/prefs.js | magicCanvas brush style, tool and canvas grid preferences in localStorage (matrix_drawing_prefs) | drawingBoard.js, drawingBoardCore.js, canvasBrushes.js, flowchart.js | — | — |
 | js/drawingBoard/view.js | magicCanvas rendering - redraw loop, viewport sizing, page background fill/swatch, note overlay fit | drawingBoard.js, canvasViewport.js, canvasDocument.js, canvasBrushes.js, canvasBackgrounds.js, canvasImages.js, noteCanvasTextOverlay.js, colorPicker.js | — | — |
 | js/drawingBoardBackup.js | magicCanvas backup/restore payload (document + prefs + toolbar) | drawingBoard.js, canvasDocument.js, layoutStorage.js | — | — |
 | js/drawingBoardClipboard.js | magicCanvas clipboard session (Ctrl+C/X/V, Delete, selection serialization) | drawingBoard.js, mediaPasteCatcher.js, canvasDocument.js, flowchart.js | — | — |
 | js/drawingBoardCore.js | magicCanvas shared board constants (brush widths, menu items) | drawingBoard.js, drawingBoardToolbar.js, canvasBrushes.js | — | — |
 | js/drawingBoardCrop.js | magicCanvas crop session (frame gesture, overlay) | drawingBoard.js, canvasImages.js, lassoGeometry.js | — | — |
-| js/drawingBoardFlowchart.js | magicCanvas flowchart session (shapes, connectors, labels) | drawingBoard.js, flowchart.js, flowchartGeometry.js | — | — |
+| js/drawingBoardFlowchart.js | magicCanvas shapes and connectors - port magnet, routing, bend and endpoint drags, inline labels | drawingBoard.js, flowchart.js, flowchartGeometry.js, canvasBrushes.js | — | — |
 | js/drawingBoardSelection.js | magicCanvas selection session (box select, lasso drag, resize handles) | drawingBoard.js, lassoGeometry.js, canvasDocument.js | — | — |
 | js/drawingBoardToolbar.js | magicCanvas toolbar session (render, bind, menu chrome) | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | — | — |
 | js/editor.js | modal note editor overlay, save flow | noteSurface.js, noteQuickActions.js, editorModalChrome.js, sheet.js | item:selected_for_edit, editor:reveal_on_board | — |
@@ -103,7 +103,7 @@ alwaysApply: true
 | js/fileCabinet/order.js | file cabinet drawer ordering and filing decisions - which note sits in which drawer, at which position, and when a note counts as filed | fileCabinet.js, tileGeometry.js, boardSort.js, notePackage.js | — | — |
 | js/fileCabinet/render.js | file cabinet rail rendering - the folded chip rail, empty-shelf group and the open drawer columns, plus the tab drag handle every rendered note carries | fileCabinet.js, fileCabinet/layout.js, fileCabinet/order.js, noteSurfaceHtml.js | — | — |
 | js/fileCabinet/transfer.js | file cabinet item transfers - filing a board note into a drawer, expanding a drawer note back onto the board, and moving a note between categories | fileCabinet.js, fileCabinet/order.js, noteSurface.js, uiTransitions.js | — | — |
-| js/flowchart.js | flowchart note subsection model — per-note diagram doc, grid/snap prefs, attached labels, connectors | canvasDocument.js, noteModel.js, api.js, flowchartGeometry.js, flowchartUi.js | — | — |
+| js/flowchart.js | shape and connector model - grid prefs, label sizing, connector routing helpers | flowchartGeometry.js, drawingBoardFlowchart.js, drawingBoardCore.js | — | — |
 | js/flowchartGeometry.js | flowchart geometry — shape ports, connector routing, hit-test, reroute | flowchart.js, lassoGeometry.js, canvasBrushes.js | — | — |
 | js/hamburger.js | side panel shell, notes list, category summary, sort | searchBar.js, ui.js, sidebarHistory.js, sidebarStats.js, categoriesOverlay.js | categories:manage_requested, category:order_changed | — |
 | js/icons.js | CARD_ICONS, ACTION_ICONS, FORMAT_ICONS, DRAWING_ICONS SVG constants | ui.js | — | — |
@@ -163,7 +163,7 @@ alwaysApply: true
 | js/noteSurfaceHtml/card.js | note card composition - theme, category band, the board editor card and the in-place refreshers that keep a rendered card in sync | noteSurfaceHtml.js, noteSurfaceHtml/shell.js, noteSurface.js, cardTheme.js | — | — |
 | js/noteSurfaceHtml/checklistMarkup.js | expanded checklist markup for a note body - open steps, the done section and the expand/collapse-all control | noteSurfaceHtml.js, checklistSteps.js, noteSurfaceChecklist.js | — | — |
 | js/noteSurfaceHtml/metaFooter.js | note card meta footer - created/modified dates, line count and payload size, plus the pure stat helpers behind them | noteSurfaceHtml.js, richText.js, sheet.js | — | — |
-| js/noteSurfaceHtml/quickActions.js | note card quick-action toolbar markup - the filed/open toggle, pin, color, media, planner, flowchart and more menu | noteSurfaceHtml.js, noteQuickActions.js, icons.js | — | — |
+| js/noteSurfaceHtml/quickActions.js | note card quick-action toolbar markup - the filed/open toggle, pin, color, media, planner and more menu | noteSurfaceHtml.js, noteQuickActions.js, icons.js | — | — |
 | js/noteSurfaceHtml/shell.js | note editor shell - the title bar, format/config side panels, meta footer assembly and the copy-feedback flash | noteSurfaceHtml.js, noteSurfaceHtml/body.js, noteSurfaceHtml/metaFooter.js | — | — |
 | js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | — |
 | js/planner.js | magicPlanner model — schema-bound schedule sheet + zoom prefs | plannerUi.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js, sheet.js, noteModel.js | — | — |

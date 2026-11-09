@@ -1,37 +1,13 @@
-/** @module {"owns":"flowchart note subsection model — per-note diagram doc, grid/snap prefs, attached labels, connectors", "related":["canvasDocument.js","noteModel.js","api.js","flowchartGeometry.js","flowchartUi.js"]} */
+/** @module {"owns":"shape and connector model - grid prefs, label sizing, connector routing helpers", "related":["flowchartGeometry.js","drawingBoardFlowchart.js","drawingBoardCore.js"]} */
 import { routeConnector } from './flowchartGeometry.js';
-import { createEmptyDocument, migrateDocument } from './canvasDocument.js';
 
-export const FLOWCHART_VERSION = 1;
 export const FLOWCHART_GRID_STEPS = Object.freeze([8, 12, 16, 24, 32, 48]);
 export const FLOWCHART_DEFAULT_GRID_SIZE = 24;
-export const FLOWCHART_DEFAULT_GRID_TYPE = 'dots';
-/** Connector / shape stroke width (separate from the freehand brush so flowchart lines stay crisp). */
-export const FLOWCHART_DEFAULT_WIDTH = 3;
-export const FLOWCHART_WIDTH_MIN = 1;
-export const FLOWCHART_WIDTH_MAX = 16;
-export const FLOWCHART_WIDTH_STEPS = Object.freeze([1, 2, 3, 4, 6, 8, 12, 16]);
-
-/** Default flowchart stroke color, matching the drawing board's pen. */
-export const FLOWCHART_DEFAULT_COLOR = '#f8fafc';
 
 /**
- * Clamp a flowchart stroke width to the nearest allowed step.
- * @param {number} raw
- * @returns {number}
+ * Tools whose strokes are connector targets: every drag shape can be attached
+ * to and typed inside. The connector tool itself is the exception.
  */
-export function clampFlowchartWidth(raw) {
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return FLOWCHART_DEFAULT_WIDTH;
-    let best = FLOWCHART_WIDTH_STEPS[0];
-    let bestDist = Math.abs(n - best);
-    for (const step of FLOWCHART_WIDTH_STEPS) {
-        const d = Math.abs(n - step);
-        if (d <= bestDist) { bestDist = d; best = step; }
-    }
-    return Math.max(FLOWCHART_WIDTH_MIN, Math.min(FLOWCHART_WIDTH_MAX, best));
-}
-
 export const FLOWCHART_SHAPE_TOOLS = Object.freeze([
     'rect',
     'rounded_rect',
@@ -48,6 +24,7 @@ export const FLOW_LABEL_DEFAULT = 20;
 export const FLOW_LABEL_MIN = 12;
 export const FLOW_LABEL_MAX = 72;
 export const FLOW_LABEL_STEP = 2;
+
 function clampGridSize(raw) {
     const n = Number(raw);
     if (!Number.isFinite(n)) return FLOWCHART_DEFAULT_GRID_SIZE;
@@ -60,27 +37,19 @@ function clampGridSize(raw) {
     return best;
 }
 
-function normalizeGridType(raw) {
-    const v = String(raw || '').toLowerCase();
-    return ['dots', 'grid', 'graph'].includes(v) ? v : FLOWCHART_DEFAULT_GRID_TYPE;
-}
-
+/**
+ * Normalize the canvas grid preference. Snap is opt-in: a fresh profile draws
+ * freehand-smooth shapes until the user turns snap on in the toolbar.
+ * @param {object} raw
+ */
 export function normalizeFlowchartGrid(raw) {
     const src = raw && typeof raw === 'object' ? raw : {};
     return {
-        type: normalizeGridType(src.type),
         size: clampGridSize(src.size),
-        snap: src.snap !== false,
-        visible: src.visible !== false
+        snap: src.snap === true
     };
 }
 
-export function snapFlowchartPoint(x, y, grid) {
-    if (!grid || grid.snap === false) return { x, y };
-    const size = clampGridSize(grid.size);
-    if (!(size > 0)) return { x, y };
-    return { x: Math.round(x / size) * size, y: Math.round(y / size) * size };
-}
 export function normalizeFlowchartLabel(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const text = String(raw.text ?? '').slice(0, 2000);
@@ -99,67 +68,19 @@ export function normalizeFlowLabelSize(raw) {
     return Math.min(FLOW_LABEL_MAX, Math.max(FLOW_LABEL_MIN, snapped));
 }
 
-export function createEmptyFlowchart() {
-    const doc = createEmptyDocument('infinite');
-    const page = doc.pages && doc.pages[0];
-    if (page) page.background = FLOWCHART_DEFAULT_GRID_TYPE;
-    return {
-        version: FLOWCHART_VERSION,
-        doc,
-        grid: {
-            type: FLOWCHART_DEFAULT_GRID_TYPE,
-            size: FLOWCHART_DEFAULT_GRID_SIZE,
-            snap: true,
-            visible: true
-        },
-        flowchartColor: FLOWCHART_DEFAULT_COLOR,
-        flowchartWidth: FLOWCHART_DEFAULT_WIDTH,
-        collapsed: false
-    };
-}
-
-export function normalizeFlowchart(raw) {
-    if (!raw || typeof raw !== 'object') return null;
-    const doc = raw.doc && typeof raw.doc === 'object'
-        ? migrateDocument(raw.doc)
-        : createEmptyDocument('infinite');
-    doc.canvasMode = 'infinite';
-    const grid = normalizeFlowchartGrid(raw.grid);
-    const page = (doc.pages || []).find((p) => p.id === doc.activePageId) || doc.pages[0];
-    if (page && !page.background) page.background = grid.type;
-    return {
-        version: FLOWCHART_VERSION,
-        doc,
-        grid,
-        flowchartColor: typeof raw.flowchartColor === 'string' && raw.flowchartColor ? raw.flowchartColor : FLOWCHART_DEFAULT_COLOR,
-        flowchartWidth: clampFlowchartWidth(raw.flowchartWidth),
-        collapsed: !!raw.collapsed
-    };
-}
-
-function isFlowStroke(s) {
-    if (!s || typeof s !== 'object') return false;
-    if (s.flowchartKind === 'shape' || s.flowchartKind === 'connector') return true;
-    if (FLOWCHART_SHAPE_TOOLS.includes(s.tool)) return true;
-    return s.tool === FLOWCHART_CONNECTOR_TOOL;
-}
-
-export function flowchartHasContent(flowchart) {
-    if (!flowchart || typeof flowchart !== 'object') return false;
-    const doc = flowchart.doc;
-    if (!doc || typeof doc !== 'object') return false;
-    const pages = Array.isArray(doc.pages) ? doc.pages : [];
-    for (const page of pages) {
-        if (!page || typeof page !== 'object') continue;
-        if (Array.isArray(page.strokes) && page.strokes.some(isFlowStroke)) return true;
-        if (Array.isArray(page.texts) && page.texts.some((t) => String(t.text || '').trim())) return true;
-    }
-    const inf = doc.infinite;
-    if (inf && typeof inf === 'object') {
-        if ((inf.strokes || []).length) return true;
-        if ((inf.texts || []).length) return true;
-    }
-    return false;
+/**
+ * Font size (canvas units) that fits a label inside a box `boxH` units tall.
+ * Never returns below FLOW_LABEL_MIN: a very small shape keeps 12px text and the
+ * label clips inside the box rather than shrinking to unreadable 6px text, and a
+ * stored size never drops under the floor.
+ * @param {number} boxH box height in canvas units
+ * @returns {number}
+ */
+export function fitFlowLabelFontSize(boxH) {
+    const h = Number(boxH);
+    if (!Number.isFinite(h) || h <= 0) return FLOW_LABEL_DEFAULT;
+    const fitted = Math.round(h * 0.32);
+    return Math.min(FLOW_LABEL_MAX, Math.max(FLOW_LABEL_MIN, fitted));
 }
 
 export function createFlowchartShape(opts) {
@@ -209,5 +130,3 @@ export function routeFlowchartConnector(conn) {
     conn.midY = routed.midY;
     return conn;
 }
-
-

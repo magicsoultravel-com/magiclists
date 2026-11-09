@@ -74,9 +74,10 @@ export function pageBackgroundSwatch(board) {
 export function redrawBackground(board) {
     if (!board.bgCtx || !board.bgCanvas) return;
     const fillColor = board.pageBackgroundFill();
-    // In flowchart mode the visible grid must match the snap size exactly,
-    // otherwise the +/- stepper changes behaviour with no visual feedback.
-    const spacing = board.isFlowchartMode ? (board.flowchartGrid().size || 24) : 24;
+    // One grid pref for the whole canvas: the visible background follows the
+    // same size that shapes and connectors snap to, so the +/- stepper changes
+    // behaviour with visible feedback instead of silently.
+    const spacing = board.canvasGrid?.().size || 24;
     renderBackground(board.bgCtx, getActiveBackground(board.doc), board.bgCanvas.width, board.bgCanvas.height, {
         fillColor,
         spacing
@@ -136,7 +137,7 @@ export function redraw(board) {
     if (board.draftStroke) drawBrushStroke(board.ctx, board.draftStroke);
     if (board.shapePreview) drawShapeStroke(board.ctx, board.shapePreview);
 
-    if (board.isFlowchartMode) board.renderFlowchartOverlays();
+    board.renderFlowchartOverlays();
 
     // Render lasso overlay (path, box selection, selection box, resize handles)
     if (board.isLassoActive || board.selectedStrokes.size > 0 || board.isBoxSelecting) {

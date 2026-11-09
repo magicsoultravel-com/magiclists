@@ -544,12 +544,6 @@ export function setupCoreListeners(app) {
         app.enterNoteCanvasMode(item);
     });
 
-    window.addEventListener('note:flowchart_draw_requested', (e) => {
-        const item = e.detail?.item;
-        if (!item?.id) return;
-        app.enterFlowchartMode(item);
-    });
-
     window.addEventListener('note:canvas_draw_exited', (e) => {
         const item = e.detail?.item;
         app.exitNoteCanvasMode(item);

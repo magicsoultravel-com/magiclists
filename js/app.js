@@ -344,8 +344,6 @@ BootProgress.set(85, 'Workspace…');
 
     async enterNoteCanvasMode(item) { return DrawingMode.enterNoteCanvasMode(this, item); }
 
-    async enterFlowchartMode(item) { return DrawingMode.enterFlowchartMode(this, item); }
-
     async exitNoteCanvasMode(item) { return DrawingMode.exitNoteCanvasMode(this, item); }
 
     async executeDataBackupExport() { return Services.executeDataBackupExport(this); }

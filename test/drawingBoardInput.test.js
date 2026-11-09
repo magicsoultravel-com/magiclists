@@ -52,7 +52,6 @@ function makeBoard(overrides = {}) {
         activeStyle: 'pen',
         selectedStrokes: new Set(),
         isLassoActive: false,
-        isFlowchartMode: false,
         draftStroke: null,
         shapePreview: null,
         resizeHandle: null,
@@ -86,6 +85,11 @@ function makeBoard(overrides = {}) {
         hitResizeHandle: () => null,
         beginBoxSelect: () => {},
         flowSnapPoint: (x, y) => ({ x, y }),
+        flowHit: () => null,
+        flowBendDrag: null,
+        startFlowBendDrag: () => false,
+        moveFlowBendDrag: () => {},
+        finishFlowBendDrag: () => {},
         ...overrides
     };
     return { board, calls };

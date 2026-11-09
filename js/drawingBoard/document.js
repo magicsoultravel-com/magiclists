@@ -122,22 +122,6 @@ export async function flushSave(board) {
         }).catch(() => {});
         return;
     }
-    if (board.docOwner === 'flowchart') {
-        const item = board.flowchartItem;
-        if (!item) return;
-        const doc = JSON.parse(JSON.stringify(board.doc));
-        const { mutateItem } = await import('../noteSurfaceMutations.js');
-        mutateItem(item, (it) => {
-            if (!it.flowchart) return;
-            it.flowchart.doc = doc;
-            // Drawing implies the flowchart should be visible on board/modal.
-            it.flowchartHidden = false;
-        }, { preserveView: true, skipRerender: true });
-        import('../flowchartUi.js').then(({ syncNoteFlowchartDom }) => {
-            syncNoteFlowchartDom(item);
-        }).catch(() => {});
-        return;
-    }
     if (board.docOwner === 'workspace') {
         await writeDocument(board.doc);
     }

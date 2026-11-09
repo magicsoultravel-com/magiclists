@@ -1,15 +1,23 @@
+// test/flowchart.test.js
+// Model + geometry guards for the always-on shape/connector layer. Grid prefs
+// are shared canvas state now (no per-note flowchart item), so snapping and
+// label sizing are pinned here; the geometry half guards the attachment
+// contract drawingBoard.js and the painter both read.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    createEmptyFlowchart,
-    normalizeFlowchart,
-    flowchartHasContent,
     normalizeFlowchartGrid,
-    snapFlowchartPoint,
+    normalizeFlowchartLabel,
+    fitFlowLabelFontSize,
     normalizeFlowLabelSize,
     createFlowchartShape,
     createFlowchartConnector,
-    FLOWCHART_DEFAULT_GRID_SIZE
+    routeFlowchartConnector,
+    FLOW_LABEL_DEFAULT,
+    FLOW_LABEL_MAX,
+    FLOW_LABEL_MIN,
+    FLOWCHART_DEFAULT_GRID_SIZE,
+    FLOWCHART_GRID_STEPS
 } from '../js/flowchart.js';
 import {
     shapePorts,
@@ -22,43 +30,41 @@ import {
 import { pointOnConnectorPath } from '../js/lassoGeometry.js';
 
 describe('flowchart model', () => {
-    it('creates an infinite dots-grid doc with snap on', () => {
-        const f = createEmptyFlowchart();
-        assert.equal(f.version, 1);
-        assert.equal(f.doc.canvasMode, 'infinite');
-        assert.equal(f.grid.type, 'dots');
-        assert.equal(f.grid.size, FLOWCHART_DEFAULT_GRID_SIZE);
-        assert.equal(f.grid.snap, true);
+    it('normalizes the shared grid pref and leaves snap opt-in', () => {
+        assert.deepEqual(normalizeFlowchartGrid(null), { size: FLOWCHART_DEFAULT_GRID_SIZE, snap: false });
+        assert.deepEqual(normalizeFlowchartGrid({ size: 25, snap: true }), { size: 24, snap: true });
+        // Snap is strict: only a real `true` turns it on, so a stale string or
+        // missing field never silently quantizes freehand drawing.
+        assert.equal(normalizeFlowchartGrid({ snap: 'yes' }).snap, false);
+        assert.equal(normalizeFlowchartGrid({ snap: 1 }).snap, false);
     });
 
-    it('snaps to grid steps and bypasses when snap off', () => {
-        assert.deepEqual(snapFlowchartPoint(13, 13, { size: 24, snap: true }), { x: 24, y: 24 });
-        assert.deepEqual(snapFlowchartPoint(13, 13, { size: 24, snap: false }), { x: 13, y: 13 });
-        assert.deepEqual(snapFlowchartPoint(10, 10, { size: 8, snap: true }), { x: 8, y: 8 });
-    });
-
-    it('normalizes grid size to nearest step', () => {
-        assert.equal(normalizeFlowchartGrid({ size: 25 }).size, 24);
+    it('clamps the grid size to an allowed step', () => {
         assert.equal(normalizeFlowchartGrid({ size: 99 }).size, 48);
-        assert.equal(normalizeFlowchartGrid(null).size, FLOWCHART_DEFAULT_GRID_SIZE);
+        assert.equal(normalizeFlowchartGrid({ size: 0 }).size, FLOWCHART_GRID_STEPS[0]);
+        assert.equal(normalizeFlowchartGrid({ size: 'nope' }).size, FLOWCHART_DEFAULT_GRID_SIZE);
+        FLOWCHART_GRID_STEPS.forEach((step) => {
+            assert.equal(normalizeFlowchartGrid({ size: step }).size, step);
+        });
     });
 
-    it('detects content only for flow strokes', () => {
-        const empty = createEmptyFlowchart();
-        assert.equal(flowchartHasContent(empty), false);
-        assert.equal(flowchartHasContent(null), false);
-        const shape = createFlowchartShape({ tool: 'rect', x0: 0, y0: 0, x1: 48, y1: 24 });
-        empty.doc.pages[0].strokes.push(shape);
-        assert.equal(flowchartHasContent(empty), true);
+    it('drops an empty label and clamps a stored one', () => {
+        assert.equal(normalizeFlowchartLabel(null), null);
+        assert.equal(normalizeFlowchartLabel({ text: '   ' }), null);
+        const kept = normalizeFlowchartLabel({ text: 'Step 1', fontSize: 500, color: '#fff' });
+        assert.equal(kept.text, 'Step 1');
+        assert.equal(kept.fontSize, FLOW_LABEL_MAX);
+        assert.equal(kept.color, '#fff');
+        assert.equal(normalizeFlowchartLabel({ text: 'x', fontSize: 1 }).fontSize, FLOW_LABEL_MIN);
+        assert.equal(normalizeFlowchartLabel({ text: 'x'.repeat(4000) }).text.length, 2000);
     });
 
-    it('normalizeFlowchart keeps doc and grid', () => {
-        const f = createEmptyFlowchart();
-        f.grid.size = 32;
-        const n = normalizeFlowchart(JSON.parse(JSON.stringify(f)));
-        assert.equal(n.grid.size, 32);
-        assert.equal(n.doc.canvasMode, 'infinite');
-        assert.equal(normalizeFlowchart(null), null);
+    it('sizes a label to the shape but never below the floor', () => {
+        assert.equal(fitFlowLabelFontSize(100), 32);
+        assert.equal(fitFlowLabelFontSize(10), FLOW_LABEL_MIN);
+        assert.equal(fitFlowLabelFontSize(10000), FLOW_LABEL_MAX);
+        assert.equal(fitFlowLabelFontSize(0), FLOW_LABEL_DEFAULT);
+        assert.equal(fitFlowLabelFontSize(NaN), FLOW_LABEL_DEFAULT);
     });
 
     it('clamps label size to step range', () => {
@@ -67,10 +73,42 @@ describe('flowchart model', () => {
         assert.equal(normalizeFlowLabelSize(5), 12);
     });
 
-    it('creates connectors with default straight routing', () => {
-        const c = createFlowchartConnector({ x0: 0, y0: 0, x1: 100, y1: 0 });
-        assert.equal(c.routing, 'straight');
-        assert.equal(c.flowchartKind, 'connector');
+    it('creates shapes tagged for the renderer, without a label', () => {
+        const s = createFlowchartShape({ id: 'R', tool: 'diamond', x0: 0, y0: 0, x1: 120, y1: 80 });
+        assert.equal(s.flowchartKind, 'shape');
+        assert.equal(s.tool, 'diamond');
+        assert.equal(s.label, null);
+        assert.equal(s.x1, 120);
+        // An unknown tool falls back to a rectangle instead of an unrenderable stroke.
+        assert.equal(createFlowchartShape({ tool: 'line' }).tool, 'rect');
+    });
+
+    it('creates connectors with default straight routing and a routed bend', () => {
+        const straight = createFlowchartConnector({ x0: 0, y0: 0, x1: 100, y1: 0 });
+        assert.equal(straight.routing, 'straight');
+        assert.equal(straight.flowchartKind, 'connector');
+        assert.equal(straight.label, null);
+
+        const elbow = createFlowchartConnector({ x0: 0, y0: 0, x1: 100, y1: 10, routing: 'elbow' });
+        // The cached bend must match the shared router the painter draws with.
+        const routed = routeConnector({ x: 0, y: 0 }, { x: 100, y: 10 }, 'elbow');
+        assert.equal(elbow.midX, routed.midX);
+        assert.equal(elbow.midY, routed.midY);
+        assert.equal(createFlowchartConnector({ routing: 'zigzag' }).routing, 'straight');
+    });
+
+    it('routeFlowchartConnector re-syncs the bend after an endpoint drag', () => {
+        const conn = createFlowchartConnector({ x0: 0, y0: 0, x1: 100, y1: 10, routing: 'elbow' });
+        conn.x1 = 300;
+        conn.y1 = 160;
+        routeFlowchartConnector(conn);
+        const routed = routeConnector({ x: 0, y: 0 }, { x: 300, y: 160 }, 'elbow');
+        assert.equal(conn.midX, routed.midX);
+        assert.equal(conn.midY, routed.midY);
+        // Non-connector strokes pass through untouched.
+        const shape = createFlowchartShape({ id: 'S' });
+        assert.equal(routeFlowchartConnector(shape), shape);
+        assert.equal(shape.midX, undefined);
     });
 });
 
@@ -281,102 +319,3 @@ describe('flowchart shape + connector lifecycle', () => {
     });
 });
 
-describe('flowchart note section markup', () => {
-    // Guards three regressions that shipped: an invisible pencil (hover-gated tray
-    // the section never matched), an empty collapse caret, and a wrapper class
-    // the stylesheet did not target.
-    const base = {
-        version: 1,
-        doc: {
-            version: 2,
-            canvasMode: 'infinite',
-            pages: [{ id: 'p1', strokes: [], texts: [], images: [], background: 'dots' }]
-        },
-        grid: { type: 'dots', size: 24, snap: true }
-    };
-    const makeItem = (id, extra = {}) => ({
-        id,
-        flowchart: JSON.parse(JSON.stringify(base)),
-        flowchartHidden: false,
-        ...extra
-    });
-
-    it('puts the pencil in an always-visible body toolbar, not a hover-gated tray', async () => {
-        const { buildNoteFlowchartSectionHtml } = await import('../js/flowchartUi.js');
-        const html = buildNoteFlowchartSectionHtml(makeItem('n1'), { canEdit: true });
-
-        // The pencil must live under note-flowchart__toolbar, which has no
-        // opacity:0 rule — planner-sub__tools does and hides it permanently.
-        const toolbarIdx = html.indexOf('note-flowchart__toolbar');
-        const pencilIdx = html.indexOf('data-flowchart-edit');
-        assert.ok(toolbarIdx > 0, 'expected a note-flowchart__toolbar wrapper');
-        assert.ok(pencilIdx > toolbarIdx, 'pencil must sit inside the toolbar');
-        assert.ok(!html.includes('planner-sub__tools'), 'must not reuse the hover-gated planner tray');
-        // And it must actually carry an icon.
-        assert.ok(html.includes('<svg'), 'pencil button needs an icon');
-    });
-
-    it('renders a collapse caret with a glyph inside collapsable-heading', async () => {
-        const { buildNoteFlowchartSectionHtml } = await import('../js/flowchartUi.js');
-        const html = buildNoteFlowchartSectionHtml(makeItem('n1'), { canEdit: true });
-        assert.ok(html.includes('collapsable-heading'), 'heading wrapper required by the collapse CSS');
-        // An empty <span class="collapsable-toggle"> renders nothing visible.
-        assert.ok(/collapsable-toggle[^>]*>\s*\S/.test(html), 'collapse caret must contain a glyph');
-        assert.ok(html.includes('\u25bc'), 'expected the ▼ caret glyph');
-    });
-
-    it('uses the wrapper class the stylesheet targets', async () => {
-        const { buildNoteFlowchartSectionHtml } = await import('../js/flowchartUi.js');
-        const html = buildNoteFlowchartSectionHtml(makeItem('n1'), { canEdit: true });
-        assert.ok(html.includes('note-body-section--flowchart'), 'stylesheet targets this class');
-    });
-
-    it('does not echo the grid px size in the note section', async () => {
-        const { buildNoteFlowchartSectionHtml } = await import('../js/flowchartUi.js');
-        const html = buildNoteFlowchartSectionHtml(makeItem('n1'), { canEdit: true });
-        assert.ok(!html.includes('flowchart-grid-echo'), 'px echo belongs in the drawing toolbar only');
-        assert.ok(!/>\s*24px\s*</.test(html), 'grid size must not be rendered in the section');
-    });
-
-    it('marks both the body and the caret collapsed when startCollapsed', async () => {
-        const { buildNoteFlowchartSectionHtml } = await import('../js/flowchartUi.js');
-        const html = buildNoteFlowchartSectionHtml(makeItem('n1'), { canEdit: true, startCollapsed: true });
-        assert.ok(html.includes('collapsable-section collapsed'), 'body needs the collapsed class');
-        assert.ok(html.includes('collapsable-toggle collapsed'), 'caret needs the collapsed class to rotate');
-    });
-
-    it('omits the pencil when the section is read-only', async () => {
-        const { buildNoteFlowchartSectionHtml } = await import('../js/flowchartUi.js');
-        const html = buildNoteFlowchartSectionHtml(makeItem('n1'), { canEdit: false });
-        assert.ok(!html.includes('data-flowchart-edit'), 'read-only sections get no edit button');
-    });
-});
-
-describe('flowchart stroke color / width controls', () => {
-    it('createEmptyFlowchart exposes the default color and width', async () => {
-        const { createEmptyFlowchart, FLOWCHART_DEFAULT_COLOR, FLOWCHART_DEFAULT_WIDTH } = await import('../js/flowchart.js');
-        const fc = createEmptyFlowchart();
-        assert.strictEqual(fc.flowchartColor, FLOWCHART_DEFAULT_COLOR);
-        assert.strictEqual(fc.flowchartWidth, FLOWCHART_DEFAULT_WIDTH);
-    });
-
-    it('normalizeFlowchart carries color/width through and clamps width', async () => {
-        const { normalizeFlowchart, createEmptyFlowchart } = await import('../js/flowchart.js');
-        const base = createEmptyFlowchart();
-        const out = normalizeFlowchart({ ...base, flowchartColor: '#ff0000', flowchartWidth: 99 });
-        assert.strictEqual(out.flowchartColor, '#ff0000');
-        assert.strictEqual(out.flowchartWidth, 16);
-        const out2 = normalizeFlowchart({ ...base, flowchartColor: 123, flowchartWidth: 'x' });
-        assert.strictEqual(out2.flowchartColor, '#f8fafc');
-        assert.strictEqual(out2.flowchartWidth, 3);
-    });
-
-    it('clampFlowchartWidth snaps to the nearest allowed step', async () => {
-        const { clampFlowchartWidth, FLOWCHART_WIDTH_STEPS } = await import('../js/flowchart.js');
-        assert.strictEqual(clampFlowchartWidth(5), 6);
-        assert.strictEqual(clampFlowchartWidth(1), 1);
-        assert.strictEqual(clampFlowchartWidth(100), 16);
-        assert.strictEqual(clampFlowchartWidth(NaN), 3);
-        FLOWCHART_WIDTH_STEPS.forEach((s) => assert.strictEqual(clampFlowchartWidth(s), s));
-    });
-});

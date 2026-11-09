@@ -1,128 +1,143 @@
 // test/flowchartToolbar.test.js
-// Guards for the flowchart toolbar row: connector stroke color/width, label color,
-// and the snap/grid controls.
+// Guards for the always-on diagram controls in the magicCanvas toolbar: the
+// connector tool + routing toggle (row 1) and the shared grid stepper (meta row).
 //
-// These are pure string builders (no DOM) so they can be exercised headlessly,
+// These are pure string builders (no DOM), so they can be exercised headlessly,
 // but the markup is what the user clicks — a missing id or a typo here is a dead
 // button with no console error to point at it.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DrawingBoard } from '../js/drawingBoard.js';
+import {
+    flowDiagramRowHtml,
+    flowGridControlsHtml,
+    stepCanvasGrid
+} from '../js/drawingBoardToolbar.js';
+import { canvasGrid, renderFlowchartOverlay } from '../js/drawingBoardFlowchart.js';
+import { FLOWCHART_GRID_STEPS } from '../js/flowchart.js';
 
-/** Build a board with a flowchartItem stub; flowchartToolbarRowHtml only reads
- *  flowchartGrid / flowchartColor / flowchartWidth / flowLabelFontSize / activeTool. */
+/** Board stub with the shared prefs the string builders read. */
 function makeBoard(overrides = {}) {
-    const board = Object.create(DrawingBoard);
-    board.activeTool = overrides.activeTool || 'pointer';
-    board.flowchartRouting = overrides.routing || 'elbow';
-    board.flowLabelTarget = null;
-    board.flowchartItem = {
-        flowchart: {
-            grid: { type: 'dots', size: 24, snap: true, visible: true },
-            flowchartColor: overrides.color || '#ff0000',
-            flowchartWidth: overrides.width || 4
+    const board = {
+        activeTool: overrides.activeTool || 'pointer',
+        prefs: {
+            grid: { size: overrides.gridSize ?? 24, snap: overrides.snap !== false },
+            routing: overrides.routing || 'elbow'
         }
     };
-    board.selectedStrokes = { set: new Set(), clear() {}, add(v) { this.set.add(v); }, size: 0 };
+    board.canvasGrid = function () { return canvasGrid(this); };
     return board;
 }
 
-describe('flowchartToolbarRowHtml', () => {
-    it('renders the connector color chip with the diagram color', () => {
-        const board = makeBoard({ color: '#ff0000' });
-        const html = DrawingBoard.flowchartToolbarRowHtml.call(board);
-        const chip = html.match(/id="draw-flow-connector-color"[^>]*style="--chip-color:([^"]+)"/);
-        assert.ok(chip, 'connector color chip must be present');
-        assert.strictEqual(chip[1], '#ff0000', 'chip must carry the diagram color');
+describe('flowDiagramRowHtml', () => {
+    it('renders the connector tool button, inactive unless the tool is armed', () => {
+        const idle = flowDiagramRowHtml(makeBoard());
+        assert.ok(idle.includes('id="draw-tool-connector"'), 'connector button must be present');
+        assert.ok(idle.includes('data-flow-tool="connector"'), 'the binder matches on data-flow-tool');
+        assert.ok(idle.includes('aria-pressed="false"'), 'not pressed until the tool is armed');
+
+        const armed = flowDiagramRowHtml(makeBoard({ activeTool: 'connector' }));
+        assert.ok(armed.includes('aria-pressed="true"'));
+        assert.ok(armed.includes('class="btn btn--compact btn--icon active" data-flow-tool="connector"'));
     });
 
-    it('renders the connector width readout with the diagram width', () => {
-        const board = makeBoard({ width: 6 });
-        const html = DrawingBoard.flowchartToolbarRowHtml.call(board);
-        assert.ok(html.includes('id="draw-flow-connector-width"'), 'width readout must be present');
-        assert.ok(html.includes('>6px<'), 'readout must show the diagram width');
+    it('renders a routing toggle that reflects the stored pref', () => {
+        const elbow = flowDiagramRowHtml(makeBoard({ routing: 'elbow' }));
+        assert.ok(elbow.includes('id="draw-flow-routing"'));
+        assert.ok(elbow.includes('aria-pressed="true"'), 'elbow is the pressed state');
+        assert.ok(elbow.includes('Connector routing: elbow'));
+
+        const straight = flowDiagramRowHtml(makeBoard({ routing: 'straight' }));
+        assert.ok(straight.includes('id="draw-flow-routing"'), 'the toggle is always rendered');
+        assert.ok(straight.includes('aria-pressed="false"'));
+        assert.ok(straight.includes('Connector routing: straight'));
     });
 
-    it('renders the - / + width buttons either side of the readout', () => {
-        const board = makeBoard();
-        const html = DrawingBoard.flowchartToolbarRowHtml.call(board);
-        assert.ok(html.includes('id="draw-flow-connector-smaller"'), 'smaller button must be present');
-        assert.ok(html.includes('id="draw-flow-connector-larger"'), 'larger button must be present');
-    });
-
-    it('renders a label color chip next to the text controls', () => {
-        const board = makeBoard();
-        const html = DrawingBoard.flowchartToolbarRowHtml.call(board);
-        assert.ok(html.includes('id="draw-flow-label-color"'), 'label color chip must be present');
-        assert.ok(html.includes('id="draw-flow-label-edit"'), 'label text button must be present');
-        // Chip comes between the text button and the size stepper.
-        const textIdx = html.indexOf('id="draw-flow-label-edit"');
-        const colorIdx = html.indexOf('id="draw-flow-label-color"');
-        const sizeIdx = html.indexOf('id="draw-flow-label-size"');
-        assert.ok(textIdx < colorIdx && colorIdx < sizeIdx,
-            'label color must sit between the text button and the size readout');
-    });
-
-    it('renders the snap toggle and grid density stepper', () => {
-        const board = makeBoard();
-        const html = DrawingBoard.flowchartToolbarRowHtml.call(board);
-        assert.ok(html.includes('id="draw-flow-snap"'), 'snap toggle must be present');
-        assert.ok(html.includes('id="draw-flow-grid-minus"'), 'grid minus must be present');
-        assert.ok(html.includes('id="draw-flow-grid-plus"'), 'grid plus must be present');
-        assert.ok(html.includes('>24px<'), 'grid size readout must show 24px');
-        assert.ok(html.includes('data-flow-tool="connector"'), 'connector tool button must be present');
-    });
-
-    it('highlights the connector tool when it is active', () => {
-        const board = makeBoard({ activeTool: 'connector' });
-        const html = DrawingBoard.flowchartToolbarRowHtml.call(board);
-        // class precedes data-flow-tool in the markup.
-        const match = html.match(/class="([^"]+)" data-flow-tool="connector"/);
-        assert.ok(match, 'connector button markup must be present');
-        assert.ok(match[1].includes('active'), 'connector button must be active when selected');
-    });
-
-    it('marks the elbow routing button active when routing is elbow', () => {
-        const board = makeBoard({ routing: 'elbow' });
-        const html = DrawingBoard.flowchartToolbarRowHtml.call(board);
-        // class precedes id in the markup.
-        const match = html.match(/class="([^"]+)" id="draw-flow-routing"/);
-        assert.ok(match, 'routing button markup must be present');
-        assert.ok(match[1].includes('active'), 'elbow button must be active');
-        assert.ok(html.includes('aria-pressed="true"'), 'elbow must report pressed=true');
-    });
-
-    it('marks the snap toggle active when snap is on', () => {
-        const board = makeBoard();
-        const html = DrawingBoard.flowchartToolbarRowHtml.call(board);
-        // class precedes id in the markup.
-        const match = html.match(/class="([^"]+)" id="draw-flow-snap"/);
-        assert.ok(match, 'snap button markup must be present');
-        assert.ok(match[1].includes('active'), 'snap must be active by default');
+    it('falls back to straight routing for an unknown pref', () => {
+        assert.ok(flowDiagramRowHtml(makeBoard({ routing: 'zigzag' })).includes('Connector routing: straight'));
     });
 });
 
-/**
- * renderFlowchartOverlay draws port dots whenever the connector tool is
- * selected — not only while a drag is in flight. Guard against the slop of
- * keying the highlight off a selected connector object instead.
- */
-describe('renderFlowchartOverlay port highlights', () => {
-    function makeBoard({ activeTool = 'pointer', flowConnect = null, shapes = [] } = {}) {
-        const board = Object.create(DrawingBoard);
-        board.isFlowchartMode = true;
-        board.activeTool = activeTool;
-        board.flowConnect = flowConnect;
-        board.flowchartItem = {
-            flowchart: {
-                grid: { type: 'dots', size: 24, snap: true, visible: true },
-                flowchartColor: '#f8fafc',
-                flowchartWidth: 3
-            }
-        };
-        // Stub strokes() so flowchartShapes() returns the given shapes.
-        board.strokes = () => shapes;
-        // Minimal 2D context: record beginPath/arc/fill/stroke calls.
+describe('flowGridControlsHtml', () => {
+    it('renders the snap toggle with the shared snap pref', () => {
+        const on = flowGridControlsHtml(makeBoard({ snap: true }));
+        assert.ok(on.includes('id="draw-flow-snap"'));
+        assert.ok(on.includes('aria-pressed="true"'));
+
+        const off = flowGridControlsHtml(makeBoard({ snap: false }));
+        assert.ok(off.includes('id="draw-flow-snap"'), 'the toggle stays rendered when snap is off');
+        assert.ok(off.includes('aria-pressed="false"'));
+    });
+
+    it('treats a missing snap pref as off (strict true)', () => {
+        const board = makeBoard();
+        delete board.prefs.grid.snap;
+        assert.ok(flowGridControlsHtml(board).includes('aria-pressed="false"'));
+    });
+
+    it('renders the grid size readout and its stepper buttons', () => {
+        const html = flowGridControlsHtml(makeBoard({ gridSize: 16 }));
+        assert.ok(html.includes('id="draw-flow-grid-size"'), 'readout must be present');
+        assert.ok(html.includes('>16px<'), 'readout must show the grid size');
+        assert.ok(html.includes('id="draw-flow-grid-minus"'), 'coarser button must be present');
+        assert.ok(html.includes('id="draw-flow-grid-plus"'), 'finer button must be present');
+    });
+});
+
+describe('stepCanvasGrid', () => {
+    /** Board stub that records the persisted patch and the toolbar repaint. */
+    function gridBoard(size) {
+        const board = makeBoard({ gridSize: size });
+        board.persisted = [];
+        board.renders = 0;
+        board.persistCanvasGrid = function (patch) { this.persisted.push(patch); };
+        board.renderToolbar = function () { this.renders += 1; };
+        return board;
+    }
+
+    it('walks the step list in both directions', () => {
+        const up = gridBoard(24);
+        stepCanvasGrid(up, 1);
+        assert.deepEqual(up.persisted, [{ size: 32 }]);
+
+        const down = gridBoard(24);
+        stepCanvasGrid(down, -1);
+        assert.deepEqual(down.persisted, [{ size: 16 }]);
+    });
+
+    it('clamps at both ends instead of wrapping', () => {
+        const top = gridBoard(FLOWCHART_GRID_STEPS[FLOWCHART_GRID_STEPS.length - 1]);
+        stepCanvasGrid(top, 1);
+        assert.deepEqual(top.persisted, [], 'stepping past the finest size is a no-op');
+        assert.equal(top.renders, 0);
+
+        const bottom = gridBoard(FLOWCHART_GRID_STEPS[0]);
+        stepCanvasGrid(bottom, -1);
+        assert.deepEqual(bottom.persisted, [], 'stepping past the coarsest size is a no-op');
+    });
+
+    it('snaps an off-grid size onto the nearest step before stepping', () => {
+        const board = gridBoard(15); // between 12 and 16 -> nearest 16
+        stepCanvasGrid(board, 1);
+        assert.deepEqual(board.persisted, [{ size: 24 }]);
+    });
+
+    it('repaints the toolbar so the readout follows the new size', () => {
+        const board = gridBoard(12);
+        stepCanvasGrid(board, 1);
+        assert.equal(board.renders, 1);
+        assert.deepEqual(board.persisted, [{ size: 16 }]);
+    });
+});
+
+describe('renderFlowchartOverlay', () => {
+    /** Minimal 2D context: records the draw calls the overlay makes. */
+    function overlayBoard(overrides = {}) {
+        const board = makeBoard(overrides);
+        board.strokes = () => overrides.shapes || [];
+        board.flowchartShapes = function () { return this.strokes().filter((s) => s && s.flowchartKind === 'shape'); };
+        board.flowConnect = overrides.flowConnect || null;
+        board.currentBrush = () => ({ color: '#abcdef', width: 4 });
+        board.getSelectedStrokesArray = () => overrides.selection || [];
         const calls = [];
         board.ctx = {
             save() { calls.push('save'); },
@@ -138,56 +153,72 @@ describe('renderFlowchartOverlay port highlights', () => {
             set strokeStyle(v) { calls.push('strokeStyle=' + v); },
             set fillStyle(v) { calls.push('fillStyle=' + v); }
         };
-        board._calls = calls;
+        board.calls = calls;
         return board;
     }
 
-    it('does nothing when not in flowchart mode', () => {
-        const board = makeBoard();
-        board.isFlowchartMode = false;
-        assert.doesNotThrow(() => DrawingBoard.renderFlowchartOverlay.call(board));
-        assert.equal(board._calls.length, 0);
+    const rect = (id, tool, x0, y0, x1, y1) => ({ id, flowchartKind: 'shape', tool, x0, y0, x1, y1 });
+
+    it('paints nothing when the page has no shapes', () => {
+        const board = overlayBoard({ activeTool: 'connector', shapes: [] });
+        renderFlowchartOverlay(board);
+        assert.equal(board.calls.length, 0, 'no shapes -> nothing to highlight');
     });
 
-    it('does nothing when the connector tool is not active and no drag is in flight', () => {
-        const board = makeBoard({ activeTool: 'rect', shapes: [{ id: 's1', flowchartKind: 'shape', tool: 'rect', x0: 0, y0: 0, x1: 100, y1: 100 }] });
-        DrawingBoard.renderFlowchartOverlay.call(board);
-        // The early-return guard still does save()/restore() — what must NOT
-        // happen is any arc (port dot) or path (rubber band) being painted.
-        assert.equal(board._calls.length, 2, 'only the save()/restore() guard should run');
-        assert.equal(board._calls.filter((c) => c === 'arc').length, 0, 'no port dots for a plain shape tool');
-        assert.equal(board._calls.filter((c) => c === 'dash').length, 0, 'no rubber band for a plain shape tool');
+    it('paints no ports for a plain shape tool', () => {
+        const board = overlayBoard({ activeTool: 'rect', shapes: [rect('s1', 'rect', 0, 0, 100, 100)] });
+        renderFlowchartOverlay(board);
+        assert.equal(board.calls.filter((c) => c === 'arc').length, 0, 'port dots are connector-tool chrome');
+        assert.equal(board.calls.filter((c) => c === 'dash').length, 0, 'no rubber band');
     });
 
-    it('paints a port dot on every shape when the connector tool is selected', () => {
-        const shapes = [
-            { id: 's1', flowchartKind: 'shape', tool: 'rect', x0: 0, y0: 0, x1: 100, y1: 100 },
-            { id: 's2', flowchartKind: 'shape', tool: 'diamond', x0: 200, y0: 0, x1: 300, y1: 100 }
-        ];
-        const board = makeBoard({ activeTool: 'connector', shapes });
-        DrawingBoard.renderFlowchartOverlay.call(board);
-        // 4 ports per shape x 2 shapes = 8 arcs (beginPath+arc+fill+stroke each).
-        const arcs = board._calls.filter((c) => c === 'arc');
-        assert.equal(arcs.length, 8, 'every port on every shape must be highlighted');
+    it('paints a port dot on every shape when the connector tool is armed', () => {
+        const board = overlayBoard({
+            activeTool: 'connector',
+            shapes: [rect('s1', 'rect', 0, 0, 100, 100), rect('s2', 'diamond', 200, 0, 300, 100)]
+        });
+        renderFlowchartOverlay(board);
+        // 4 ports per shape x 2 shapes = 8 arcs.
+        assert.equal(board.calls.filter((c) => c === 'arc').length, 8,
+            'every port on every shape must be highlighted');
     });
 
-    it('does not paint when the connector tool is selected but there are no shapes', () => {
-        const board = makeBoard({ activeTool: 'connector', shapes: [] });
-        DrawingBoard.renderFlowchartOverlay.call(board);
-        assert.equal(board._calls.length, 0, 'no shapes -> nothing to highlight');
-    });
-
-    it('still paints the live rubber band when a drag is in flight', () => {
-        const shapes = [{ id: 's1', flowchartKind: 'shape', tool: 'rect', x0: 0, y0: 0, x1: 100, y1: 100 }];
-        const board = makeBoard({
+    it('paints candidate ports and a dashed rubber band during a drag', () => {
+        const board = overlayBoard({
             activeTool: 'connector',
             flowConnect: { x: 50, y: 50, from: null, hover: null, fromPt: { x: 50, y: 50 } },
-            shapes
+            shapes: [rect('s1', 'rect', 0, 0, 100, 100)]
         });
-        DrawingBoard.renderFlowchartOverlay.call(board);
-        // Ports on the 3 remaining shapes (s1 skipped as the anchor) + the rubber band.
-        const arcs = board._calls.filter((c) => c === 'arc');
-        assert.ok(arcs.length >= 4, 'drag overlay must still paint ports');
-        assert.ok(board._calls.includes('dash'), 'rubber band must be dashed');
+        renderFlowchartOverlay(board);
+        assert.ok(board.calls.filter((c) => c === 'arc').length >= 4, 'drag overlay must paint ports');
+        assert.ok(board.calls.includes('dash'), 'rubber band must be dashed');
+    });
+
+    it('routes the rubber band through the bend when an elbow target is hovered', () => {
+        const board = overlayBoard({
+            activeTool: 'connector',
+            routing: 'elbow',
+            flowConnect: {
+                x: 200, y: 150,
+                from: { shapeId: 's1', port: 'e' },
+                fromPt: { x: 100, y: 150 },
+                hover: { shapeId: 's2', port: 'w', x: 200, y: 150 }
+            },
+            shapes: [rect('s2', 'rect', 200, 100, 300, 200)]
+        });
+        renderFlowchartOverlay(board);
+        // Anchor -> bend -> target: two segments instead of one straight line.
+        assert.equal(board.calls.filter((c) => c === 'lineTo').length, 2);
+    });
+
+    it('draws no rubber band when no drag is in flight', () => {
+        const board = overlayBoard({
+            activeTool: 'connector',
+            flowConnect: null,
+            shapes: [rect('s1', 'rect', 0, 0, 100, 100)]
+        });
+        renderFlowchartOverlay(board);
+        assert.equal(board.calls.filter((c) => c === 'dash').length, 0);
+        assert.equal(board.calls.filter((c) => c === 'lineTo').length, 0);
     });
 });

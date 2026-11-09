@@ -343,12 +343,6 @@ export function _bindPaneInteractions(magicFocus, body, item) {
             if (host) bindNoteAttachments(host, item);
         });
     }).catch(() => {});
-
-    import('../flowchartUi.js').then(({ attachFlowchartInteractions }) => {
-        body.querySelectorAll('[data-note-flowchart]').forEach((sec) => {
-            attachFlowchartInteractions(sec.closest('.editor-note-body') || sec.parentElement, item);
-        });
-    }).catch(() => {});
 }
 
 export async function _hostDrawingBoard(magicFocus, hostEl, item) {

@@ -1,5 +1,5 @@
 // test/flowchartEditLabel.test.js
-// Regression guards for the flowchart label editor + exit path.
+// Regression guards for the inline shape/connector label editor.
 //
 // Bugs these catch (all shipped, all invisible to `node --check` and unit tests):
 //   1. flowEditLabel called CanvasViewport.worldToScreen, which does not exist
@@ -8,8 +8,9 @@
 //   2. Position/size math used viewport scale on top of dpr; the text layer is
 //      placed by `world / dpr` (see placeTextBox) and zoom is carried by the
 //      innerEl CSS transform, so scale was applied twice.
-//   3. The back-to-note button called exitNoteCanvas(), which early-returns on
-//      !isNoteCanvasMode, so flowchart mode could never be exited.
+//   3. Label chrome used to live in the toolbar, which meant every label edit
+//      re-rendered (and could steal focus from) the whole toolbar. The editor is
+//      self-contained now: it must not touch the toolbar at all.
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { DrawingBoard } from '../js/drawingBoard.js';
@@ -57,14 +58,12 @@ describe('flowEditLabel', () => {
     }
 
     /**
-     * Inherit the real DrawingBoard so flowCloseLabel / flowLabelTargetShape /
-     * exitFlowchart are the actual implementations; only DOM + persistence
-     * sinks are replaced.
+     * Inherit the real DrawingBoard so flowCloseLabel / flowEditLabel are the
+     * actual implementations; only DOM + persistence sinks are replaced.
      */
     function makeBoard() {
         const appended = [];
         const board = Object.create(DrawingBoard);
-        board.isFlowchartMode = true;
         board.flowLabelEl = null;
         board.flowLabelTarget = null;
         board.selectedStrokes = {
@@ -95,7 +94,7 @@ describe('flowEditLabel', () => {
         assert.equal(board.appended.length, 1, 'editor should be appended to the text layer');
         assert.equal(board.flowLabelTarget, shape, 'editor should latch onto its target');
         assert.ok(board.selectedStrokes.set.has(shape), 'target should be selected');
-        assert.equal(board.toolbarRenders, 1);
+        assert.equal(board.toolbarRenders, undefined, 'label editing must not repaint the toolbar');
     });
 
     it('positions the editor in text-layer space (world / dpr, no viewport scale)', () => {
@@ -115,11 +114,9 @@ describe('flowEditLabel', () => {
         assert.ok(Number.isFinite(left) && Number.isFinite(top), 'left/top must be finite numbers');
         assert.ok(Math.abs(left - 100) < 60, `left should be near centre-100, got ${left}`);
         assert.ok(Math.abs(top - 50) < 30, `top should be near centre-50, got ${top}`);
-        // Font size is world/dpr, floored at 11px so the editor stays legible
-        // (same philosophy as placeTextBox's Math.max(16, ...)). Default 20 / 2 = 10,
-        // floored to 11. Test "keeps an existing label" asserts the exact /dpr
-        // scaling on an unfloored value (24 -> 12).
-        assert.equal(parseFloat(el.style.fontSize), 11);
+        // Font size is fitted to the box height (100 world units -> 32) and then
+        // divided by dpr, so the editor text is the size the painter will draw.
+        assert.equal(parseFloat(el.style.fontSize), 16);
     });
 
     it('keeps an existing label in the editor', () => {
@@ -150,16 +147,72 @@ describe('flowEditLabel', () => {
         assert.ok(left < 150 && left > 0, `connector editor should centre on the bend, got ${left}`);
     });
 
-    it('is a no-op outside flowchart mode', () => {
+    it('is a no-op without a target', () => {
         installEditorDom();
         const board = makeBoard();
-        board.isFlowchartMode = false;
-        DrawingBoard.flowEditLabel.call(board, { flowchartKind: 'shape', x0: 0, y0: 0, x1: 10, y1: 10 });
+        // Nothing under the pointer: the caller passes the miss through and the
+        // editor must never open on an empty canvas click.
+        DrawingBoard.flowEditLabel.call(board, null);
         assert.equal(board.appended.length, 0);
+        assert.equal(board.flowLabelEl, null);
+    });
+
+    it('commits typed text as a single undo step', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        const shape = { id: 's1', flowchartKind: 'shape', tool: 'rect', x0: 0, y0: 0, x1: 200, y1: 100, label: null };
+        DrawingBoard.flowEditLabel.call(board, shape);
+
+        const el = created[0];
+        el.innerText = '  Approved  ';
+        // Blur is the commit path (Enter commits by calling blur()).
+        el.listeners.blur.forEach((fn) => fn());
+
+        assert.equal(shape.label.text, 'Approved', 'text is trimmed, not stored with padding');
+        assert.equal(board.historyPushes, 1, 'one label change = one undo entry');
+        assert.equal(board.saves, 1, 'the label change schedules a save');
+        assert.equal(board.flowLabelEl, null, 'the editor is torn down');
+        assert.equal(board.redraws, 1);
+    });
+
+    it('clears an existing label in one undo step when committed empty', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100,
+            label: { text: 'Old', fontSize: 20, color: '' }
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+
+        const el = created[0];
+        el.innerText = '';
+        el.listeners.blur.forEach((fn) => fn());
+
+        assert.equal(shape.label, null, 'empty text deletes the label');
+        assert.equal(board.historyPushes, 1, 'the delete is a single undo step');
+        assert.equal(board.saves, 1);
+    });
+
+    it('does not push history when the text is unchanged', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100,
+            label: { text: 'Same', fontSize: 20, color: '' }
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+
+        created[0].innerText = 'Same';
+        created[0].listeners.blur.forEach((fn) => fn());
+
+        assert.equal(board.historyPushes, undefined, 'an unchanged label must not add an undo entry');
+        assert.equal(board.saves, undefined, 'and must not schedule a save');
     });
 });
 
-describe('flowchart exit path', () => {
+describe('note canvas exit path', () => {
     afterEach(() => {
         dispatched = null;
         delete globalThis.window;
@@ -174,61 +227,22 @@ describe('flowchart exit path', () => {
         };
     }
 
-    it('exitFlowchart dispatches the note-canvas exit event', () => {
-        installDispatchDom();
-        const item = { id: 'n1', flowchart: {} };
-        DrawingBoard.exitFlowchart.call({ isFlowchartMode: true, flowchartItem: item });
-        assert.ok(dispatched, 'exitFlowchart should dispatch an event');
-        assert.equal(dispatched.type, 'note:canvas_draw_exited');
-        assert.equal(dispatched.detail.item, item);
-    });
-
-    it('exitFlowchart is inert when not in flowchart mode', () => {
-        installDispatchDom();
-        DrawingBoard.exitFlowchart.call({ isFlowchartMode: false, flowchartItem: { id: 'n1' } });
-        assert.equal(dispatched, null);
-    });
-
-    it('exitFlowchart is inert without a bound item', () => {
-        installDispatchDom();
-        DrawingBoard.exitFlowchart.call({ isFlowchartMode: true, flowchartItem: null });
-        assert.equal(dispatched, null);
-    });
-
-    it('exitFromToolbar routes flowchart mode to exitFlowchart', () => {
-        installDispatchDom();
-        const item = { id: 'n1', flowchart: {} };
-        // Real method, real guards — calling exitNoteCanvas here would early-return
-        // and strand the user in drawing mode.
-        const fake = Object.create(DrawingBoard);
-        fake.isFlowchartMode = true;
-        fake.isNoteCanvasMode = false;
-        fake.flowchartItem = item;
-        fake.noteCanvasItem = null;
-        DrawingBoard.exitFromToolbar.call(fake);
-        assert.ok(dispatched, 'flowchart exit must dispatch');
-        assert.equal(dispatched.detail.item, item);
-    });
-
     it('exitFromToolbar routes note-canvas mode to exitNoteCanvas', () => {
         installDispatchDom();
         const item = { id: 'n2', canvas: {} };
         const fake = Object.create(DrawingBoard);
-        fake.isFlowchartMode = false;
         fake.isNoteCanvasMode = true;
-        fake.flowchartItem = null;
         fake.noteCanvasItem = item;
         DrawingBoard.exitFromToolbar.call(fake);
         assert.ok(dispatched, 'note-canvas exit must dispatch');
+        assert.equal(dispatched.type, 'note:canvas_draw_exited');
         assert.equal(dispatched.detail.item, item);
     });
 
-    it('exitFromToolbar is inert in neither mode', () => {
+    it('exitFromToolbar is inert outside note-canvas', () => {
         installDispatchDom();
         const fake = Object.create(DrawingBoard);
-        fake.isFlowchartMode = false;
         fake.isNoteCanvasMode = false;
-        fake.flowchartItem = { id: 'a' };
         fake.noteCanvasItem = { id: 'b' };
         DrawingBoard.exitFromToolbar.call(fake);
         assert.equal(dispatched, null);

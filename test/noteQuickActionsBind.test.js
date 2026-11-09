@@ -5,7 +5,7 @@
 // inside wireSharedActions on every board render, which surfaced as a fatal sync
 // failure that wiped the whole board. The identifier was only reachable at call
 // time, so module import and `node --check` both passed and unit tests on the
-// flowchart model never noticed. This test binds the real board tray instead.
+// pure helpers never noticed. This test binds the real board tray instead.
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -56,7 +56,6 @@ function makeEl(tag = 'div', dataset = {}) {
 /** Build the tray markup shape bindNoteQuickActions actually queries for. */
 function buildTray(itemId) {
     const cls = {
-        '.card-act--flowchart': 'flowchartBtn',
         '.card-act--planner': 'plannerBtn',
         '.card-act--draw': 'drawBtn'
     };
@@ -118,7 +117,7 @@ describe('bindNoteQuickActions board tray', () => {
                 card,
                 ctx: {}
             });
-        }, 'bindNoteQuickActions must not throw while wiring the flowchart tray button');
+        }, 'bindNoteQuickActions must not throw while wiring the board tray');
 
         // Every tray button got a mousedown listener (the commit-then-act path).
         for (const [selector, btn] of Object.entries(byClass)) {

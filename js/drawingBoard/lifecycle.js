@@ -1,11 +1,8 @@
-/** @module {"owns":"magicCanvas session enter/exit (workspace, note canvas, flowchart) and toolbar chrome lifecycle","related":["drawingBoard.js","drawingBoard/prefs.js","canvasViewport.js","flowchart.js","noteModel.js"]} */
+/** @module {"owns":"magicCanvas session enter/exit (workspace, note canvas) and toolbar chrome lifecycle","related":["drawingBoard.js","drawingBoard/prefs.js","canvasViewport.js","noteModel.js"]} */
 import { ColorPicker } from '../colorPicker.js';
 import { DrawingToolbarMenu } from '../drawingToolbarMenu.js';
 import { CanvasViewport } from '../canvasViewport.js';
-import {
-    readDocument,
-    setActiveBackground
-} from '../canvasDocument.js';
+import { readDocument } from '../canvasDocument.js';
 import { DrawingToolbarChrome } from '../drawingToolbarChrome.js';
 import { clearImageCache } from '../canvasImages.js';
 import {
@@ -58,8 +55,9 @@ export function init(board, app) {
     });
 
     board.canvas.addEventListener('pointerdown', (e) => board.onPointerDown(e));
+    // Double-click any shape or connector to edit its label. There is no
+    // diagram mode to gate on any more: every canvas page has the tools.
     board.canvas.addEventListener('dblclick', (e) => {
-        if (!board.isFlowchartMode) return;
         const pt = board.clientToCanvas(e.clientX, e.clientY);
         const target = board.flowHit(pt.x, pt.y);
         if (target) { e.preventDefault(); board.flowEditLabel(target); }
@@ -86,6 +84,10 @@ export async function activate(board) {
     board.activeNoteId = null;
     board.noteCanvasItem = null;
     board.cropState = null;
+    board.flowConnect = null;
+    board.flowBendDrag = null;
+    board.flowEndpointDrag = null;
+    board.flowShapesCache = null;
 
     if (board.brandEl) board.brandEl.textContent = 'magicCanvas';
     board.updateNoteToolbarChrome();
@@ -111,8 +113,6 @@ export async function activateForNote(board, item) {
     board.active = true;
     board.docOwner = 'note';
     board.isNoteCanvasMode = true;
-    board.isFlowchartMode = false;
-    board.flowchartItem = null;
     board.activeNoteId = item.id;
     board.noteCanvasItem = item;
     board.cropState = null;
@@ -142,63 +142,6 @@ export async function activateForNote(board, item) {
     board.resize();
     board.redrawBackground();
     board.redraw();
-    if (board.isFlowchartMode) board.bindFlowBendEvents();
-}
-
-export async function openNoteFlowchart(board, item) {
-    if (!item?.id) return;
-    const { normalizeFlowchart, createEmptyFlowchart } = await import('../flowchart.js');
-    if (!item.flowchart) {
-        item.flowchart = createEmptyFlowchart();
-        item.flowchartHidden = false;
-    }
-    const normalized = normalizeFlowchart(item.flowchart) || createEmptyFlowchart();
-    item.flowchart = normalized;
-    board.history.clear();
-    board.active = true;
-    board.docOwner = 'flowchart';
-    board.isNoteCanvasMode = false;
-    board.noteCanvasItem = null;
-    board.isFlowchartMode = true;
-    board.flowchartItem = item;
-    board.flowchartRouting = 'straight';
-    board.activeNoteId = item.id;
-    board.cropState = null;
-    board.doc = normalized.doc;
-    // Force the dot grid + snap on entry; the user can relax either afterwards.
-    normalized.grid = {
-        type: 'dots',
-        size: Number.isFinite(Number(normalized.grid?.size)) && Number(normalized.grid.size) > 0
-            ? Number(normalized.grid.size)
-            : 24,
-        snap: true,
-        visible: true
-    };
-    item.flowchart.grid = { ...normalized.grid };
-    setActiveBackground(board.doc, normalized.grid.type);
-    board.prefs = readPrefs();
-    // Keep the user's brush prefs; default new diagrams to a shape tool.
-    board.activeTool = 'rect';
-    board.activeStyle = board.prefs.activeStyle || 'pen';
-
-    DrawingToolbarChrome.show();
-    board.toolbarEl = DrawingToolbarChrome.getToolbarMount();
-
-    if (board.brandEl) board.brandEl.textContent = 'magicCanvas · Flowchart';
-    board.updateNoteToolbarChrome();
-
-    board.boardEl.classList.remove('is-hidden');
-    board.boardEl.setAttribute('aria-hidden', 'false');
-
-    CanvasViewport.loadFromDoc(board.doc.viewport || { scale: 1, offsetX: 0, offsetY: 0 });
-    CanvasViewport.setHandMode(false);
-    if (board.canvas) board.canvas.dataset.tool = board.activeTool;
-    board.shrinkInfiniteIfNeeded();
-    board.renderToolbar();
-    board.updateZoomLevel();
-    board.resize();
-    board.redrawBackground();
-    board.redraw();
 }
 
 export function exitNoteCanvas(board) {
@@ -208,15 +151,7 @@ export function exitNoteCanvas(board) {
     window.dispatchEvent(new CustomEvent('note:canvas_draw_exited', { detail: { item } }));
 }
 
-export function exitFlowchart(board) {
-    if (!board.isFlowchartMode) return;
-    const item = board.flowchartItem;
-    if (!item) return;
-    window.dispatchEvent(new CustomEvent('note:canvas_draw_exited', { detail: { item } }));
-}
-
 export function exitFromToolbar(board) {
-    if (board.isFlowchartMode) { board.exitFlowchart(); return; }
     if (board.isNoteCanvasMode) { board.exitNoteCanvas(); return; }
 }
 
@@ -246,10 +181,14 @@ export async function deactivate(board) {
     CanvasViewport.setHandMode(false);
     clearImageCache();
     board.isNoteCanvasMode = false;
-    board.isFlowchartMode = false;
     board.activeNoteId = null;
     board.noteCanvasItem = null;
-    board.flowchartItem = null;
+    board.flowConnect = null;
+    board.flowBendDrag = null;
+    board.flowEndpointDrag = null;
+    board.flowLabelEl = null;
+    board.flowLabelTarget = null;
+    board.flowShapesCache = null;
     board.doc = null;
     board.docOwner = null;
     board.history.clear();

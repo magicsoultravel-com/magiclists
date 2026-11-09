@@ -12,7 +12,6 @@ import { escapeHTML } from '../domEscape.js';
 import { mutateItem } from '../noteSurfaceMutations.js';
 import { buildNoteAttachmentsSectionHtml, buildNoteCanvasSectionHtml } from '../noteAttachmentsUi.js';
 import { buildNotePlannerSectionHtml } from '../plannerUi.js';
-import { buildNoteFlowchartSectionHtml } from '../flowchartUi.js';
 import { renderFocusSpawnTrayHtml, renderFocusSpawnSubTrayHtml } from '../noteFocusSpawn.js';
 import { buildExpandedChecklistHtml } from './checklistMarkup.js';
 
@@ -50,11 +49,7 @@ export function plannerSectionStartCollapsed(item) {
     return !!item?.plannerCollapsed;
 }
 
-export function flowchartSectionStartCollapsed(item) {
-    return !!(item?.flowchartCollapsed ?? item?.flowchart?.collapsed);
-}
-
-/** Append peer side sections: Media → Canvas → Plan → Flowchart. */
+/** Append peer side sections: Media → Canvas → Plan. */
 export function appendNoteSideSections(item, html, { canEdit = false } = {}) {
     let out = html;
     out += buildNoteAttachmentsSectionHtml(item, {
@@ -67,10 +62,6 @@ export function appendNoteSideSections(item, html, { canEdit = false } = {}) {
     out += buildNotePlannerSectionHtml(item, {
         canEdit,
         startCollapsed: plannerSectionStartCollapsed(item)
-    });
-    out += buildNoteFlowchartSectionHtml(item, {
-        canEdit,
-        startCollapsed: flowchartSectionStartCollapsed(item)
     });
     return out;
 }
@@ -218,7 +209,7 @@ export function bindNoteBodySections(root, item) {
     root.querySelectorAll('.note-body-section .note-section-header').forEach((header) => {
         // Media/canvas section collapse is owned by noteAttachmentsUi.bindMediaSectionToggle
         // so expand can re-paint the canvas preview. Planner owns its own toggle too.
-        if (header.closest('[data-note-attachments], [data-note-planner], [data-note-canvas], [data-note-flowchart]')) return;
+        if (header.closest('[data-note-attachments], [data-note-planner], [data-note-canvas]')) return;
         header.addEventListener('click', (e) => {
             // Let Focus-spawn bubble to bindFocusSpawnButtons (do not stopPropagation).
             if (e.target.closest?.('[data-focus-spawn]')) return;

@@ -41,7 +41,7 @@ const ARITY = {
     onMagicFocusEnter: 0, applyDesktopDockAfterFocusEnter: 0, applyDesktopDockAfterFocusLeave: 0,
     onMagicFocusLeave: 0, exitDrawingForFocus: 0, isDrawingMode: 0, stateWorkspaceMode: 0,
     setupScribbleFab: 0, setupDrawingMode: 0, switchWorkspaceMode: 1, applyWorkspaceMode: 1,
-    enterNoteCanvasMode: 1, enterFlowchartMode: 1, exitNoteCanvasMode: 1, executeDataBackupExport: 0,
+    enterNoteCanvasMode: 1, exitNoteCanvasMode: 1, executeDataBackupExport: 0,
     executeFullBackupExport: 0, executeExportAllTxt: 0, setupBackupInterface: 0, executeAddCategory: 0,
     executeAddCategoryPrompt: 0, executeLoginPrompt: 0, executeLogout: 0,
     migrateBoardOverlayFromFreeform: 0, toggleBoardOverlay: 0, toggleFileCabinet: 0,
@@ -52,7 +52,7 @@ const ARITY = {
 const ASYNC = [
     'init', 'refreshBoardFromSync', 'removeItemFromWorkspace', 'restoreItem', 'refreshPlannerHostsAfterRestore',
     'syncDataStore', '_syncDataStoreInner', 'onMagicFocusLeave', 'exitDrawingForFocus', 'switchWorkspaceMode',
-    'applyWorkspaceMode', 'enterNoteCanvasMode', 'enterFlowchartMode', 'exitNoteCanvasMode',
+    'applyWorkspaceMode', 'enterNoteCanvasMode', 'exitNoteCanvasMode',
     'executeDataBackupExport', 'executeFullBackupExport', 'toggleBoardOverlay', 'toggleFileCabinet'
 ];
 
@@ -107,9 +107,9 @@ function walk(node, visit) {
 }
 
 describe('app facade · member surface', () => {
-    it('keeps all 62 members on the Application class', () => {
+    it('keeps all 61 members on the Application class', () => {
         assert.deepEqual(members.map(memberName).sort(), Object.keys(ARITY).sort());
-        assert.equal(members.length, 62);
+        assert.equal(members.length, 61);
     });
 
     it('keeps Function.length of every member - no receiver leaks into a signature', () => {

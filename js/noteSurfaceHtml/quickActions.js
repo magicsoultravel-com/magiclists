@@ -1,4 +1,4 @@
-/** @module {"owns":"note card quick-action toolbar markup - the filed/open toggle, pin, color, media, planner, flowchart and more menu", "related":["noteSurfaceHtml.js","noteQuickActions.js","icons.js"]} */
+/** @module {"owns":"note card quick-action toolbar markup - the filed/open toggle, pin, color, media, planner and more menu", "related":["noteSurfaceHtml.js","noteQuickActions.js","icons.js"]} */
 import { CARD_ICONS } from '../icons.js';
 import { escapeHTML, escapeAttr } from '../domEscape.js';
 import { LEGACY_TILE_SIZE, isCollapsedSpatialSize } from '../tileGeometry.js';
@@ -58,11 +58,6 @@ export function buildNoteQuickActionsHtml(item, {
     const plannerBtn = isPopout
         ? ''
         : `<button type="button" class="card-act card-act--planner${plannerActive ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(plannerTitle)}" aria-label="${escapeAttr(plannerTitle)}" aria-pressed="${plannerActive ? 'true' : 'false'}">${CARD_ICONS.planner}</button>`;
-    const flowchartActive = !!(item?.flowchart && !item?.flowchartHidden);
-    const flowchartTitle = flowchartActive ? 'Hide flowchart' : 'Show flowchart';
-    const flowchartBtn = isPopout
-        ? ''
-        : `<button type="button" class="card-act card-act--flowchart${flowchartActive ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(flowchartTitle)}" aria-label="${escapeAttr(flowchartTitle)}" aria-pressed="${flowchartActive ? 'true' : 'false'}">${CARD_ICONS.flowchart}</button>`;
     const isFocusSurface = surface === 'focus';
     let focusActive = false;
     try {
@@ -107,7 +102,7 @@ export function buildNoteQuickActionsHtml(item, {
     const attachBtn = `<button type="button" class="card-act card-act--attach${attachCount ? ' is-active' : ''}" title="${escapeAttr(attachTitle)}" aria-label="${escapeAttr(attachTitle)}" aria-pressed="${attachCount ? 'true' : 'false'}">${CARD_ICONS.attach}</button>`;
     // Board: popout, draw, planner, [focus], cal, popin (popped only), emoji, copy, note-package, [pin], color, attach, hide, edit, [drag], toggle
     // Popout: cal, close (pop in), emoji, copy, note-package, color, attach, window-size
-    let actionCount = isPopout ? 8 : 13;
+    let actionCount = isPopout ? 7 : 12;
     if (!isModal && !isPopout && showDragIcon) actionCount += 1;
     if (!isPopout && poppedOut) actionCount += 1; // popin
     if (focusBtn) actionCount += 1;
@@ -123,7 +118,6 @@ export function buildNoteQuickActionsHtml(item, {
             ${popBtn}
             ${drawBtn}
             ${plannerBtn}
-            ${flowchartBtn}
             ${focusBtn}
             ${calBtn}
             ${closeBtn}

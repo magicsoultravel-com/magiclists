@@ -9,7 +9,7 @@ import {
 } from './canvasDocument.js';
 import { CanvasViewport } from './canvasViewport.js';
 import { showAppToast } from './toast.js';
-import { FLOW_LABEL_MIN, FLOW_LABEL_MAX } from './flowchart.js';
+import { FLOWCHART_GRID_STEPS } from './flowchart.js';
 import { stripRichText } from './richText.js';
 import {
     migrateNoteCanvasTextFlags,
@@ -338,54 +338,43 @@ export function handleBackgroundMenu(board, id) {
         }
 }
 
-export function flowchartToolbarRowHtml(board) {
-        const grid = board.flowchartGrid();
-        const snapOn = grid.snap !== false;
-        const routing = board.flowchartRouting === 'elbow' ? 'elbow' : 'straight';
-        const fcColor = board.flowchartColor();
-        const fcWidth = board.flowchartWidth();
-        const tools = [
-            ['rect', 'Process', 'rect'],
-            ['rounded_rect', 'Rounded', 'rounded_rect'],
-            ['diamond', 'Decision', 'diamond'],
-            ['ellipse', 'Terminator', 'ellipse'],
-            ['parallelogram', 'Input', 'parallelogram'],
-            ['triangle', 'Triangle', 'triangle']
-        ];
-        const toolBtns = tools.map(function (t) {
-            return '<button type="button" class="btn btn--compact btn--icon" data-flow-tool="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '">' + (DRAWING_ICONS[t[2]] || DRAWING_ICONS.shapes) + '</button>';
-        }).join('');
-        return '<div class="drawing-toolbar-row drawing-toolbar-row--flowchart" aria-label="Flowchart tools">'
-            + '<span class="drawing-toolbar-row__label">Flow</span>'
-            + toolBtns
-            + '<button type="button" class="btn btn--compact btn--icon' + (board.activeTool === 'connector' ? ' active' : '') + '" data-flow-tool="connector" title="Connector (drag shape to shape)" aria-label="Connector">' + DRAWING_ICONS.arrow + '</button>'
-            + '<button type="button" class="btn btn--compact btn--icon' + (routing === 'elbow' ? ' active' : '') + '" id="draw-flow-routing" title="Toggle elbow routing" aria-label="Toggle elbow routing" aria-pressed="' + (routing === 'elbow' ? 'true' : 'false') + '">' + (DRAWING_ICONS.connectorElbow || DRAWING_ICONS.arrow) + '</button>'
-            + '<span class="drawing-toolbar-group" data-flow-connector-group>'
-            + '<button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-flow-connector-color" title="Stroke color" aria-label="Stroke color" aria-expanded="false" style="--chip-color:' + fcColor + '"><span class="drawing-color-chip" style="background:' + fcColor + '"></span></button>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-connector-smaller" title="Thinner stroke" aria-label="Thinner stroke">' + ACTION_ICONS.minus + '</button>'
-            + '<span class="drawing-brush-size__value" id="draw-flow-connector-width" aria-live="polite">' + fcWidth + 'px</span>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-connector-larger" title="Thicker stroke" aria-label="Thicker stroke">' + ACTION_ICONS.plus + '</button>'
-            + '</span>'
-            + '<span class="format-toolbar-sep" aria-hidden="true"></span>'
-            + '<span class="drawing-toolbar-group" data-flow-label-group>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-edit" title="Edit shape text" aria-label="Edit shape text">' + DRAWING_ICONS.text + '</button>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-color" title="Label color" aria-label="Label color" aria-expanded="false" style="--chip-color:' + (board.flowLabelTargetShape()?.label?.color || fcColor) + '"><span class="drawing-color-chip" style="background:' + (board.flowLabelTargetShape()?.label?.color || fcColor) + '"></span></button>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-smaller" title="Smaller label text" aria-label="Smaller label text">' + ACTION_ICONS.minus + '</button>'
-            + '<span class="drawing-brush-size__value" id="draw-flow-label-size" aria-live="polite">' + board.flowLabelFontSize() + 'px</span>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-larger" title="Larger label text" aria-label="Larger label text">' + ACTION_ICONS.plus + '</button>'
-            + '</span>'
-            + '<span class="format-toolbar-sep" aria-hidden="true"></span>'
-            + '<button type="button" class="btn btn--compact btn--icon' + (snapOn ? ' active' : '') + '" id="draw-flow-snap" title="Snap to grid" aria-label="Snap to grid" aria-pressed="' + (snapOn ? 'true' : 'false') + '">' + DRAWING_ICONS.gridSnap + '</button>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-grid-minus" title="Coarser grid" aria-label="Coarser grid">' + ACTION_ICONS.minus + '</button>'
-            + '<span class="drawing-brush-size__value" id="draw-flow-grid-size" aria-live="polite">' + grid.size + 'px</span>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-grid-plus" title="Finer grid" aria-label="Finer grid">' + ACTION_ICONS.plus + '</button>'
-            + '<button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-flow-grid-type" title="Grid style" aria-label="Grid style"><span class="drawing-dropdown-label">' + grid.type + '</span><span class="drawing-dropdown-chevron">' + CHEVRON + '</span></button>'
-            + '</div>';
+/**
+ * Row-1 diagram controls: connector tool + elbow/straight routing toggle.
+ * Injected right after the shapes menu so the tools read shape -> connector ->
+ * routing, and rendered unconditionally: shapes and connectors are part of the
+ * normal toolbar, not a separate diagram mode.
+ * Rendering depends only on the active tool and the routing pref, never on the
+ * selection, so a selection change never re-renders the toolbar.
+ */
+export function flowDiagramRowHtml(board) {
+        const routing = board.prefs?.routing === 'elbow' ? 'elbow' : 'straight';
+        const connActive = board.activeTool === 'connector';
+        return '<span class="format-toolbar-sep" aria-hidden="true"></span>'
+            + '<button type="button" class="btn btn--compact btn--icon' + (connActive ? ' active' : '') + '" data-flow-tool="connector" id="draw-tool-connector" title="Connector (drag from shape to shape)" aria-label="Connector" aria-pressed="' + (connActive ? 'true' : 'false') + '">' + DRAWING_ICONS.arrow + '</button>'
+            + '<button type="button" class="btn btn--compact btn--icon' + (routing === 'elbow' ? ' active' : '') + '" id="draw-flow-routing" title="Connector routing: ' + routing + '" aria-label="Toggle elbow routing" aria-pressed="' + (routing === 'elbow' ? 'true' : 'false') + '">' + (routing === 'elbow' ? DRAWING_ICONS.connectorElbow : DRAWING_ICONS.line) + '</button>';
 }
 
-export function stepFlowchartGrid(board, delta) {
-        const steps = [8, 12, 16, 24, 32, 48];
-        const grid = board.flowchartGrid();
+/**
+ * Meta-row grid controls: snap toggle + grid density stepper. The one grid pref
+ * drives the visible background, shape snapping and connector snapping, so it
+ * sits with the page-level controls instead of in a diagram-only row.
+ */
+export function flowGridControlsHtml(board) {
+        const grid = board.canvasGrid();
+        const snapOn = grid.snap === true;
+        return '<span class="format-toolbar-sep" aria-hidden="true"></span>'
+            + '<button type="button" class="btn btn--compact btn--icon' + (snapOn ? ' active' : '') + '" id="draw-flow-snap" title="Snap to grid" aria-label="Snap to grid" aria-pressed="' + (snapOn ? 'true' : 'false') + '">' + DRAWING_ICONS.gridSnap + '</button>'
+            + '<span class="drawing-brush-size" aria-label="Grid size">'
+            + '<button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-flow-grid-minus" title="Coarser grid" aria-label="Coarser grid">' + ACTION_ICONS.minus + '</button>'
+            + '<span class="drawing-brush-size__value" id="draw-flow-grid-size" aria-live="polite">' + grid.size + 'px</span>'
+            + '<button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-flow-grid-plus" title="Finer grid" aria-label="Finer grid">' + ACTION_ICONS.plus + '</button>'
+            + '</span>';
+}
+
+/** Step the shared grid density through the allowed sizes. */
+export function stepCanvasGrid(board, delta) {
+        const steps = FLOWCHART_GRID_STEPS;
+        const grid = board.canvasGrid();
         let idx = steps.indexOf(grid.size);
         if (idx < 0) {
             let best = 0;
@@ -398,8 +387,7 @@ export function stepFlowchartGrid(board, delta) {
         }
         const next = steps[Math.max(0, Math.min(steps.length - 1, idx + delta))];
         if (next === grid.size) return;
-        board.persistFlowchartGrid({ size: next });
-        board.redrawBackground();
+        board.persistCanvasGrid({ size: next });
         board.renderToolbar();
 }
 
@@ -418,10 +406,9 @@ export function renderToolbar(board) {
         const pageCount = board.doc.pages.length;
         const canPrev = pageIdx > 0;
         const canNext = pageIdx >= 0 && pageIdx < pageCount - 1;
-        const exitBtn = (board.isNoteCanvasMode || board.isFlowchartMode)
+        const exitBtn = board.isNoteCanvasMode
             ? `<button type="button" class="btn btn--compact btn--icon" id="draw-back-to-note" title="Back to note" aria-label="Back to note">${ACTION_ICONS.viewFree}</button>`
             : `<button type="button" class="btn btn--compact btn--icon" id="draw-exit-drawing" title="Exit drawing mode" aria-label="Exit drawing mode">${ACTION_ICONS.viewFree}</button>`;
-        const flowchartRow = board.isFlowchartMode ? board.flowchartToolbarRowHtml() : '';
 
         board.toolbarEl.innerHTML = `
             <div class="drawing-toolbar-row">
@@ -446,6 +433,7 @@ export function renderToolbar(board) {
                     <span class="drawing-dropdown-icon">${board.shapeTriggerIcon()}</span>
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
+                ${flowDiagramRowHtml(board)}
                 <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
                 <button type="button" class="btn btn--compact btn--icon ${isCropActive ? 'active' : ''}" id="draw-crop" title="Crop image — drag the frame edges, drag back out to restore" aria-label="Crop image" aria-pressed="${isCropActive ? 'true' : 'false'}">${DRAWING_ICONS.crop}</button>
                 <button type="button" class="btn btn--compact btn--icon ${board.isLassoActive ? 'active' : ''}" id="draw-lasso" title="Rectangle select" aria-label="Rectangle select" aria-pressed="${board.isLassoActive ? 'true' : 'false'}">${DRAWING_ICONS.lasso}</button>
@@ -481,8 +469,8 @@ export function renderToolbar(board) {
                     <button type="button" class="btn btn--compact btn--icon" id="draw-page-next" title="Next page" aria-label="Next page" ${canNext ? '' : 'disabled'}>${DRAWING_ICONS.pageNext}</button>
                     <button type="button" class="btn btn--compact btn--icon" id="draw-page-add" title="Add page" aria-label="Add page">${DRAWING_ICONS.pageAdd}</button>
                 </span>
+                ${flowGridControlsHtml(board)}
             </div>
-            ${flowchartRow}
         `;
         board.bindToolbar();
         board.updateZoomLevel();
@@ -614,72 +602,34 @@ export function bindToolbar(board) {
             board.toggleLassoMode();
         });
 
-        // Flowchart row: shape tools, connector routing, labels, snap + grid density
+        // Diagram controls: connector tool, routing toggle, snap + grid density.
         board.toolbarEl.querySelectorAll('[data-flow-tool]')?.forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 board.setTool(btn.dataset.flowTool);
+                board.renderToolbar();
             });
         });
         q('#draw-flow-routing')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            board.flowchartRouting = board.flowchartRouting === 'elbow' ? 'straight' : 'elbow';
-            if (board.activeTool === 'connector') board.renderToolbar();
-            else board.renderToolbar();
-            showAppToast(board.flowchartRouting === 'elbow' ? 'Connectors: elbow routing' : 'Connectors: straight routing');
+            const next = (board.prefs?.routing === 'elbow') ? 'straight' : 'elbow';
+            board.persistCanvasRouting(next);
+            board.renderToolbar();
+            board.requestRedraw();
+            showAppToast(next === 'elbow' ? 'Connectors: elbow routing' : 'Connectors: straight routing');
         });
         q('#draw-flow-snap')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            const grid = board.flowchartGrid();
-            board.persistFlowchartGrid({ snap: !(grid.snap !== false) });
+            board.persistCanvasGrid({ snap: board.canvasGrid().snap !== true });
             board.renderToolbar();
         });
         q('#draw-flow-grid-minus')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            board.stepFlowchartGrid(-1);
+            board.stepCanvasGrid(-1);
         });
         q('#draw-flow-grid-plus')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            board.stepFlowchartGrid(1);
-        });
-        q('#draw-flow-grid-type')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const order = ['dots', 'grid', 'graph'];
-            const grid = board.flowchartGrid();
-            const next = order[(order.indexOf(grid.type) + 1) % order.length];
-            board.persistFlowchartGrid({ type: next });
-            board.setBackground(next);
-        });
-        q('#draw-flow-label-edit')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            board.editSelectedFlowchartLabel();
-        });
-        q('#draw-flow-label-smaller')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            board.nudgeSelectedFlowchartLabel(-2);
-        });
-        q('#draw-flow-label-larger')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            board.nudgeSelectedFlowchartLabel(2);
-        });
-
-        // Connector stroke color — opens the shared color picker, persists to the diagram.
-        q('#draw-flow-connector-color')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            board.openFlowchartColorPicker(e.currentTarget);
-        });
-        q('#draw-flow-connector-smaller')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            board.adjustFlowchartWidth(-1);
-        });
-        q('#draw-flow-connector-larger')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            board.adjustFlowchartWidth(1);
-        });
-        // Label color — opens the shared color picker, persists to the selected label.
-        q('#draw-flow-label-color')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            board.openFlowLabelColorPicker(e.currentTarget);
+            board.stepCanvasGrid(1);
         });
 }
 
@@ -688,35 +638,4 @@ export function updateToolbarState(board) {
         board.toolbarEl.querySelector('#draw-undo')?.toggleAttribute('disabled', !board.history.canUndo);
         board.toolbarEl.querySelector('#draw-redo')?.toggleAttribute('disabled', !board.history.canRedo);
         board.updatePointerWidthLabel();
-        board.updateFlowLabelControls();
-}
-
-    /**
-     * Keep the flowchart label group honest: text actions need a selected shape
-     * or connector, and A-/A+ clamp at the label size bounds.
-     */
-export function updateFlowLabelControls(board) {
-        if (!board.toolbarEl) return;
-        const group = board.toolbarEl.querySelector('[data-flow-label-group]');
-        if (!group) return;
-        const target = board.flowLabelTargetShape();
-        const hasTarget = !!target;
-        const size = board.flowLabelFontSize();
-        group.querySelector('#draw-flow-label-edit')?.toggleAttribute('disabled', !hasTarget);
-        group.querySelector('#draw-flow-label-smaller')?.toggleAttribute('disabled', !hasTarget || size <= FLOW_LABEL_MIN);
-        group.querySelector('#draw-flow-label-larger')?.toggleAttribute('disabled', !hasTarget || size >= FLOW_LABEL_MAX);
-        const readout = group.querySelector('#draw-flow-label-size');
-        if (readout) readout.textContent = size + 'px';
-        // Label color chip reflects the selected label (or the diagram default).
-        const labelChip = group.querySelector('#draw-flow-label-color');
-        if (labelChip) {
-            const color = (target?.label?.color || board.flowchartColor());
-            labelChip.style.setProperty('--chip-color', color);
-            const swatch = labelChip.querySelector('.drawing-color-chip');
-            if (swatch) swatch.style.background = color;
-            labelChip.toggleAttribute('disabled', !hasTarget);
-        }
-        // Connector width readout always reflects the diagram setting.
-        const connWidth = board.toolbarEl.querySelector('#draw-flow-connector-width');
-        if (connWidth) connWidth.textContent = board.flowchartWidth() + 'px';
 }

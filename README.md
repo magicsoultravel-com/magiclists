@@ -332,8 +332,8 @@ Two details are worth copying and one is worth avoiding:
 
 The lazy imports needed the same depth fix as `paneMarkup.js` and `panes.js`
 (`./plannerUi.js`, `./drawingBoard.js`, `./drawingToolbarChrome.js`,
-`./noteAttachmentsUi.js`, `./toast.js`, `./mediaLibraryOverlay.js`,
-`./flowchartUi.js`). Nine new suites came out of the split — `magicFocusModel`,
+`./noteAttachmentsUi.js`, `./toast.js`, `./mediaLibraryOverlay.js`). Nine new
+suites came out of the split — `magicFocusModel`,
 `magicFocusLayout`, `magicFocusPaneMarkup`, `magicFocusSetup`, `magicFocusPanes`,
 `magicFocusSplitters`, `magicFocusRender`, `magicFocusLifecycle` and
 `magicFocusFacade` — taking the file from no coverage of its internals to 125 tests

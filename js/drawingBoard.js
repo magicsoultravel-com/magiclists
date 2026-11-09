@@ -120,12 +120,9 @@ export const DrawingBoard = {
     activeNoteId: null,
     isNoteCanvasMode: false,
     noteCanvasItem: null,
-    // Flowchart mode state (per-note diagram profile on top of the canvas engine)
-    isFlowchartMode: false,
-    flowchartItem: null,
-    flowchartRouting: 'straight',
-    flowchartColorOpen: false,
-    flowLabelColorOpen: false,
+    // Shape/connector state (always on: shapes, connectors and inline labels)
+    /** Memoized {(source, list)} of shape strokes, keyed on the strokes array. */
+    flowShapesCache: null,
     /** Live connector endpoint drag: { conn, end:'from'|'to', moved:false } */
     flowEndpointDrag: null,
     /** Live connector drag: { x, y, from: {shapeId,port}|null, hover: {...}|null } */
@@ -142,52 +139,16 @@ export const DrawingBoard = {
 
     async activateForNote(item) { return LifecycleSession.activateForNote(this, item); },
 
-    /**
-     * Flowchart edit mode: per-note diagram on the same canvas engine.
-     * Forces dot-square grid + snap on first open; keeps full magicCanvas suite.
-     * @param {object} item note with item.flowchart
-     */
-    async openNoteFlowchart(item) { return LifecycleSession.openNoteFlowchart(this, item); },
+    /** Canvas grid preference: { size, snap } shared by shapes, connectors and BG. */
+    canvasGrid() { return FlowSession.canvasGrid(this); },
 
-    flowchartGrid() { return FlowSession.flowchartGrid(this); },
+    /** Persist a grid patch (size/snap) into the shared drawing prefs. */
+    persistCanvasGrid(patch) { return FlowSession.persistCanvasGrid(this, patch); },
 
-    /** Active flowchart stroke color, persisted per diagram. */
-    flowchartColor() { return FlowSession.flowchartColor(this); },
+    /** Persist the connector routing style ('straight' | 'elbow'). */
+    persistCanvasRouting(routing) { return FlowSession.persistCanvasRouting(this, routing); },
 
-    /** Active flowchart stroke width, persisted per diagram. */
-    flowchartWidth() { return FlowSession.flowchartWidth(this); },
-
-    /** Set the flowchart stroke color on the live item + the toolbar chip. */
-    persistFlowchartColor(color) { return FlowSession.persistFlowchartColor(this, color); },
-
-    /** Set the flowchart stroke width on the live item + the toolbar readout. */
-    persistFlowchartWidth(width) { return FlowSession.persistFlowchartWidth(this, width); },
-
-    /** Shared persist helper for flowchart prefs that live on item.flowchart. */
-    persistFlowchartPref(patch) { return FlowSession.persistFlowchartPref(this, patch); },
-
-    /**
-     * Flowchart stroke color picker. Same chrome as the brush color rollout but
-     * persists to item.flowchart.flowchartColor so every shape and connector
-     * repaints consistently.
-     */
-    openFlowchartColorPicker(anchor) { return FlowSession.openFlowchartColorPicker(this, anchor); },
-
-    /**
-     * Label color picker. Persists to the selected shape/connector's label so a
-     * label can be tinted independently of the stroke.
-     */
-    openFlowLabelColorPicker(anchor) { return FlowSession.openFlowLabelColorPicker(this, anchor); },
-
-    /**
-     * Adjust the flowchart stroke width (1-16px, snapped to the allowed steps).
-     * @param {number} delta
-     */
-    adjustFlowchartWidth(delta) { return FlowSession.adjustFlowchartWidth(this, delta); },
-
-    async persistFlowchartGrid(patch) { return FlowSession.persistFlowchartGrid(this, patch); },
-
-    /** True when the given tool draws a flowchart shape. */
+    /** True when the given tool draws a shape (all drag shapes but the connector). */
     isFlowShape(tool) { return FlowSession.isFlowShape(this, tool); },
 
     /** True when the given tool drags a flowchart connector. */
@@ -235,11 +196,6 @@ export const DrawingBoard = {
     hitFlowEndpoint(conn, x, y) { return FlowSession.hitFlowEndpoint(this, conn, x, y); },
 
     /**
-     * Flowchart overlay: live connector drag with its port magnet, plus port dots
-     * on every shape while connecting so targets are discoverable.
-     */
-    
-    /**
      * Test if pointer is over a connector elbow bend point (within tolerance).
      * Returns { kind: 'bend', connector, point: {x,y} } or null.
      */
@@ -254,14 +210,14 @@ export const DrawingBoard = {
     renderFlowBendPreview() { return FlowSession.renderFlowBendPreview(this); },
 
     /**
-     * Clear the live bend preview state.
-     */
-    clearFlowBendPreview() { return FlowSession.clearFlowBendPreview(this); },
-
-    /**
      * Called on pointerdown over a connector bend: start the drag capture.
+     * Returns false when the pointer is not on a bend, so the caller can fall
+     * through to normal drawing.
      */
     startFlowBendDrag(x, y) { return FlowSession.startFlowBendDrag(this, x, y); },
+
+    /** Called on pointermove while a bend is being dragged. */
+    moveFlowBendDrag(x, y) { return FlowSession.moveFlowBendDrag(this, x, y); },
 
     /**
      * Called on pointerup after starting a bend drag: commit the new midpoint.
@@ -269,12 +225,8 @@ export const DrawingBoard = {
     finishFlowBendDrag() { return FlowSession.finishFlowBendDrag(this); },
 
     /**
-     * Bind bend-drag pointer events into the canvas overlay.
-     */
-    bindFlowBendEvents() { return FlowSession.bindFlowBendEvents(this); },
-
-    /**
-     * Called each render to draw live bend preview and update bend-hit state.
+     * Called each render to draw the live bend ghost, port dots and endpoint
+     * handles above the strokes.
      */
     renderFlowchartOverlays() { return FlowSession.renderFlowchartOverlays(this); },
 
@@ -311,7 +263,6 @@ export const DrawingBoard = {
     finishFlowEndpointDrag() { return FlowSession.finishFlowEndpointDrag(this); },
 
     /**
-     * Commit the in-flight connector drag.    /**
      * Commit the in-flight connector drag.
      * Attached-to-port when the pointer lands inside the magnet radius, otherwise
      * a free-floating straight arrow. Self-loops are rejected; tiny drags dropped.
@@ -320,26 +271,12 @@ export const DrawingBoard = {
     /**
      * Inline contentEditable editor for the label of a shape/connector.
      * Commits on blur or Enter, clears on Escape, and pushes a single undo step
-     * so label edits never tear the shape and its text apart.
+     * so label edits never tear the shape and its text apart. Empty text on an
+     * existing label deletes it in the same undo step.
      */
     flowEditLabel(target) { return FlowSession.flowEditLabel(this, target); },
 
     flowCloseLabel() { return FlowSession.flowCloseLabel(this); },
-
-    /**
-     * The stroke the label toolbar acts on: the open editor's target, else the
-     * current selection when it is a flowchart shape/connector.
-     */
-    flowLabelTargetShape() { return FlowSession.flowLabelTargetShape(this); },
-
-    /** Current label size of the toolbar target, clamped to the allowed range. */
-    flowLabelFontSize() { return FlowSession.flowLabelFontSize(this); },
-
-    /** Toolbar "text" action: open the label editor on the selection. */
-    editSelectedFlowchartLabel() { return FlowSession.editSelectedFlowchartLabel(this); },
-
-    /** Toolbar A- / A+: resize the selected shape's label as one undo step. */
-    nudgeSelectedFlowchartLabel(delta) { return FlowSession.nudgeSelectedFlowchartLabel(this, delta); },
 
     /**
      * Request exit from note-canvas. App owns deactivate via note:canvas_draw_exited
@@ -348,15 +285,8 @@ export const DrawingBoard = {
     exitNoteCanvas() { return LifecycleSession.exitNoteCanvas(this); },
 
     /**
-     * Request exit from flowchart mode. Reuses note:canvas_draw_exited so the
-     * app owns teardown exactly as it does for note-canvas (single flush path).
-     */
-    exitFlowchart() { return LifecycleSession.exitFlowchart(this); },
-
-    /**
-     * Toolbar "Back to note" routing. Each mode has its own exit because the
-     * guards differ (isNoteCanvasMode vs isFlowchartMode); calling the wrong one
-     * early-returns and strands the user in drawing mode.
+     * Toolbar "Back to note" routing. Note-canvas is the only note-scoped session
+     * left; the workspace exit is a plain mode switch.
      */
     exitFromToolbar() { return LifecycleSession.exitFromToolbar(this); },
 
@@ -791,9 +721,7 @@ export const DrawingBoard = {
 
     handleBackgroundMenu(id) { return ToolbarSession.handleBackgroundMenu(this, id); },
 
-    flowchartToolbarRowHtml() { return ToolbarSession.flowchartToolbarRowHtml(this); },
-
-    stepFlowchartGrid(delta) { return ToolbarSession.stepFlowchartGrid(this, delta); },
+    stepCanvasGrid(delta) { return ToolbarSession.stepCanvasGrid(this, delta); },
 
     renderToolbar() { return ToolbarSession.renderToolbar(this); },
 
@@ -802,12 +730,6 @@ export const DrawingBoard = {
     bindToolbar() { return ToolbarSession.bindToolbar(this); },
 
     updateToolbarState() { return ToolbarSession.updateToolbarState(this); },
-
-    /**
-     * Keep the flowchart label group honest: text actions need a selected shape
-     * or connector, and A-/A+ clamp at the label size bounds.
-     */
-    updateFlowLabelControls() { return ToolbarSession.updateFlowLabelControls(this); },
 
     handleKeydown(e) { return InputSession.handleKeydown(this, e); },
 

@@ -8,7 +8,6 @@ import {
 } from '../drawingBoardCore.js';
 import * as ClipboardSession from '../drawingBoardClipboard.js';
 import { getStrokesBounds } from '../lassoGeometry.js';
-import { showAppToast } from '../toast.js';
 import {
     dist2,
     thinStrokePoints,
@@ -32,12 +31,17 @@ export function onPointerDown(board, e) {
         return;
     }
 
+    // Elbow bend grab: the pointer must sit on the bend itself before this
+    // steals the gesture, so ordinary drawing on a selected connector still
+    // works. Runs before the endpoint grab so a bend never starts an endpoint drag.
+    if (board.flowBendDrag === null && board.startFlowBendDrag(x, y)) return;
+
     // Connector endpoint grab: when exactly one connector is selected and the
     // pointer lands on one of its endpoints, start dragging that endpoint so
     // the origin/terminus can be re-attached to a different port. Takes
     // priority over the lasso drag that would otherwise start for any click
     // inside the connector's bounding box.
-    if (board.isFlowchartMode && board.selectedStrokes.size === 1) {
+    if (board.selectedStrokes.size === 1) {
         const only = board.getSelectedStrokesArray()[0];
         if (only && only.flowchartKind === 'connector') {
             const hitEnd = board.hitFlowEndpoint(only, x, y);
@@ -64,21 +68,18 @@ export function onPointerDown(board, e) {
 
     // Rectangle marquee (lasso mode or pointer select tool)
     if (board.isLassoActive || board.activeTool === 'pointer') {
-        // In flowchart mode a click picks the shape/connector under the cursor so
-        // labels and reroutes have a target; dragging still falls through to marquee.
-        if (board.isFlowchartMode && !board.isLassoActive) {
+        // A click picks the shape/connector under the cursor so double-click
+        // labels and reroutes have a target; dragging still falls through to
+        // marquee. Selection never repaints the toolbar (no selection chrome).
+        if (!board.isLassoActive) {
             const hit = board.flowHit(x, y);
             if (hit) {
                 board.selectedStrokes.clear();
                 board.selectedStrokes.add(hit);
                 board.startLassoDrag(x, y);
-                board.renderToolbar();
                 return;
             }
-            if (board.selectedStrokes.size) {
-                board.selectedStrokes.clear();
-                board.renderToolbar();
-            }
+            if (board.selectedStrokes.size) board.selectedStrokes.clear();
         }
         // Keep prior selection visible until endBoxSelect commits the replacement
         board.beginBoxSelect(x, y);
@@ -86,13 +87,10 @@ export function onPointerDown(board, e) {
     }
 
     if (board.activeTool === 'text') {
-        if (board.isFlowchartMode) {
-            // Flowchart text edits the selected shape instead of dropping a loose note.
-            const target = board.flowHit(x, y);
-            if (target) { board.flowEditLabel(target); return; }
-            showAppToast('Click a shape to add text');
-            return;
-        }
+        // Text on a shape/connector edits that label; empty canvas drops a
+        // free-floating text box exactly as before.
+        const target = board.flowHit(x, y);
+        if (target) { board.flowEditLabel(target); return; }
         board.placeTextBox(x, y);
         return;
     }
@@ -147,14 +145,9 @@ export function onPointerDown(board, e) {
             x0: anchor.x, y0: anchor.y, x1: anchor.x, y1: anchor.y
         };
         if (board.isFlowShape(board.activeTool)) {
+            // Shapes are connector targets and accept inline labels; the stroke
+            // colour/width comes from the active brush, like every other stroke.
             preview.flowchartKind = 'shape';
-            // Flowchart strokes use the diagram's own color/width so a palette
-            // change repaints every shape and connector consistently.
-            preview.color = board.flowchartColor();
-            preview.width = board.flowchartWidth();
-            // No label yet: drawFlowchartLabel skips empty labels, so text only
-            // appears once the user actually types something.
-            preview.label = null;
         }
         board.shapePreview = preview;
     }
@@ -176,6 +169,13 @@ export function onPointerMove(board, e) {
     if (board.cropState?.mode) {
         const cropPt = board.clientToCanvas(e.clientX, e.clientY);
         board.moveCropGesture(cropPt.x, cropPt.y);
+        return;
+    }
+
+    // Live connector bend drag
+    if (board.flowBendDrag) {
+        const pt = board.clientToCanvas(e.clientX, e.clientY);
+        board.moveFlowBendDrag(pt.x, pt.y);
         return;
     }
 
@@ -265,7 +265,13 @@ export function onPointerUp(board, e) {
         return;
     }
 
-    // Commit the flowchart connector drag
+    // Commit a connector bend drag
+    if (board.flowBendDrag) {
+        board.finishFlowBendDrag();
+        return;
+    }
+
+    // Commit the connector drag
     if (board.flowConnect) {
         board.commitFlowConnect();
         return;

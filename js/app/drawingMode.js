@@ -1,4 +1,4 @@
-/** @module {"owns":"the workspace-mode switches - notes board, file cabinet, note-canvas and flowchart - plus leaving drawing when the focus editor opens and migrating a freeform overlay layout on the way out","related":["../app.js","state.js","listeners.js","../drawingBoard.js"],"events":["board:visibility_changed","workspace:mode_changed"]} */
+/** @module {"owns":"the workspace-mode switches - notes board, file cabinet and note-canvas - plus leaving drawing when the focus editor opens and migrating a freeform overlay layout on the way out","related":["../app.js","state.js","listeners.js","../drawingBoard.js"],"events":["board:visibility_changed","workspace:mode_changed"]} */
 import { BoardOverlay } from '../boardOverlay.js';
 import { DesktopDock } from '../desktopDockComponent.js';
 import { DesktopZoom } from '../desktopZoom.js';
@@ -76,23 +76,6 @@ export async function enterNoteCanvasMode(app, item) {
     drawBtn?.classList.add('active');
     DesktopZoom.apply({ enabled: false });
     await DrawingBoard.activateForNote(live);
-    app.updateFabVisibility();
-}
-
-export async function enterFlowchartMode(app, item) {
-    if (!item?.id) return;
-    // Bind to the live AppState note (Shared SoT) like enterNoteCanvasMode.
-    const live = AppState.items.find((i) => i.id === item.id) || item;
-    AppState.workspaceMode = 'drawing';
-    DesktopDock.setSuppressed(true);
-    const shell = document.getElementById('workspace-shell');
-    const canvas = document.getElementById('app-canvas');
-    const drawBtn = document.getElementById('btn-drawing-mode');
-    shell?.setAttribute('data-drawing-mode', '');
-    canvas?.classList.add('is-hidden');
-    drawBtn?.classList.add('active');
-    DesktopZoom.apply({ enabled: false });
-    await DrawingBoard.openNoteFlowchart(live);
     app.updateFabVisibility();
 }
 

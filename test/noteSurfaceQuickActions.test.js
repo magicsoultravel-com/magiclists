@@ -19,8 +19,8 @@ describe('note quick actions · board surface', () => {
     it('renders the full board toolbar with a toggle, not a close button', async () => {
         const html = await board({ id: 'n1' });
 
-        assert.match(html, /class="card-actions" data-action-count="13" data-surface="board"/);
-        for (const cls of ['popout', 'draw', 'planner', 'flowchart', 'cal', 'emoji', 'copy',
+        assert.match(html, /class="card-actions" data-action-count="12" data-surface="board"/);
+        for (const cls of ['popout', 'draw', 'planner', 'cal', 'emoji', 'copy',
             'note-package', 'pin', 'color', 'attach', 'hide', 'edit', 'toggle']) {
             assert.ok(has(html, cls), `board toolbar is missing ${cls}`);
         }
@@ -42,7 +42,7 @@ describe('note quick actions · board surface', () => {
     it('adds a drag handle only when the card is draggable and unpinned', async () => {
         const draggable = await board({}, { showDrag: true });
         assert.ok(has(draggable, 'drag'));
-        assert.match(draggable, /data-action-count="14"/);
+        assert.match(draggable, /data-action-count="13"/);
 
         const pinned = await board({}, { showDrag: true, pinned: true });
         assert.equal(has(pinned, 'drag'), false, 'a pinned card cannot be dragged');
@@ -74,8 +74,8 @@ describe('note quick actions · modal and popout surfaces', () => {
     it('drops the board-only actions inside a popout window', async () => {
         const html = await board({ id: 'n1' }, { surface: 'popout' });
 
-        assert.match(html, /data-surface="popout" data-action-count|data-action-count="8" data-surface="popout"/);
-        for (const cls of ['popout', 'draw', 'planner', 'flowchart', 'pin', 'hide', 'edit', 'drag', 'toggle']) {
+        assert.match(html, /data-surface="popout" data-action-count|data-action-count="7" data-surface="popout"/);
+        for (const cls of ['popout', 'draw', 'planner', 'pin', 'hide', 'edit', 'drag', 'toggle']) {
             assert.equal(has(html, cls), false, `popout toolbar should not render ${cls}`);
         }
         assert.ok(has(html, 'window-size'), 'popout collapses its own window instead');
@@ -86,7 +86,7 @@ describe('note quick actions · modal and popout surfaces', () => {
         const html = await board({ id: 'n1' }, { poppedOut: true });
 
         assert.match(html, /class="card-act card-act--popin" title="Pop in \(return note to board\)"/);
-        assert.match(html, /data-action-count="14"/, 'the pop-in button counts');
+        assert.match(html, /data-action-count="13"/, 'the pop-in button counts');
         assert.match(html, /card-act--popout is-active" data-note-id="n1" title="Focus popout window"/);
     });
 });
