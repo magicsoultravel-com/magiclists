@@ -35,6 +35,7 @@ import {
 import * as FlowSession from './drawingBoardFlowchart.js';
 import * as CropSession from './drawingBoardCrop.js';
 import * as SelectSession from './drawingBoardSelection.js';
+import * as TextSession from './drawingBoard/text.js';
 import * as ToolbarSession from './drawingBoardToolbar.js';
 import * as ClipboardSession from './drawingBoardClipboard.js';
 
@@ -90,6 +91,8 @@ export const DrawingBoard = {
     brandNotesText: 'magicNotes',
     colorRolloutOpen: false,
     bgColorRolloutOpen: false,
+    /** Separate rollout state so the text-colour picker survives toolbar repaints. */
+    textColorRolloutOpen: false,
 
     // Marquee / rectangle select state (lasso button = rect marquee mode)
     isLassoActive: false,
@@ -503,6 +506,59 @@ export const DrawingBoard = {
     updateColorChip(color) { return ToolbarSession.updateColorChip(this, color); },
 
     toggleColorRollout(anchor) { return ToolbarSession.toggleColorRollout(this, anchor); },
+
+    /** Text style pref ({ color, size } in CSS px) used by new labels/text boxes. */
+    textStyle() { return TextSession.textStyle(this); },
+
+    /** CSS-px size the text stepper shows for the current selection. */
+    currentTextSize() { return TextSession.currentTextSize(this); },
+
+    /** Allowed CSS-px range for the current selection (labels cap lower). */
+    textSizeRange() { return TextSession.textSizeRange(this); },
+
+    /**
+     * Text colour: remembered for future text, applied to the current selection.
+     * @param {string} color
+     * @param {{rerender?: boolean}} [opts]
+     */
+    setTextColor(color, { rerender = true } = {}) { return TextSession.setTextColor(this, color, { rerender }); },
+
+    setTextSize(size) {
+        const changed = TextSession.setTextSize(this, size);
+        this.updateTextSizeControls();
+        return changed;
+    },
+
+    stepTextSize(delta) {
+        const changed = TextSession.stepTextSize(this, delta);
+        this.updateTextSizeControls();
+        return changed;
+    },
+
+    updateTextColorChip(color) { return ToolbarSession.updateTextColorChip(this, color); },
+
+    updateTextSizeControls() { return ToolbarSession.updateTextSizeControls(this); },
+
+    openTextColorPicker(anchor) { return ToolbarSession.openTextColorPicker(this, anchor); },
+
+    /**
+     * Text tool entry point: a click on a shape/connector edits its label, bare
+     * canvas drops a text box (see InputSession). Clicking again returns to the
+     * pointer instead of leaving an invisible mode armed.
+     */
+    openTextTool() {
+        if (this.activeTool === 'text') { this.setTool('pointer'); return; }
+        this.setTool('text');
+        this.showTextTip();
+    },
+
+    /** One-shot hint: text boxes on bare canvas, labels on shapes. */
+    showTextTip() {
+        if (this.prefs.textTipShown) return;
+        this.prefs.textTipShown = true;
+        writePrefs(this.prefs);
+        showAppToast('Text: click bare canvas for a text box, or click a shape to edit its label');
+    },
 
     onPointerDown(e) { return InputSession.onPointerDown(this, e); },
 

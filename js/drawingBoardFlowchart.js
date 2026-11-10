@@ -13,6 +13,7 @@ import { showAppToast } from './toast.js';
 import { createId } from './canvasDocument.js';
 import { isDragShape } from './drawingBoardCore.js';
 import { writePrefs } from './drawingBoard/prefs.js';
+import { textStyle } from './drawingBoard/text.js';
 
 /**
  * Canvas grid preference. Shapes, connectors and the visible background all read
@@ -502,6 +503,14 @@ export function flowEditLabel(board, target) {
     const boxW = Math.abs(target.x1 - target.x0);
     const boxH = Math.abs(target.y1 - target.y0);
     const existing = target.label && target.label.text ? String(target.label.text) : '';
+    const hasPrev = !!(target.label && String(target.label.text || '').trim());
+    const textPref = textStyle(board);
+    // A brand-new label takes the text-colour pref; an existing one keeps
+    // whatever the painter already draws it with (its own colour, else the
+    // outline colour) so editing the words never silently restyles it.
+    const labelFill = hasPrev
+        ? (target.label.color || target.color || textPref.color)
+        : textPref.color;
     // An explicit stored size always wins; only a brand-new label is fitted to
     // the box, and fitting never dips below the readable floor.
     const fontSize = target.label && target.label.fontSize
@@ -515,9 +524,9 @@ export function flowEditLabel(board, target) {
     el.spellcheck = false;
     el.dataset.placeholder = 'Type\u2026';
     el.style.fontSize = cssFont + 'px';
-    // Inherit the stroke colour so typed text lands in the same tone the painter
-    // will use; the committed label stores no colour of its own.
-    el.style.color = target.color || '#f8fafc';
+    // Same colour the painter will use for this label, so typed text does not
+    // jump tone when it is committed.
+    el.style.color = labelFill;
 
     if (isConnector) {
         const cx = Number.isFinite(Number(target.midX)) ? Number(target.midX) : (target.x0 + target.x1) / 2;
@@ -553,7 +562,13 @@ export function flowEditLabel(board, target) {
         const text = String(el.innerText || '').replace(/\u00a0/g, ' ').trim();
         const prevLabel = target.label || null;
         const prevJson = JSON.stringify(prevLabel);
-        const nextLabel = text ? { text, fontSize, color: '' } : null;
+        // Existing labels keep their stored colour ('' still means "inherit the
+        // outline"); only a brand-new label is stamped with the text pref. Read
+        // at commit time, not open time, so a pick during the edit still wins.
+        const hadText = !!(prevLabel && String(prevLabel.text || '').trim());
+        const nextLabel = text
+            ? { text, fontSize, color: hadText ? String(prevLabel.color || '') : textStyle(board).color }
+            : null;
         el.remove();
         if (board.flowLabelEl === el) { board.flowLabelEl = null; board.flowLabelTarget = null; }
         if (JSON.stringify(nextLabel) !== prevJson) {

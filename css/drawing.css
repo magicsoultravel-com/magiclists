@@ -386,6 +386,9 @@
     background: rgba(0, 0, 0, 0.15);
     border-radius: 0.2rem;
     white-space: pre-wrap;
+    /* Must match drawTextObject's line advance (fontSize * 1.25), or typed text
+       reflows when the canvas repaints it. */
+    line-height: 1.25;
 }
 
 .canvas-text-box:empty::before {
@@ -514,6 +517,19 @@
     align-items: center;
     gap: 0.1rem;
     flex-shrink: 0;
+}
+
+/* Text styling cluster: tool + text colour + size, grouped so it reads as one
+   control and never gets confused with the brush colour/size next to it. */
+.drawing-text-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+}
+
+.drawing-text-size {
+    margin-inline-start: 0.1rem;
 }
 
 .drawing-brush-size__btn {

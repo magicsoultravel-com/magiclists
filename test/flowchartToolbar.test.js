@@ -10,9 +10,11 @@ import assert from 'node:assert/strict';
 import {
     flowDiagramRowHtml,
     flowGridControlsHtml,
+    textControlsHtml,
     stepCanvasGrid
 } from '../js/drawingBoardToolbar.js';
 import { canvasGrid, renderFlowchartOverlay } from '../js/drawingBoardFlowchart.js';
+import { textStyle, currentTextSize } from '../js/drawingBoard/text.js';
 import { FLOWCHART_GRID_STEPS } from '../js/flowchart.js';
 
 /** Board stub with the shared prefs the string builders read. */
@@ -21,10 +23,15 @@ function makeBoard(overrides = {}) {
         activeTool: overrides.activeTool || 'pointer',
         prefs: {
             grid: { size: overrides.gridSize ?? 24, snap: overrides.snap !== false },
-            routing: overrides.routing || 'elbow'
-        }
+            routing: overrides.routing || 'elbow',
+            text: overrides.text || { color: '#f8fafc', size: 40 }
+        },
+        selectedStrokes: new Set(overrides.selection || [])
     };
     board.canvasGrid = function () { return canvasGrid(this); };
+    board.getSelectedStrokesArray = function () { return Array.from(this.selectedStrokes); };
+    board.textStyle = function () { return textStyle(this); };
+    board.currentTextSize = function () { return currentTextSize(this); };
     return board;
 }
 
@@ -80,6 +87,42 @@ describe('flowGridControlsHtml', () => {
         assert.ok(html.includes('>16px<'), 'readout must show the grid size');
         assert.ok(html.includes('id="draw-flow-grid-minus"'), 'coarser button must be present');
         assert.ok(html.includes('id="draw-flow-grid-plus"'), 'finer button must be present');
+    });
+});
+
+describe('textControlsHtml', () => {
+    it('renders the text tool, colour chip and size stepper', () => {
+        const html = textControlsHtml(makeBoard({ text: { color: '#ff0000', size: 28 } }));
+        assert.ok(html.includes('id="draw-text-tool"'), 'text tool button');
+        assert.ok(html.includes('id="draw-text-color-btn"'), 'text colour button');
+        assert.ok(html.includes('drawing-text-color-chip'), 'chip the picker repaints');
+        assert.ok(html.includes('background:#ff0000'), 'chip shows the text pref, not the brush');
+        assert.ok(html.includes('id="draw-text-size"'), 'size readout');
+        assert.ok(html.includes('>28px<'), 'readout shows the text pref in CSS px');
+        assert.ok(html.includes('id="draw-text-size-smaller"'));
+        assert.ok(html.includes('id="draw-text-size-larger"'));
+    });
+
+    it('marks the text tool pressed only while it is armed', () => {
+        const idle = textControlsHtml(makeBoard());
+        assert.ok(idle.includes('aria-pressed="false"'));
+        const armed = textControlsHtml(makeBoard({ activeTool: 'text' }));
+        assert.ok(armed.includes('aria-pressed="true"'));
+        assert.ok(armed.includes('class="btn btn--compact btn--icon active"'));
+    });
+
+    it('falls back to the pref when no text style is stored yet', () => {
+        const board = makeBoard();
+        board.prefs.text = undefined;
+        const html = textControlsHtml(board);
+        assert.ok(html.includes('>40px<'), '40 CSS px default from the prefs layer');
+        assert.ok(html.includes('background:#f8fafc'));
+    });
+
+    it('shows the selection size, not the pref, when a text box is selected', () => {
+        const box = { id: 't1', tool: 'text', text: 'Hi', fontSize: 60, color: '#f8fafc' };
+        const html = textControlsHtml(makeBoard({ selection: [box], text: { color: '#f8fafc', size: 40 } }));
+        assert.ok(html.includes('>60px<'), 'a selected text box reports its own size');
     });
 });
 

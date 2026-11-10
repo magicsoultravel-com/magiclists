@@ -27,6 +27,7 @@ export function init(board, app) {
         DrawingToolbarMenu.close();
         board.colorRolloutOpen = false;
         board.bgColorRolloutOpen = false;
+        board.textColorRolloutOpen = false;
         requestAnimationFrame(() => board.resize());
     };
     DrawingToolbarChrome.onExpand = () => {
@@ -165,6 +166,7 @@ export async function deactivate(board) {
     DrawingToolbarMenu.close();
     board.colorRolloutOpen = false;
     board.bgColorRolloutOpen = false;
+    board.textColorRolloutOpen = false;
     if (board.brandEl) board.brandEl.textContent = board.brandNotesText;
     board.boardEl?.classList.add('is-hidden');
     board.boardEl?.setAttribute('aria-hidden', 'true');

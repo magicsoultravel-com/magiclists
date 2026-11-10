@@ -93,8 +93,8 @@ trip through the one-row strip (and is re-persisted rather than written as
 
 ## Splitting a big module: facade + session modules
 
-`js/drawingBoard.js` was 1874 lines of one object literal. It is now 939 lines of
-facade plus `js/drawingBoard/{geometry,prefs,history,input,view,document,lifecycle}.js`,
+`js/drawingBoard.js` was 1874 lines of one object literal. It is now a facade
+plus `js/drawingBoard/{geometry,prefs,history,input,view,document,lifecycle,text}.js`,
 and the same shape is the target for the other oversized files. The rules that
 keep it reviewable:
 
@@ -110,10 +110,19 @@ keep it reviewable:
 
 Gate after each extraction: `npm run assets:stamp && node scripts/build-architecture-map.mjs && npm run verify`.
 
+`js/drawingBoard/text.js` is the newest session and the one to copy when adding
+another styling control. Text colour and size live in `prefs.text` in CSS pixels
+(default 40, 8–72) because the toolbar and the `contentEditable` overlay both
+speak CSS px while the painter speaks canvas units. A pick writes the pref
+first — the next label/text box inherits it — and then restyles the current
+selection through a dry run, so a no-op (same colour, size already at the label
+ceiling) pushes no undo entry. Shape labels clamp to `FLOW_LABEL_MAX`, text boxes
+do not, which is why the range is computed per selection instead of disabled.
+
 What deliberately stays in the facade: `init`, the tool and preference setters,
 and the toolbar/DOM orchestration that every entry path needs — the seam the
-sessions call back into. `activate`, `activateForNote` and `openNoteFlowchart`
-still share an identical entry tail (chrome → toolbar mount → brand → aria →
+sessions call back into. `activate` and `activateForNote` still share an
+identical entry tail (chrome → toolbar mount → brand → aria →
 `loadFromDoc` → hand mode → `dataset.tool` → `shrinkInfiniteIfNeeded` →
 `renderToolbar` → `updateZoomLevel` → `resize` → `redraw`); deduping it is its
 own commit, with the lifecycle tests as the safety net.

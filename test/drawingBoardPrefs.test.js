@@ -9,6 +9,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { PREFS_KEY, readPrefs, writePrefs } from '../js/drawingBoard/prefs.js';
+import {
+    TEXT_COLOR_DEFAULT, TEXT_SIZE_DEFAULT, TEXT_SIZE_MIN, TEXT_SIZE_MAX
+} from '../js/drawingBoard/prefs.js';
 import { BRUSH_STYLES, DRAG_SHAPE_TOOLS } from '../js/canvasBrushes.js';
 import { DEFAULT_WIDTH, HIGHLIGHTER_WIDTH } from '../js/drawingBoardCore.js';
 
@@ -97,6 +100,54 @@ describe('drawing board prefs', () => {
             const prefs = readPrefs();
             assert.equal(prefs.activeTool, 'pointer');
             assert.equal(prefs.styles.pen.width, DEFAULT_WIDTH);
+        });
+    });
+
+    it('defaults the text style to 40 CSS px in the default ink colour', () => {
+        withStorage(() => {
+            const prefs = readPrefs();
+            assert.deepEqual(prefs.text, { color: TEXT_COLOR_DEFAULT, size: TEXT_SIZE_DEFAULT });
+            assert.equal(prefs.text.size, 40, '40px matches the old width*4 default');
+            assert.equal(prefs.textTipShown, false);
+        });
+    });
+
+    it('normalises a stored text style instead of trusting it', () => {
+        withStorage((store) => {
+            store.set(PREFS_KEY, JSON.stringify({ text: { color: '  #ff0000  ', size: 999 } }));
+            const prefs = readPrefs();
+            assert.equal(prefs.text.color, '#ff0000', 'colour is trimmed');
+            assert.equal(prefs.text.size, TEXT_SIZE_MAX, 'size clamps to the ceiling');
+        });
+
+        withStorage((store) => {
+            store.set(PREFS_KEY, JSON.stringify({ text: { color: '', size: -12 } }));
+            const prefs = readPrefs();
+            assert.equal(prefs.text.color, TEXT_COLOR_DEFAULT, 'empty colour falls back');
+            assert.equal(prefs.text.size, TEXT_SIZE_MIN, 'size clamps to the floor');
+        });
+
+        withStorage((store) => {
+            store.set(PREFS_KEY, JSON.stringify({ text: { color: 42, size: 'big' } }));
+            const prefs = readPrefs();
+            assert.deepEqual(prefs.text, { color: TEXT_COLOR_DEFAULT, size: TEXT_SIZE_DEFAULT });
+        });
+    });
+
+    it('rounds a fractional text size to a whole CSS px', () => {
+        withStorage((store) => {
+            store.set(PREFS_KEY, JSON.stringify({ text: { size: 33.6 } }));
+            assert.equal(readPrefs().text.size, 34);
+        });
+    });
+
+    it('keeps the one-shot text tip flag across reads', () => {
+        withStorage((store) => {
+            assert.equal(readPrefs().textTipShown, false, 'strict true: a missing flag is off');
+            store.set(PREFS_KEY, JSON.stringify({ textTipShown: 'yes' }));
+            assert.equal(readPrefs().textTipShown, false, 'only a real boolean turns it on');
+            store.set(PREFS_KEY, JSON.stringify({ textTipShown: true }));
+            assert.equal(readPrefs().textTipShown, true);
         });
     });
 });

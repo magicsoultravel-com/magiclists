@@ -44,6 +44,53 @@ export function updateColorChip(board, color) {
         if (btn) btn.style.setProperty('--chip-color', color);
 }
 
+export function updateTextColorChip(board, color) {
+        const chip = board.toolbarEl?.querySelector('.drawing-text-color-chip');
+        const btn = board.toolbarEl?.querySelector('#draw-text-color-btn');
+        if (chip) chip.style.background = color;
+        if (btn) btn.style.setProperty('--chip-color', color);
+}
+
+/**
+ * Text-size readout + stepper state. The value is the *effective* CSS-px size for
+ * the current selection: a homogeneous selection reports its shared size, a
+ * mixed one reports the pref, and a label-only selection caps at the label
+ * painter's ceiling so "+" never looks dead.
+ */
+export function updateTextSizeControls(board) {
+        if (!board.toolbarEl) return;
+        const value = typeof board.currentTextSize === 'function' ? board.currentTextSize() : 40;
+        const range = typeof board.textSizeRange === 'function' ? board.textSizeRange() : { min: 8, max: 72 };
+        const label = board.toolbarEl.querySelector('#draw-text-size');
+        if (label) label.textContent = value + 'px';
+        const smaller = board.toolbarEl.querySelector('#draw-text-size-smaller');
+        const larger = board.toolbarEl.querySelector('#draw-text-size-larger');
+        if (smaller) smaller.disabled = value <= range.min;
+        if (larger) larger.disabled = value >= range.max;
+}
+
+/** Text colour rollout — same picker as the brush, wired to the text pref. */
+export function openTextColorPicker(board, anchor) {
+        if (board.textColorRolloutOpen) {
+            ColorPicker.close();
+            return;
+        }
+        ColorPicker.close();
+        board.colorRolloutOpen = false;
+        board.bgColorRolloutOpen = false;
+        const style = board.textStyle ? board.textStyle() : { color: '#f8fafc' };
+        ColorPicker.open({
+            anchor,
+            presets: PALETTE_UNIFIED,
+            value: style.color,
+            align: 'end',
+            onSelect: (c) => board.setTextColor(c, { rerender: false }),
+            onClose: () => { board.textColorRolloutOpen = false; }
+        });
+        board.textColorRolloutOpen = true;
+        anchor?.setAttribute('aria-expanded', 'true');
+}
+
 export function toggleColorRollout(board, anchor) {
         if (board.colorRolloutOpen) {
             ColorPicker.close();
@@ -371,6 +418,32 @@ export function flowGridControlsHtml(board) {
             + '</span>';
 }
 
+/**
+ * Text styling cluster: text tool, independent text colour and size stepper.
+ * Deliberately separate from the brush colour/size controls — picking a text
+ * colour must not repaint the brush, and brush size has nothing to do with text.
+ * Selection-first: with items selected the controls restyle them, with nothing
+ * selected they only change what the next label/text box gets.
+ */
+export function textControlsHtml(board) {
+        const style = board.textStyle ? board.textStyle() : { color: '#f8fafc', size: 40 };
+        const size = typeof board.currentTextSize === 'function' ? board.currentTextSize() : style.size;
+        const active = board.activeTool === 'text';
+        const sizeTip = 'Text size — shape labels cap at 72 canvas units so they stay inside their box';
+        return '<span class="format-toolbar-sep" aria-hidden="true"></span>'
+            + '<span class="drawing-text-controls" id="draw-text-controls" role="group" aria-label="Text style">'
+            + '<button type="button" class="btn btn--compact btn--icon' + (active ? ' active' : '') + '" id="draw-text-tool" title="Text — click bare canvas for a text box, or a shape to edit its label" aria-label="Text tool" aria-pressed="' + (active ? 'true' : 'false') + '">' + DRAWING_ICONS.text + '</button>'
+            + '<button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-text-color-btn" title="Text colour" aria-label="Text colour" aria-expanded="false" style="--chip-color:' + style.color + '">'
+            + '<span class="drawing-color-chip drawing-text-color-chip" style="background:' + style.color + '"></span>'
+            + '</button>'
+            + '<span class="drawing-brush-size drawing-text-size" aria-label="Text size" title="' + sizeTip + '">'
+            + '<button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-text-size-smaller" title="Smaller text" aria-label="Smaller text">' + ACTION_ICONS.minus + '</button>'
+            + '<span class="drawing-brush-size__value" id="draw-text-size" aria-live="polite" title="' + sizeTip + '">' + size + 'px</span>'
+            + '<button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-text-size-larger" title="Larger text" aria-label="Larger text">' + ACTION_ICONS.plus + '</button>'
+            + '</span>'
+            + '</span>';
+}
+
 /** Step the shared grid density through the allowed sizes. */
 export function stepCanvasGrid(board, delta) {
         const steps = FLOWCHART_GRID_STEPS;
@@ -395,6 +468,7 @@ export function renderToolbar(board) {
         if (!board.toolbarEl) return;
         const wasColorOpen = board.colorRolloutOpen;
         const wasBgColorOpen = board.bgColorRolloutOpen;
+        const wasTextColorOpen = board.textColorRolloutOpen;
         DrawingToolbarMenu.close();
         const brush = board.currentBrush();
         const bgSwatch = board.pageBackgroundSwatch();
@@ -434,6 +508,7 @@ export function renderToolbar(board) {
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
                 ${flowDiagramRowHtml(board)}
+                ${textControlsHtml(board)}
                 <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
                 <button type="button" class="btn btn--compact btn--icon ${isCropActive ? 'active' : ''}" id="draw-crop" title="Crop image — drag the frame edges, drag back out to restore" aria-label="Crop image" aria-pressed="${isCropActive ? 'true' : 'false'}">${DRAWING_ICONS.crop}</button>
                 <button type="button" class="btn btn--compact btn--icon ${board.isLassoActive ? 'active' : ''}" id="draw-lasso" title="Rectangle select" aria-label="Rectangle select" aria-pressed="${board.isLassoActive ? 'true' : 'false'}">${DRAWING_ICONS.lasso}</button>
@@ -477,6 +552,7 @@ export function renderToolbar(board) {
         board.updateToolEcho();
         board.updateNoteToolbarChrome();
         board.updateBrushSizeControls();
+        board.updateTextSizeControls();
         if (wasColorOpen) {
             board.colorRolloutOpen = false;
             const btn = board.toolbarEl.querySelector('#draw-color-btn');
@@ -485,6 +561,10 @@ export function renderToolbar(board) {
             board.bgColorRolloutOpen = false;
             const btn = board.toolbarEl.querySelector('#draw-bg-color-btn');
             if (btn) board.openPageBackgroundPicker(btn);
+        } else if (wasTextColorOpen) {
+            board.textColorRolloutOpen = false;
+            const btn = board.toolbarEl.querySelector('#draw-text-color-btn');
+            if (btn) board.openTextColorPicker(btn);
         }
 }
 
@@ -511,6 +591,23 @@ export function bindToolbar(board) {
         q('#draw-bg-color-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             board.openPageBackgroundPicker(e.currentTarget);
+        });
+        // Text cluster: tool, independent colour and size — never the brush's.
+        q('#draw-text-tool')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            board.openTextTool();
+        });
+        q('#draw-text-color-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            board.openTextColorPicker(e.currentTarget);
+        });
+        q('#draw-text-size-smaller')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            board.stepTextSize(-1);
+        });
+        q('#draw-text-size-larger')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            board.stepTextSize(1);
         });
         q('#draw-zoom-in')?.addEventListener('click', () => { CanvasViewport.stepZoom(0.1); board.persistViewport(); });
         q('#draw-zoom-out')?.addEventListener('click', () => { CanvasViewport.stepZoom(-0.1); board.persistViewport(); });
@@ -638,4 +735,7 @@ export function updateToolbarState(board) {
         board.toolbarEl.querySelector('#draw-undo')?.toggleAttribute('disabled', !board.history.canUndo);
         board.toolbarEl.querySelector('#draw-redo')?.toggleAttribute('disabled', !board.history.canRedo);
         board.updatePointerWidthLabel();
+        // Undo/redo restores both the selection and the items it points at, so
+        // the text readout has to follow.
+        board.updateTextSizeControls?.();
 }

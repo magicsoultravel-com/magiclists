@@ -66,6 +66,8 @@ describe('flowEditLabel', () => {
         const board = Object.create(DrawingBoard);
         board.flowLabelEl = null;
         board.flowLabelTarget = null;
+        // Own prefs object: the suite must not mutate the module-level defaults.
+        board.prefs = { ...DrawingBoard.prefs, text: { color: '#f8fafc', size: 40 } };
         board.selectedStrokes = {
             set: new Set(),
             clear() { this.set.clear(); },
@@ -209,6 +211,59 @@ describe('flowEditLabel', () => {
 
         assert.equal(board.historyPushes, undefined, 'an unchanged label must not add an undo entry');
         assert.equal(board.saves, undefined, 'and must not schedule a save');
+    });
+
+    it('paints a new label in the text-colour pref and stores it', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        board.prefs.text.color = '#38bdf8';
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100, color: '#22c55e', label: null
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+
+        const el = created[0];
+        assert.equal(el.style.color, '#38bdf8', 'editor matches the text pref, not the outline');
+
+        el.innerText = 'New';
+        el.listeners.blur.forEach((fn) => fn());
+        assert.equal(shape.label.color, '#38bdf8', 'the new label keeps the text colour');
+    });
+
+    it('never restyles an existing label when only the words change', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        board.prefs.text.color = '#38bdf8';
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100, color: '#22c55e',
+            label: { text: 'Old', fontSize: 20, color: '#ff0000' }
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+
+        const el = created[0];
+        assert.equal(el.style.color, '#ff0000', 'its own colour, not the pref');
+
+        el.innerText = 'Newer';
+        el.listeners.blur.forEach((fn) => fn());
+        assert.equal(shape.label.color, '#ff0000', 'editing text does not recolour the label');
+    });
+
+    it('falls back to the outline colour for a legacy label with no stored colour', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100, color: '#22c55e',
+            label: { text: 'Old', fontSize: 20, color: '' }
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+        assert.equal(created[0].style.color, '#22c55e', 'matches what the painter draws');
+
+        created[0].innerText = 'Legacy';
+        created[0].listeners.blur.forEach((fn) => fn());
+        assert.equal(shape.label.color, '', 'still inheriting, never silently stamped');
     });
 });
 

@@ -21,6 +21,7 @@ import { CanvasViewport } from './canvasViewport.js';
 import { DRAWING_PREFS_KEY } from './drawingBoardBackup.js';
 import { RESIZE_HANDLE_SIZE, RESIZE_HANDLE_HIT } from './drawingBoardCore.js';
 import { MIN_IMAGE_SIDE } from './canvasImages.js';
+import { textStyle } from './drawingBoard/text.js';
 
 function writePrefs(prefs) {
     try { localStorage.setItem(DRAWING_PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore quota */ }
@@ -69,6 +70,9 @@ export function endBoxSelect(board) {
         board.isBoxSelecting = false;
         board.boxSelectStart = null;
         board.boxSelectCurrent = null;
+        // The text stepper shows the selection's size; refresh it as soon as the
+        // marquee commits so the readout is never stale before the first step.
+        board.updateTextSizeControls?.();
 }
 
     /**
@@ -133,16 +137,18 @@ export function selectStrokesInRect(board, rect) {
 }
 
 export function placeTextBox(board, x, y) {
-        const brush = board.currentBrush();
+        const style = textStyle(board);
         const dpr = window.devicePixelRatio || 1;
+        const fontSize = Math.max(1, Math.round(style.size * dpr));
         const el = document.createElement('div');
         el.className = 'canvas-text-box';
         el.contentEditable = 'true';
         el.dataset.placeholder = 'Type…';
         el.style.left = (x / dpr) + 'px';
         el.style.top = (y / dpr) + 'px';
-        el.style.color = brush.color;
-        el.style.fontSize = Math.max(16, brush.width * 4) + 'px';
+        el.style.color = style.color;
+        // The pref is CSS px; the editor lives in CSS px too, so no dpr math here.
+        el.style.fontSize = style.size + 'px';
         board.textLayer.appendChild(el);
         el.focus();
 
@@ -157,8 +163,8 @@ export function placeTextBox(board, x, y) {
                 tool: 'text',
                 x, y,
                 text,
-                fontSize: Math.max(16, brush.width * 4) * dpr,
-                color: brush.color,
+                fontSize,
+                color: style.color,
                 fontFamily: 'Inter, sans-serif'
             });
             setActiveTexts(board.doc, texts);
