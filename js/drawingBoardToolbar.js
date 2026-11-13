@@ -91,6 +91,69 @@ export function openTextColorPicker(board, anchor) {
         anchor?.setAttribute('aria-expanded', 'true');
 }
 
+/**
+ * Fill swatches for closed shapes. The picker grid is a fixed 4x4 (GRID_SLOTS =
+ * 16) and slices anything longer, so one swatch is traded for "No fill":
+ * '#121214' is a near-duplicate of '#000000', while white stays useful for
+ * diagram boxes.
+ */
+export const SHAPE_FILL_PRESETS = [
+        ...PALETTE_UNIFIED.filter((preset) => preset.value !== '#121214').slice(0, 15),
+        { value: '', label: 'No fill' }
+];
+
+const HEX_FILL = /^#[0-9a-f]{6}$/i;
+
+/** Swatch + button for the shape fill picker ('' renders the "none" slash). */
+export function shapeFillChipHtml(board) {
+        const stored = typeof board.shapeFillColor === 'function'
+            ? board.shapeFillColor()
+            : String(board.prefs?.shapeFill || '').toLowerCase();
+        const fill = HEX_FILL.test(stored) ? stored.toLowerCase() : '';
+        const label = fill || 'No fill';
+        return '<button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-shape-fill-btn" title="Shape fill — ' + label + '" aria-label="Shape fill" aria-expanded="false" style="--chip-color:' + (fill || 'transparent') + '">'
+            + '<span class="drawing-color-chip drawing-shape-fill-chip' + (fill ? '' : ' drawing-shape-fill-chip--none') + '" style="background:' + (fill || 'transparent') + '"></span>'
+            + '</button>';
+}
+
+export function updateShapeFillChip(board, color) {
+        const value = HEX_FILL.test(String(color || '')) ? String(color).toLowerCase() : '';
+        const chip = board.toolbarEl?.querySelector('.drawing-shape-fill-chip');
+        const btn = board.toolbarEl?.querySelector('#draw-shape-fill-btn');
+        if (chip) {
+            chip.style.background = value || 'transparent';
+            chip.classList.toggle('drawing-shape-fill-chip--none', !value);
+        }
+        if (btn) {
+            btn.style.setProperty('--chip-color', value || 'transparent');
+            btn.title = 'Shape fill — ' + (value || 'No fill');
+        }
+}
+
+export function openShapeFillPicker(board, anchor) {
+        if (board.shapeFillRolloutOpen) {
+            ColorPicker.close();
+            return;
+        }
+        ColorPicker.close();
+        board.colorRolloutOpen = false;
+        board.bgColorRolloutOpen = false;
+        board.textColorRolloutOpen = false;
+        const value = typeof board.shapeFillColor === 'function'
+            ? board.shapeFillColor()
+            : String(board.prefs?.shapeFill || '');
+        ColorPicker.open({
+            anchor,
+            presets: SHAPE_FILL_PRESETS,
+            value,
+            align: 'end',
+            onSelect: (c) => board.setShapeFill(c, { rerender: false }),
+            onClose: () => { board.shapeFillRolloutOpen = false; }
+        });
+        board.shapeFillRolloutOpen = true;
+        anchor?.setAttribute('aria-expanded', 'true');
+}
+
 export function toggleColorRollout(board, anchor) {
         if (board.colorRolloutOpen) {
             ColorPicker.close();
@@ -469,11 +532,13 @@ export function renderToolbar(board) {
         const wasColorOpen = board.colorRolloutOpen;
         const wasBgColorOpen = board.bgColorRolloutOpen;
         const wasTextColorOpen = board.textColorRolloutOpen;
+        const wasShapeFillOpen = board.shapeFillRolloutOpen;
         DrawingToolbarMenu.close();
         const brush = board.currentBrush();
         const bgSwatch = board.pageBackgroundSwatch();
-        const isPointerActive = board.activeTool === 'pointer' || board.activeTool === 'brush';
+        const isBrushActive = board.activeTool === 'brush';
         const isEraserActive = board.activeTool === 'eraser';
+        const brushLabel = POINTER_ITEMS.find((item) => item.id === board.activeStyle)?.label || 'Brush';
         const isPanActive = board.activeTool === 'pan';
         const isCropActive = board.activeTool === 'crop';
         const pageIdx = board.doc.pages.findIndex((p) => p.id === board.doc.activePageId);
@@ -486,10 +551,10 @@ export function renderToolbar(board) {
 
         board.toolbarEl.innerHTML = `
             <div class="drawing-toolbar-row">
-                <button type="button" class="btn btn--compact drawing-toolbar-dropdown ${isPointerActive ? 'active' : ''}" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools" aria-label="Pointer tools">
-                    <span class="drawing-dropdown-icon">${board.pointerTriggerIcon()}</span>
-                    <span class="drawing-dropdown-chevron">${CHEVRON}</span>
-                </button>
+                <span class="drawing-brush-split" role="group" aria-label="Brush">
+                    <button type="button" class="btn btn--compact btn--icon drawing-brush-split__tool ${isBrushActive ? 'active' : ''}" id="draw-brush-tool" title="Brush — ${brushLabel}" aria-label="Brush — ${brushLabel}" aria-pressed="${isBrushActive ? 'true' : 'false'}">${board.pointerTriggerIcon()}</button>
+                    <button type="button" class="btn btn--compact btn--icon drawing-brush-split__menu" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Brush type — ${brushLabel}" aria-label="Brush type">${CHEVRON}</button>
+                </span>
                 <span class="drawing-brush-size" id="draw-brush-size-group" aria-label="Brush size">
                     <button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-brush-smaller" title="Decrease brush size" aria-label="Decrease brush size">${ACTION_ICONS.minus}</button>
                     <span class="drawing-brush-size__value" id="draw-brush-width" aria-live="polite">${brush.width}px</span>
@@ -507,12 +572,15 @@ export function renderToolbar(board) {
                     <span class="drawing-dropdown-icon">${board.shapeTriggerIcon()}</span>
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
+                ${shapeFillChipHtml(board)}
                 ${flowDiagramRowHtml(board)}
-                ${textControlsHtml(board)}
+            </div>
+            <div class="drawing-toolbar-row drawing-toolbar-row--canvas">
                 <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
                 <button type="button" class="btn btn--compact btn--icon ${isCropActive ? 'active' : ''}" id="draw-crop" title="Crop image — drag the frame edges, drag back out to restore" aria-label="Crop image" aria-pressed="${isCropActive ? 'true' : 'false'}">${DRAWING_ICONS.crop}</button>
                 <button type="button" class="btn btn--compact btn--icon ${board.isLassoActive ? 'active' : ''}" id="draw-lasso" title="Rectangle select" aria-label="Rectangle select" aria-pressed="${board.isLassoActive ? 'true' : 'false'}">${DRAWING_ICONS.lasso}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
+                ${textControlsHtml(board)}
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
                 <button type="button" class="btn btn--compact btn--icon ${isPanActive ? 'active' : ''}" id="draw-pan" title="Hand tool — pan canvas. Scroll also pans; Ctrl+scroll zooms; Space+drag pans." aria-label="Hand tool" aria-pressed="${isPanActive ? 'true' : 'false'}">${DRAWING_ICONS.hand}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-out" title="Zoom out" aria-label="Zoom out">${DRAWING_ICONS.zoomOut}</button>
@@ -522,8 +590,6 @@ export function renderToolbar(board) {
                 <button type="button" class="btn btn--compact btn--icon" id="draw-undo" title="Undo" aria-label="Undo" ${board.history.canUndo ? '' : 'disabled'}>${ACTION_ICONS.undo}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-redo" title="Redo" aria-label="Redo" ${board.history.canRedo ? '' : 'disabled'}>${ACTION_ICONS.redo}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-clear" title="Clear" aria-label="Clear">${ACTION_ICONS.layoutReset}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-toolbar-hide" title="Hide toolbar" aria-label="Hide toolbar">${ACTION_ICONS.collapseAll}</button>
-                ${exitBtn}
             </div>
             <div class="drawing-toolbar-row drawing-toolbar-row--meta">
                 <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-format" aria-haspopup="menu" aria-expanded="false" title="Page format" aria-label="Page format">
@@ -545,6 +611,9 @@ export function renderToolbar(board) {
                     <button type="button" class="btn btn--compact btn--icon" id="draw-page-add" title="Add page" aria-label="Add page">${DRAWING_ICONS.pageAdd}</button>
                 </span>
                 ${flowGridControlsHtml(board)}
+                <span class="format-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-toolbar-hide" title="Hide toolbar" aria-label="Hide toolbar">${ACTION_ICONS.collapseAll}</button>
+                ${exitBtn}
             </div>
         `;
         board.bindToolbar();
@@ -565,6 +634,10 @@ export function renderToolbar(board) {
             board.textColorRolloutOpen = false;
             const btn = board.toolbarEl.querySelector('#draw-text-color-btn');
             if (btn) board.openTextColorPicker(btn);
+        } else if (wasShapeFillOpen) {
+            board.shapeFillRolloutOpen = false;
+            const btn = board.toolbarEl.querySelector('#draw-shape-fill-btn');
+            if (btn) board.openShapeFillPicker(btn);
         }
 }
 
@@ -591,6 +664,18 @@ export function bindToolbar(board) {
         q('#draw-bg-color-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             board.openPageBackgroundPicker(e.currentTarget);
+        });
+        // The swatch opens the fill picker; it never arms a tool.
+        q('#draw-shape-fill-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            board.openShapeFillPicker(e.currentTarget);
+        });
+        // Split button: one click arms the remembered brush style (same idiom as
+        // the hand tool), while the chevron keeps the full style menu.
+        q('#draw-brush-tool')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (board.activeTool === 'brush') board.setTool('pointer');
+            else board.setStyle(board.activeStyle || 'pen');
         });
         // Text cluster: tool, independent colour and size — never the brush's.
         q('#draw-text-tool')?.addEventListener('click', (e) => {

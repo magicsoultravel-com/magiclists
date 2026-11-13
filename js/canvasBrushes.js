@@ -7,6 +7,15 @@ export const DRAG_SHAPE_TOOLS = [
     'connector'
 ];
 
+/**
+ * Drag shapes with an interior the fill swatch can paint. Lines, arrows and
+ * connectors have no region, so they are deliberately absent.
+ */
+export const SHAPE_FILL_TOOLS = Object.freeze([
+    'rect', 'rounded_rect', 'ellipse', 'sphere', 'triangle', 'diamond', 'star',
+    'chevron', 'trapezoid', 'parallelogram', 'cube', 'pyramid', 'cylinder'
+]);
+
 export const STYLE_CONFIG = {
     pen: { alpha: 1, widthMul: 1, pressureMin: 0.08, pressureRange: 1.22, pressureAlpha: true, alphaMin: 0.4, alphaRange: 0.6 },
     marker: { alpha: 0.85, widthMul: 1, pressureMin: 0.15, pressureRange: 1.0, pressureAlpha: true, alphaMin: 0.5, alphaRange: 0.45 },
@@ -511,6 +520,80 @@ function drawSphere(ctx, b) {
     ctx.stroke();
 }
 
+/**
+ * Paint the interior of a shape. Geometry mirrors the outline helpers below so
+ * a fill never pokes outside its own border; open tools fall through unpainted.
+ * Caller owns fillStyle/globalAlpha (and must restore them).
+ */
+function fillShapeGeometry(ctx, tool, b) {
+    const polygon = (pts) => {
+        ctx.beginPath();
+        pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+        ctx.closePath();
+        ctx.fill();
+    };
+    if (tool === 'rect') {
+        ctx.fillRect(b.left, b.top, Math.max(b.w, 1), Math.max(b.h, 1));
+    } else if (tool === 'rounded_rect') {
+        const r = Math.min(12, b.w / 4, b.h / 4);
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') ctx.roundRect(b.left, b.top, Math.max(b.w, 1), Math.max(b.h, 1), r);
+        else ctx.rect(b.left, b.top, Math.max(b.w, 1), Math.max(b.h, 1));
+        ctx.fill();
+    } else if (tool === 'ellipse' || tool === 'sphere') {
+        ctx.beginPath();
+        ctx.ellipse(b.cx, b.cy, Math.max(b.w / 2, 1), Math.max(b.h / 2, 1), 0, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (tool === 'triangle') {
+        polygon([[b.cx, b.top], [b.left, b.bottom], [b.right, b.bottom]]);
+    } else if (tool === 'diamond') {
+        polygon([[b.cx, b.top], [b.right, b.cy], [b.cx, b.bottom], [b.left, b.cy]]);
+    } else if (tool === 'star') {
+        const outer = Math.min(b.w, b.h) / 2;
+        const inner = outer * 0.42;
+        const pts = [];
+        for (let i = 0; i < 10; i++) {
+            const r = i % 2 === 0 ? outer : inner;
+            const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+            pts.push([b.cx + r * Math.cos(ang), b.cy + r * Math.sin(ang)]);
+        }
+        polygon(pts);
+    } else if (tool === 'chevron') {
+        const inset = b.w * 0.2;
+        polygon([[b.left, b.top], [b.right - inset, b.cy], [b.left, b.bottom]]);
+    } else if (tool === 'trapezoid') {
+        const inset = b.w * 0.2;
+        polygon([[b.left + inset, b.top], [b.right - inset, b.top], [b.right, b.bottom], [b.left, b.bottom]]);
+    } else if (tool === 'parallelogram') {
+        const skew = b.w * 0.25;
+        polygon([[b.left + skew, b.top], [b.right, b.top], [b.right - skew, b.bottom], [b.left, b.bottom]]);
+    } else if (tool === 'cube') {
+        // Front face plus the two visible side faces, matching drawCube's frame.
+        const d = Math.min(b.w, b.h) * 0.28;
+        ctx.fillRect(b.left, b.top + d, Math.max(b.w - d, 1), Math.max(b.h - d, 1));
+        ctx.fillRect(b.left + d, b.top, Math.max(b.w - d, 1), d);
+        ctx.fillRect(b.right - d, b.top + d, d, Math.max(b.h - d * 2, 1));
+    } else if (tool === 'pyramid') {
+        // Base slab plus the front face, matching drawPyramid.
+        const inset = b.w * 0.08;
+        const baseH = Math.min(b.w, b.h) * 0.35;
+        ctx.fillRect(b.left + inset, b.bottom - baseH, Math.max(b.w - inset * 2, 1), baseH);
+        polygon([[b.cx, b.top], [b.left + inset, b.bottom], [b.right - inset, b.bottom]]);
+    } else if (tool === 'cylinder') {
+        const ry = Math.max(b.h * 0.12, 4);
+        const topY = b.top + ry;
+        const botY = b.bottom - ry;
+        const rx = Math.max(b.w / 2, 1);
+        ctx.fillRect(b.left, topY, Math.max(b.w, 1), Math.max(botY - topY, 1));
+        ctx.beginPath();
+        ctx.ellipse(b.cx, topY, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(b.cx, botY, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
 export function drawShapeStroke(ctx, stroke) {
     const cfg = STYLE_CONFIG[stroke.style] || STYLE_CONFIG.pen;
     ctx.save();
@@ -522,6 +605,17 @@ export function drawShapeStroke(ctx, stroke) {
     ctx.lineJoin = 'round';
     const { x0, y0, x1, y1, tool } = stroke;
     const b = shapeBBox(stroke);
+
+    // Fill sits under the outline and stays opaque: the picked swatch should
+    // read the same on a pen and on a translucent highlighter. The nested
+    // save/restore hands fillStyle back to the arrowheads and the label painter.
+    if (stroke.fillColor && /^#[0-9a-fA-F]{6}$/.test(stroke.fillColor)) {
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = stroke.fillColor;
+        fillShapeGeometry(ctx, tool, b);
+        ctx.restore();
+    }
 
     if (tool === 'line') {
         ctx.beginPath();

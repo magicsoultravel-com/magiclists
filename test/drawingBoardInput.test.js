@@ -65,6 +65,7 @@ function makeBoard(overrides = {}) {
         clientToCanvas: () => { calls.clientToCanvas += 1; return { x: 10, y: 20 }; },
         expandInfiniteIfNeeded: () => {},
         currentBrush: () => ({ color: '#abcdef', width: 4 }),
+        shapeFillColor: () => '',
         pushLayerHistory: () => { calls.pushLayerHistory += 1; },
         eraseAt: (x, y) => calls.eraseAt.push([x, y]),
         placeTextBox: (x, y) => calls.placeTextBox.push([x, y]),
@@ -175,6 +176,32 @@ describe('onPointerDown', () => {
         const touch = makeBoard({ penPointerActive: true });
         onPointerDown(touch.board, pointerEvent({ pointerType: 'touch' }));
         assert.equal(touch.calls.clientToCanvas, 0, 'a palm touch must not move the stroke');
+    });
+});
+
+describe('shape fill on new shapes', () => {
+    it('seeds a new closed shape with the fill pref', () => {
+        const { board } = makeBoard({ activeTool: 'rect', shapeFillColor: () => '#22c55e' });
+        onPointerDown(board, pointerEvent());
+        assert.equal(board.shapePreview.tool, 'rect');
+        assert.equal(board.shapePreview.fillColor, '#22c55e');
+        assert.equal(board.shapePreview.color, '#abcdef', 'the outline still uses the brush colour');
+    });
+
+    it('leaves open tools and connectors unfilled', () => {
+        const line = makeBoard({ activeTool: 'line', shapeFillColor: () => '#22c55e' });
+        onPointerDown(line.board, pointerEvent());
+        assert.equal(line.board.shapePreview.fillColor, undefined);
+
+        const connector = makeBoard({ activeTool: 'connector', shapeFillColor: () => '#22c55e' });
+        onPointerDown(connector.board, pointerEvent());
+        assert.equal(connector.board.shapePreview.fillColor, undefined);
+    });
+
+    it('stays outline-only when the pref is empty', () => {
+        const { board } = makeBoard({ activeTool: 'ellipse' });
+        onPointerDown(board, pointerEvent());
+        assert.equal('fillColor' in board.shapePreview, false);
     });
 });
 

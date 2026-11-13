@@ -36,6 +36,7 @@ import * as FlowSession from './drawingBoardFlowchart.js';
 import * as CropSession from './drawingBoardCrop.js';
 import * as SelectSession from './drawingBoardSelection.js';
 import * as TextSession from './drawingBoard/text.js';
+import * as FillSession from './drawingBoard/fill.js';
 import * as ToolbarSession from './drawingBoardToolbar.js';
 import * as ClipboardSession from './drawingBoardClipboard.js';
 
@@ -93,6 +94,8 @@ export const DrawingBoard = {
     bgColorRolloutOpen: false,
     /** Separate rollout state so the text-colour picker survives toolbar repaints. */
     textColorRolloutOpen: false,
+    /** Separate rollout state so the shape-fill picker survives toolbar repaints. */
+    shapeFillRolloutOpen: false,
 
     // Marquee / rectangle select state (lasso button = rect marquee mode)
     isLassoActive: false,
@@ -540,6 +543,20 @@ export const DrawingBoard = {
     updateTextSizeControls() { return ToolbarSession.updateTextSizeControls(this); },
 
     openTextColorPicker(anchor) { return ToolbarSession.openTextColorPicker(this, anchor); },
+
+    /** Shape fill pref for new shapes ('' = outline only). */
+    shapeFillColor() { return FillSession.shapeFillColor(this); },
+
+    /**
+     * Shape fill: remembered for future shapes, applied to the selected shapes.
+     * @param {string} color 6-digit hex, or '' for no fill
+     * @param {{rerender?: boolean}} [opts]
+     */
+    setShapeFill(color, { rerender = true } = {}) { return FillSession.setShapeFill(this, color, { rerender }); },
+
+    updateShapeFillChip(color) { return ToolbarSession.updateShapeFillChip(this, color); },
+
+    openShapeFillPicker(anchor) { return ToolbarSession.openShapeFillPicker(this, anchor); },
 
     /**
      * Text tool entry point: a click on a shape/connector edits its label, bare

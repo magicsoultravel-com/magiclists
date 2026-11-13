@@ -1,4 +1,4 @@
-/** @module {"owns":"magicCanvas pointer and keyboard input - press routing, stroke drafting, gesture end and shortcuts","related":["drawingBoard.js","drawingBoard/geometry.js","drawingBoardSelection.js","drawingBoardCrop.js","drawingBoardFlowchart.js","drawingBoardClipboard.js","canvasViewport.js","lassoGeometry.js"]} */
+/** @module {"owns":"magicCanvas pointer and keyboard input - press routing, stroke drafting, gesture end and shortcuts","related":["drawingBoard.js","drawingBoard/geometry.js","drawingBoard/fill.js","drawingBoardSelection.js","drawingBoardCrop.js","drawingBoardFlowchart.js","drawingBoardClipboard.js","canvasViewport.js","lassoGeometry.js"]} */
 import { CanvasViewport } from '../canvasViewport.js';
 import { createId } from '../canvasDocument.js';
 import {
@@ -8,6 +8,7 @@ import {
 } from '../drawingBoardCore.js';
 import * as ClipboardSession from '../drawingBoardClipboard.js';
 import { getStrokesBounds } from '../lassoGeometry.js';
+import { isFillableShape } from './fill.js';
 import {
     dist2,
     thinStrokePoints,
@@ -148,6 +149,12 @@ export function onPointerDown(board, e) {
             // Shapes are connector targets and accept inline labels; the stroke
             // colour/width comes from the active brush, like every other stroke.
             preview.flowchartKind = 'shape';
+        }
+        // New shapes inherit the fill swatch; connectors have no interior, so
+        // isFillableShape keeps them outline-only.
+        if (isFillableShape(preview)) {
+            const fill = board.shapeFillColor();
+            if (fill) preview.fillColor = fill;
         }
         board.shapePreview = preview;
     }

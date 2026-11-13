@@ -193,6 +193,9 @@
     cursor: default;
 }
 
+/* Three stacked bands: brush -> canvas objects/view -> page meta. The rules sit
+   on the row boundaries so wrapping still reads as separate groups. */
+.drawing-toolbar-row--canvas,
 .drawing-toolbar-row--meta {
     padding-top: 0.1rem;
     border-top: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
@@ -420,6 +423,61 @@
     height: 0.75rem;
     border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/* "No fill" swatch: the picker's none tile in miniature. The pattern is forced
+   over the inline `background: transparent` the chip keeps in sync. */
+.drawing-shape-fill-chip--none {
+    background: repeating-linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.22) 0 2px,
+        rgba(255, 255, 255, 0.05) 2px 4px
+    ) !important;
+    border-style: dashed;
+}
+
+/* Split button: the tool half arms the brush in one click, the chevron half
+   keeps the style menu. One shared outline makes them read as one control. */
+.drawing-brush-split {
+    display: inline-flex;
+    align-items: stretch;
+    flex-shrink: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    overflow: hidden;
+}
+
+.drawing-brush-split .btn {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent;
+    min-height: 26px;
+}
+
+.drawing-brush-split .btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    /* The shell's hover lift/ring would be clipped by the group outline. */
+    box-shadow: none;
+    transform: none;
+}
+
+.drawing-brush-split .btn:active:not(:disabled) {
+    transform: none;
+}
+
+.drawing-brush-split .btn.active {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.drawing-brush-split__menu {
+    padding-inline: 0.15rem !important;
+    border-inline-start: 1px solid var(--border-color) !important;
+    opacity: 0.75;
+}
+
+.drawing-brush-split__menu:hover {
+    opacity: 1;
 }
 
 .drawing-toolbar-dropdown {

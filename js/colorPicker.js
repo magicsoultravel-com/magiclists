@@ -571,7 +571,16 @@ export const ColorPicker = {
     },
 
     selectColor(color, onSelect) {
-        const normalized = normalizeHex(color);
+        const raw = typeof color === 'string' ? color.trim() : '';
+        // The "No fill" preset posts an empty value on purpose; it must clear
+        // the selection instead of being swallowed like any other non-hex.
+        if (!raw) {
+            this.selectedColor = '';
+            onSelect?.('');
+            this.syncSelection();
+            return;
+        }
+        const normalized = normalizeHex(raw);
         if (!normalized) return;
         this.selectedColor = normalized.toLowerCase();
         onSelect?.(normalized);
@@ -584,7 +593,12 @@ export const ColorPicker = {
         this.popover.querySelectorAll('.color-picker-tile.is-selected').forEach((el) => {
             el.classList.remove('is-selected');
         });
-        if (!normalized) return;
+        if (!normalized) {
+            // Light up the empty-value tile so "no colour" is a visible state,
+            // not an unselected grid after reopening.
+            this.popover.querySelector('.color-picker-tile[data-color=""]')?.classList.add('is-selected');
+            return;
+        }
         const presetMatch = this.popover.querySelector(`.color-picker-tile[data-color="${normalized}"]:not([data-user-slot])`);
         if (presetMatch) {
             presetMatch.classList.add('is-selected');

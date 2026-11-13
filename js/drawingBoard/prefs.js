@@ -1,4 +1,4 @@
-/** @module {"owns":"magicCanvas brush style, text style, tool and canvas grid preferences in localStorage (matrix_drawing_prefs)","related":["drawingBoard.js","drawingBoardCore.js","drawingBoard/text.js","canvasBrushes.js","flowchart.js"]} */
+/** @module {"owns":"magicCanvas brush style, text style, shape fill, tool and canvas grid preferences in localStorage (matrix_drawing_prefs)","related":["drawingBoard.js","drawingBoardCore.js","drawingBoard/text.js","drawingBoard/fill.js","canvasBrushes.js","flowchart.js"]} */
 import { BRUSH_STYLES, DRAG_SHAPE_TOOLS } from '../canvasBrushes.js';
 import { defaultWidthForStyle } from '../drawingBoardCore.js';
 import { normalizeFlowchartGrid, FLOWCHART_ROUTINGS } from '../flowchart.js';
@@ -26,6 +26,16 @@ export function normalizeTextSize(raw) {
 export function normalizeTextColor(raw) {
     const c = typeof raw === 'string' ? raw.trim() : '';
     return c || TEXT_COLOR_DEFAULT;
+}
+
+/**
+ * Shape fill preference: `''` means outline only. Anything that is not a plain
+ * 6-digit hex is dropped rather than coerced, so a corrupt payload can never
+ * reach `ctx.fillStyle` as garbage.
+ */
+export function normalizeShapeFill(raw) {
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : '';
 }
 
 /** Normalize the stored text style ({ color, size }) or fall back to defaults. */
@@ -56,6 +66,8 @@ export function readPrefs() {
             routing: FLOWCHART_ROUTINGS.includes(raw?.routing) ? raw.routing : 'straight',
             /** Independent text styling: colour + size (CSS px) for text boxes. */
             text: readTextPrefs(raw?.text),
+            /** Shape fill for new shapes: '' = outline only. */
+            shapeFill: normalizeShapeFill(raw?.shapeFill),
             /** One-shot hint flag: the snap tip is shown once per browser. */
             snapTipShown: raw?.snapTipShown === true,
             /** One-shot hint flag: the text-tool tip is shown once per browser. */
@@ -71,6 +83,7 @@ export function readPrefs() {
             grid: normalizeFlowchartGrid(null),
             routing: 'straight',
             text: readTextPrefs(null),
+            shapeFill: '',
             snapTipShown: false,
             textTipShown: false
         };

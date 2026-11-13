@@ -100,7 +100,26 @@ describe('drawing board prefs', () => {
             const prefs = readPrefs();
             assert.equal(prefs.activeTool, 'pointer');
             assert.equal(prefs.styles.pen.width, DEFAULT_WIDTH);
+            assert.equal(prefs.shapeFill, '', 'a corrupt payload still yields an outline-only default');
         });
+    });
+
+    it('keeps shape fill outline-only until a real hex is stored', () => {
+        withStorage(() => {
+            assert.equal(readPrefs().shapeFill, '');
+        });
+
+        withStorage((store) => {
+            store.set(PREFS_KEY, JSON.stringify({ shapeFill: '#22C55E' }));
+            assert.equal(readPrefs().shapeFill, '#22c55e', 'accepted 6-digit hex is lower-cased');
+        });
+
+        for (const bad of ['red', '#22c55', '#22c55e88', 'rgb(1,2,3)', 42, null, {}]) {
+            withStorage((store) => {
+                store.set(PREFS_KEY, JSON.stringify({ shapeFill: bad }));
+                assert.equal(readPrefs().shapeFill, '', `${JSON.stringify(bad)} must not reach the canvas`);
+            });
+        }
     });
 
     it('defaults the text style to 40 CSS px in the default ink colour', () => {
