@@ -1,4 +1,13 @@
 // js/toolPanelChrome.js — floating desktop tool panels (drag, resize, collapse chip)
+import {
+    CHIP_ENTER_MS,
+    CHIP_MOTION_EASING,
+    CHIP_MOTION_MS,
+    canAnimateElement,
+    chipOriginForPanel,
+    chipScaleForPanel,
+    resolveExpandedPanelOrigin
+} from './chipMotion.js';
 import { bindFloatResize, mountFloatChrome } from './desktopFloatChrome.js';
 import { raiseDesktopElement } from './desktopStack.js';
 import { CARD_ICONS } from './icons.js';
@@ -99,15 +108,6 @@ function loadSavedCoord(value, min, max, size, fallback) {
     return value;
 }
 
-function chipAnchorFromPanel(panel, chip) {
-    const chipW = chip?.offsetWidth || 40;
-    const chipH = chip?.offsetHeight || 40;
-    return {
-        x: panel.offsetLeft + panel.offsetWidth - chipW - 4,
-        y: panel.offsetTop + 4
-    };
-}
-
 function bringToFront(el) {
     if (!el) return;
     raiseDesktopElement(el);
@@ -204,36 +204,53 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     let collapsed = !!saved.collapsed;
     let minimal = !!saved.minimal;
     let chipReadoutText = '';
+    let chipAnimation = null;
+    let chipEnterAnimation = null;
+
+    const cancelChipAnimation = () => {
+        chipAnimation?.cancel();
+        chipAnimation = null;
+        chipEnterAnimation?.cancel();
+        chipEnterAnimation = null;
+    };
+
+    /** Drop the inline styles the collapse/expand morph leaves behind. */
+    const resetPanelMotion = () => {
+        panel.style.visibility = '';
+        panel.style.transform = '';
+        panel.style.transformOrigin = '';
+        panel.style.opacity = '';
+        panel.style.pointerEvents = '';
+    };
 
     const persist = (extra = {}) => {
-        savePanelState(toolId, {
-            x: panel.offsetLeft,
-            y: panel.offsetTop,
-            w: panel.offsetWidth,
-            h: panel.offsetHeight,
-            collapsed,
-            minimal,
-            ...extra
-        });
+        const patch = { collapsed, minimal, ...extra };
+        // Skip the geometry when the panel has no layout box (display:none /
+        // not mounted yet): offsets would all be 0 and wipe the saved rect.
+        if (panel.offsetWidth || panel.offsetHeight) {
+            patch.x = panel.offsetLeft;
+            patch.y = panel.offsetTop;
+            patch.w = panel.offsetWidth;
+            patch.h = panel.offsetHeight;
+        }
+        savePanelState(toolId, patch);
     };
 
     const positionChip = (anchorToPanel = false) => {
         if (!chip) return;
         const desktopBounds = getDesktopBounds();
+        const fallback = chipOriginForPanel(panel.offsetLeft, panel.offsetTop);
         const chipW = chip.offsetWidth || 40;
         const chipH = chip.offsetHeight || 40;
-        const panelAnchor = chipAnchorFromPanel(panel, chip);
-        const fallbackX = panelAnchor.x;
-        const fallbackY = panelAnchor.y;
 
-        let chipX;
-        let chipY;
-        if (anchorToPanel) {
-            chipX = fallbackX;
-            chipY = fallbackY;
-        } else {
-            chipX = loadSavedCoord(saved.chipX, desktopBounds.left, desktopBounds.right, chipW, fallbackX);
-            chipY = loadSavedCoord(saved.chipY, desktopBounds.top, desktopBounds.bottom, chipH, fallbackY);
+        let chipX = fallback.x;
+        let chipY = fallback.y;
+        if (!anchorToPanel) {
+            // Read fresh: a dragged token persists chipX/chipY long after the
+            // snapshot taken at createToolPanel() time.
+            const state = loadAllPanelState()[toolId] || {};
+            chipX = loadSavedCoord(state.chipX, desktopBounds.left, desktopBounds.right, chipW, fallback.x);
+            chipY = loadSavedCoord(state.chipY, desktopBounds.top, desktopBounds.bottom, chipH, fallback.y);
         }
 
         const chipPos = clampPosition(chip, chipX, chipY);
@@ -271,7 +288,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
         chip.querySelector('.tool-chip__expand').addEventListener('click', (e) => {
             e.stopPropagation();
-            expand();
+            expand({ restoreFocus: e.detail === 0 });
         });
 
         chip.querySelector('.tool-chip__close').addEventListener('click', (e) => {
@@ -286,29 +303,201 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         applyChipReadout(chipReadoutText);
     };
 
-    const collapse = () => {
+    /**
+     * Token entrance after the panel has shrunk onto its rect: a short pop from
+     * 72%, not a fade, so the token reads as "landed" rather than "replaced".
+     */
+    const animateChipIn = () => {
+        if (!chip) return;
+        if (!canAnimateElement(chip)) {
+            chip.style.opacity = '';
+            return;
+        }
+        // Opacity stays inline-0 until the first frame applies, so the token is
+        // never painted at full size before the pop starts.
+        chipEnterAnimation = chip.animate(
+            [
+                { transform: 'scale(0.72)', opacity: 0 },
+                { transform: 'scale(1)', opacity: 1 }
+            ],
+            { duration: CHIP_ENTER_MS, easing: CHIP_MOTION_EASING }
+        );
+        chipEnterAnimation.addEventListener(
+            'finish',
+            () => {
+                chipEnterAnimation?.cancel();
+                chipEnterAnimation = null;
+                if (chip) chip.style.opacity = '';
+            },
+            { once: true }
+        );
+    };
+
+    const collapse = ({ restoreFocus = false } = {}) => {
+        // Already collapsed and resting: nothing to morph. Re-running would
+        // measure a display:none panel and persist a 0×0 rect.
+        if (
+            collapsed &&
+            chip &&
+            panel.classList.contains('is-hidden') &&
+            !chip.classList.contains('is-hidden')
+        ) {
+            return;
+        }
         collapsed = true;
         if (minimal) setMinimal(false);
         if (!chip) createChip();
-        positionChip(true);
-        panel.classList.add('is-hidden');
+
+        // Measure the panel while it still has a layout box: `is-hidden` is
+        // display:none and would report every offset as 0. Layout offsets also
+        // ignore transforms, so the stored w/h stay the untransformed size.
+        const panelLeft = panel.offsetLeft;
+        const panelTop = panel.offsetTop;
+        const panelW = panel.offsetWidth;
+        const panelH = panel.offsetHeight;
+
+        cancelChipAnimation();
+
+        // Park the token under the panel's top-left corner. It has to be
+        // measurable now: `is-hidden` is display:none, which reports every
+        // offset as 0, so inline opacity + pointer-events keep it laid out but
+        // unpainted and unclickable during the morph.
         chip.classList.remove('is-hidden');
-        bringToFront(chip);
-        persist({
-            chipX: chip.offsetLeft,
-            chipY: chip.offsetTop
-        });
-        callbacks.onCollapse?.();
+        chip.style.opacity = '0';
+        chip.style.pointerEvents = 'none';
+        positionChip(true);
+        const chipX = chip.offsetLeft;
+        const chipY = chip.offsetTop;
+        const chipW = chip.offsetWidth || 40;
+        const chipH = chip.offsetHeight || 40;
+
+        const finish = () => {
+            // Persist before hiding the panel: persist() reads offsetWidth/
+            // Height, which collapse to 0 once `is-hidden` lands.
+            if (chip) {
+                chip.style.opacity = '0';
+                chip.style.pointerEvents = '';
+            }
+            bringToFront(chip);
+            persist({
+                chipX: chip?.offsetLeft ?? chipX,
+                chipY: chip?.offsetTop ?? chipY
+            });
+
+            panel.classList.add('is-hidden');
+            cancelChipAnimation();
+            resetPanelMotion();
+
+            // The collapse button disappears with the panel. Only move focus for
+            // keyboard activation (detail 0): a pointer user gets the token
+            // without its hover actions snapping open via :focus-within.
+            if (restoreFocus) {
+                chip?.querySelector('.tool-chip__expand')?.focus({ preventScroll: true });
+            }
+            animateChipIn();
+            callbacks.onCollapse?.();
+        };
+
+        if (!panelW || !panelH || !canAnimateElement(panel)) {
+            finish();
+            return;
+        }
+
+        const { sx, sy } = chipScaleForPanel(panelW, panelH, chipW, chipH);
+        panel.style.transformOrigin = `${chipX - panelLeft}px ${chipY - panelTop}px`;
+        panel.style.pointerEvents = 'none';
+        chipAnimation = panel.animate(
+            [
+                { transform: 'scale(1, 1)', opacity: 1 },
+                { transform: `scale(${sx}, ${sy})`, opacity: 0.35 }
+            ],
+            { duration: CHIP_MOTION_MS, easing: CHIP_MOTION_EASING, fill: 'forwards' }
+        );
+        chipAnimation.addEventListener('finish', finish, { once: true });
     };
 
-    const expand = () => {
+    const expand = ({ restoreFocus = false } = {}) => {
         collapsed = false;
-        panel.classList.remove('is-hidden');
-        if (chip) chip.classList.add('is-hidden');
+        cancelChipAnimation();
+
+        // Read the token BEFORE hiding it: `is-hidden` is display:none, which
+        // would make its offsets report 0.
+        const chipVisible = !!chip && !chip.classList.contains('is-hidden');
+        const chipX = chipVisible ? chip.offsetLeft : 0;
+        const chipY = chipVisible ? chip.offsetTop : 0;
+        const chipW = chipVisible ? chip.offsetWidth || 40 : 0;
+        const chipH = chipVisible ? chip.offsetHeight || 40 : 0;
+
+        // Lay the panel out under `visibility: hidden` so the expanded rect can
+        // be measured without painting a full-size frame first.
+        const wasHidden = panel.classList.contains('is-hidden');
+        if (wasHidden) {
+            panel.style.visibility = 'hidden';
+            panel.classList.remove('is-hidden');
+        }
+        const panelW = panel.offsetWidth;
+        const panelH = panel.offsetHeight;
+
+        // Clamp-only anchoring: the panel opens at the token's corner and slides
+        // inward near an edge; it never flips to another corner.
+        const origin =
+            chipVisible && panelW && panelH
+                ? resolveExpandedPanelOrigin({
+                      chipX,
+                      chipY,
+                      panelWidth: panelW,
+                      panelHeight: panelH,
+                      bounds: getDesktopBounds()
+                  })
+                : null;
+        if (origin) {
+            panel.style.left = `${origin.x}px`;
+            panel.style.top = `${origin.y}px`;
+        }
+
+        if (chip) {
+            chip.classList.add('is-hidden');
+            chip.style.opacity = '';
+            chip.style.pointerEvents = '';
+        }
+
+        const finish = () => {
+            panel.classList.remove('is-hidden');
+            resetPanelMotion();
+            cancelChipAnimation();
+            // Keyboard expand from the token: land focus on the panel's collapse
+            // control instead of dropping it to <body> when the token hides.
+            if (restoreFocus) collapseBtn?.focus({ preventScroll: true });
+            persist();
+            callbacks.onExpand?.();
+            // Deferred until the panel is at its final size: calendar/cosmos
+            // measure .tool-panel__body to lay themselves out.
+            callbacks.onResize?.(bodyEl);
+        };
+
         bringToFront(panel);
-        persist();
-        callbacks.onExpand?.();
-        callbacks.onResize?.(bodyEl);
+
+        if (!origin || !canAnimateElement(panel)) {
+            finish();
+            return;
+        }
+
+        const { sx, sy } = chipScaleForPanel(panelW, panelH, chipW, chipH);
+        // Grow from the token's corner inside the panel (clamping can move the
+        // panel out from under it, so this is not always 0 0).
+        panel.style.transformOrigin = `${chipX - origin.x}px ${chipY - origin.y}px`;
+        panel.style.transform = `scale(${sx}, ${sy})`;
+        panel.style.opacity = '0.35';
+        panel.style.pointerEvents = 'none';
+        panel.style.visibility = '';
+        chipAnimation = panel.animate(
+            [
+                { transform: `scale(${sx}, ${sy})`, opacity: 0.35 },
+                { transform: 'scale(1, 1)', opacity: 1 }
+            ],
+            { duration: CHIP_MOTION_MS, easing: CHIP_MOTION_EASING, fill: 'forwards' }
+        );
+        chipAnimation.addEventListener('finish', finish, { once: true });
     };
 
     const setMinimal = (value) => {
@@ -328,6 +517,12 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     const restore = () => setMinimal(false);
 
     const show = () => {
+        cancelChipAnimation();
+        resetPanelMotion();
+        if (chip) {
+            chip.style.opacity = '';
+            chip.style.pointerEvents = '';
+        }
         desktop.appendChild(panel);
         setMinimal(minimal);
         if (collapsed) {
@@ -343,6 +538,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     };
 
     const destroy = () => {
+        cancelChipAnimation();
         panel.remove();
         chip?.remove();
         removePanelState(toolId);
@@ -387,7 +583,8 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
     collapseBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        collapse();
+        // detail === 0 means Enter/Space on the button, not a pointer click.
+        collapse({ restoreFocus: e.detail === 0 });
     });
 
     minimizeBtn.addEventListener('click', (e) => {

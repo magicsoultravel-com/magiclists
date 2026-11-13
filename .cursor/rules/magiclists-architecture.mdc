@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-10T16:39:45.520Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-13T23:06:13.952Z
 
 ## CSS load order
 
@@ -73,6 +73,7 @@ alwaysApply: true
 | js/checklistSteps.js | checklist tree logic, step reorder, indent/outdent | noteSurface.js, noteBodyConversion.js | — | — |
 | js/checkpointBundle.js | checkpoint bundle export — one ZIP per scheduled tick with the incremental parts inside | backup.js, mediaBackup.js, scheduledBackupConfig.js, scheduledBackup.js | — | — |
 | js/checkpointPartsUi.js | shared NOTES/BOARD/CANVAS/MEDIA checkpoint zip-composition UI | scheduledBackup.js, cloudBackup.js, scheduledBackupConfig.js | — | — |
+| js/chipMotion.js | collapse-to-chip geometry, motion timings and reduced-motion policy | toolPanelChrome.js, drawingToolbarChrome.js | — | — |
 | js/cloud/cloudProvider.js | cloud provider registry and factory dispatch | cloudBackup.js, cloud/megaProvider.js, cloud/localFolderProvider.js | — | — |
 | js/cloudBackup.js | cloud backup UI, MEGA and local-folder sync | backup.js, cloud/cloudProvider.js, cloud/megaProvider.js, cloud/localFolderProvider.js | — | — |
 | js/desktopCardManager.js | desktop card creation, updating, finalization, freeform dimensions | noteSurface.js, noteQuickActions.js | — | — |

@@ -1,9 +1,62 @@
+import {
+    CHIP_ENTER_MS,
+    CHIP_MOTION_EASING,
+    CHIP_MOTION_MS,
+    canAnimateElement,
+    chipOriginForPanel,
+    chipScaleForPanel,
+    resolveExpandedPanelOrigin
+} from './chipMotion.js';
 import { CARD_ICONS } from './icons.js';
 
 const STORAGE_KEY_DEFAULT = 'matrix_drawing_toolbar';
 
 let activeStorageKey = STORAGE_KEY_DEFAULT;
 let hostBoundsEl = null;
+let chipMotion = null;
+let chipEnterMotion = null;
+
+function cancelChipMotion() {
+    chipMotion?.cancel();
+    chipMotion = null;
+    chipEnterMotion?.cancel();
+    chipEnterMotion = null;
+}
+
+/** Drop the inline styles the collapse/expand morph leaves behind. */
+function resetPanelMotion(panel) {
+    if (!panel) return;
+    panel.style.visibility = '';
+    panel.style.transform = '';
+    panel.style.transformOrigin = '';
+    panel.style.opacity = '';
+    panel.style.pointerEvents = '';
+}
+
+/** Short pop from 72% once the panel has shrunk onto the token's rect. */
+function animateChipIn(chip) {
+    if (!chip) return;
+    if (!canAnimateElement(chip)) {
+        chip.style.opacity = '';
+        return;
+    }
+    chipEnterMotion = chip.animate(
+        [
+            { transform: 'scale(0.72)', opacity: 0 },
+            { transform: 'scale(1)', opacity: 1 }
+        ],
+        { duration: CHIP_ENTER_MS, easing: CHIP_MOTION_EASING }
+    );
+    chipEnterMotion.addEventListener(
+        'finish',
+        () => {
+            chipEnterMotion?.cancel();
+            chipEnterMotion = null;
+            chip.style.opacity = '';
+        },
+        { once: true }
+    );
+}
 
 function loadState() {
     try {
@@ -133,7 +186,7 @@ export const DrawingToolbarChrome = {
         });
         expandBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.expand();
+            this.expand({ restoreFocus: e.detail === 0 });
         });
 
         bindDrag(this.panel.querySelector('[data-draw-toolbar-drag]'), this.panel, () => {
@@ -156,6 +209,13 @@ export const DrawingToolbarChrome = {
 
     show() {
         if (!this.panel || !this.chip) return;
+        cancelChipMotion();
+        resetPanelMotion(this.panel);
+        if (this.chip) {
+            this.chip.style.opacity = '';
+            this.chip.style.pointerEvents = '';
+        }
+
         const saved = loadState();
         // Focus host: default collapsed unless user has expanded before in this storage key.
         if (hostBoundsEl && saved.collapsed == null && this._forceDefaultCollapsed) {
@@ -188,27 +248,29 @@ export const DrawingToolbarChrome = {
     },
 
     hide() {
+        cancelChipMotion();
+        resetPanelMotion(this.panel);
         this.panel?.classList.add('is-hidden');
         this.chip?.classList.add('is-hidden');
+        if (this.chip) {
+            this.chip.style.opacity = '';
+            this.chip.style.pointerEvents = '';
+        }
     },
 
     positionChip(anchorToPanel = false) {
         if (!this.chip || !this.panel) return;
         const bounds = getDesktopBounds();
+        const fallback = chipOriginForPanel(this.panel.offsetLeft, this.panel.offsetTop);
         const chipW = this.chip.offsetWidth || 44;
         const chipH = this.chip.offsetHeight || 44;
-        const saved = loadState();
 
-        let chipX;
-        let chipY;
-        if (anchorToPanel) {
-            chipX = this.panel.offsetLeft + this.panel.offsetWidth - chipW - 4;
-            chipY = this.panel.offsetTop + 4;
-        } else {
-            const fallbackX = this.panel.offsetLeft + this.panel.offsetWidth - chipW - 4;
-            const fallbackY = this.panel.offsetTop + 4;
-            chipX = loadSavedCoord(saved.chipX, bounds.left, bounds.right, chipW, fallbackX);
-            chipY = loadSavedCoord(saved.chipY, bounds.top, bounds.bottom, chipH, fallbackY);
+        let chipX = fallback.x;
+        let chipY = fallback.y;
+        if (!anchorToPanel) {
+            const saved = loadState();
+            chipX = loadSavedCoord(saved.chipX, bounds.left, bounds.right, chipW, fallback.x);
+            chipY = loadSavedCoord(saved.chipY, bounds.top, bounds.bottom, chipH, fallback.y);
         }
 
         const pos = clampPosition(this.chip, chipX, chipY);
@@ -218,34 +280,160 @@ export const DrawingToolbarChrome = {
 
     collapse() {
         if (!this.panel || !this.chip) return;
+        // Already collapsed and resting: nothing to morph. Re-running would
+        // measure a display:none panel and save a 0,0 position.
+        if (
+            this.collapsed &&
+            this.panel.classList.contains('is-collapsed') &&
+            !this.chip.classList.contains('is-hidden')
+        ) {
+            return;
+        }
         this.collapsed = true;
-        this.panel.classList.add('is-collapsed');
-        this.positionChip(true);
+
+        // Measure before `is-collapsed` lands: it is display:none, which reports
+        // every offset as 0.
+        const panelLeft = this.panel.offsetLeft;
+        const panelTop = this.panel.offsetTop;
+        const panelW = this.panel.offsetWidth;
+        const panelH = this.panel.offsetHeight;
+
+        cancelChipMotion();
+
         this.chip.classList.remove('is-hidden');
-        saveState({
-            x: this.panel.offsetLeft,
-            y: this.panel.offsetTop,
-            chipX: this.chip.offsetLeft,
-            chipY: this.chip.offsetTop,
-            collapsed: true
-        });
-        this.onCollapse?.();
+        this.chip.style.opacity = '0';
+        this.chip.style.pointerEvents = 'none';
+        this.positionChip(true);
+        const chipX = this.chip.offsetLeft;
+        const chipY = this.chip.offsetTop;
+        const chipW = this.chip.offsetWidth || 44;
+        const chipH = this.chip.offsetHeight || 44;
+
+        const finish = () => {
+            // Save while the panel is still laid out; offsets read 0 once it is
+            // display:none.
+            this.chip.classList.remove('is-hidden');
+            this.chip.style.opacity = '0';
+            this.chip.style.pointerEvents = '';
+            const next = {
+                chipX: this.chip.offsetLeft,
+                chipY: this.chip.offsetTop,
+                collapsed: true
+            };
+            // Only rewrite the panel rect when it had a layout box to measure.
+            if (panelW && panelH) {
+                next.x = panelLeft;
+                next.y = panelTop;
+            }
+            saveState(next);
+            this.panel.classList.add('is-collapsed');
+            cancelChipMotion();
+            resetPanelMotion(this.panel);
+            animateChipIn(this.chip);
+            this.onCollapse?.();
+        };
+
+        if (!panelW || !panelH || !canAnimateElement(this.panel)) {
+            finish();
+            return;
+        }
+
+        const { sx, sy } = chipScaleForPanel(panelW, panelH, chipW, chipH);
+        this.panel.style.transformOrigin = `${chipX - panelLeft}px ${chipY - panelTop}px`;
+        this.panel.style.pointerEvents = 'none';
+        chipMotion = this.panel.animate(
+            [
+                { transform: 'scale(1, 1)', opacity: 1 },
+                { transform: `scale(${sx}, ${sy})`, opacity: 0.35 }
+            ],
+            { duration: CHIP_MOTION_MS, easing: CHIP_MOTION_EASING, fill: 'forwards' }
+        );
+        chipMotion.addEventListener('finish', finish, { once: true });
     },
 
-    expand() {
+    expand({ restoreFocus = false } = {}) {
         if (!this.panel || !this.chip) return;
         this.collapsed = false;
-        this.panel.classList.remove('is-collapsed');
-        this.chip.classList.add('is-hidden');
-        const pos = clampPosition(this.panel, this.panel.offsetLeft, this.panel.offsetTop);
-        this.panel.style.left = `${pos.x}px`;
-        this.panel.style.top = `${pos.y}px`;
-        saveState({
-            x: pos.x,
-            y: pos.y,
-            collapsed: false
-        });
+        cancelChipMotion();
+
+        // Re-render toolbar buttons before measuring so the expanded rect (and
+        // therefore the animation target) reflects the final content.
         this.onExpand?.();
+
+        const chipVisible = !this.chip.classList.contains('is-hidden');
+        const chipX = chipVisible ? this.chip.offsetLeft : 0;
+        const chipY = chipVisible ? this.chip.offsetTop : 0;
+        const chipW = chipVisible ? this.chip.offsetWidth || 44 : 0;
+        const chipH = chipVisible ? this.chip.offsetHeight || 44 : 0;
+
+        // Lay the panel out under `visibility: hidden` so the expanded rect can
+        // be measured without painting a full-size frame first.
+        const wasCollapsed = this.panel.classList.contains('is-collapsed');
+        if (wasCollapsed) {
+            this.panel.style.visibility = 'hidden';
+            this.panel.classList.remove('is-collapsed');
+        }
+        const panelW = this.panel.offsetWidth;
+        const panelH = this.panel.offsetHeight;
+
+        // Clamp-only anchoring: open at the token's corner, slide inward near an
+        // edge, never flip to another corner.
+        const origin =
+            chipVisible && panelW && panelH
+                ? resolveExpandedPanelOrigin({
+                      chipX,
+                      chipY,
+                      panelWidth: panelW,
+                      panelHeight: panelH,
+                      bounds: getDesktopBounds()
+                  })
+                : null;
+        if (origin) {
+            this.panel.style.left = `${origin.x}px`;
+            this.panel.style.top = `${origin.y}px`;
+        }
+
+        this.chip.classList.add('is-hidden');
+        this.chip.style.opacity = '';
+        this.chip.style.pointerEvents = '';
+
+        const finish = () => {
+            this.panel.classList.remove('is-collapsed');
+            resetPanelMotion(this.panel);
+            cancelChipMotion();
+            if (restoreFocus) {
+                document.getElementById('draw-panel-collapse')?.focus({ preventScroll: true });
+            }
+            if (panelW) {
+                saveState({
+                    x: this.panel.offsetLeft,
+                    y: this.panel.offsetTop,
+                    collapsed: false
+                });
+            } else {
+                saveState({ collapsed: false });
+            }
+        };
+
+        if (!origin || !canAnimateElement(this.panel)) {
+            finish();
+            return;
+        }
+
+        const { sx, sy } = chipScaleForPanel(panelW, panelH, chipW, chipH);
+        this.panel.style.transformOrigin = `${chipX - origin.x}px ${chipY - origin.y}px`;
+        this.panel.style.transform = `scale(${sx}, ${sy})`;
+        this.panel.style.opacity = '0.35';
+        this.panel.style.pointerEvents = 'none';
+        this.panel.style.visibility = '';
+        chipMotion = this.panel.animate(
+            [
+                { transform: `scale(${sx}, ${sy})`, opacity: 0.35 },
+                { transform: 'scale(1, 1)', opacity: 1 }
+            ],
+            { duration: CHIP_MOTION_MS, easing: CHIP_MOTION_EASING, fill: 'forwards' }
+        );
+        chipMotion.addEventListener('finish', finish, { once: true });
     },
 
     getToolbarMount() {
