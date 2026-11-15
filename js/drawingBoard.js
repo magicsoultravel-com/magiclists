@@ -37,6 +37,7 @@ import * as CropSession from './drawingBoardCrop.js';
 import * as SelectSession from './drawingBoardSelection.js';
 import * as TextSession from './drawingBoard/text.js';
 import * as FillSession from './drawingBoard/fill.js';
+import * as StrokeSession from './drawingBoard/stroke.js';
 import * as ToolbarSession from './drawingBoardToolbar.js';
 import * as ClipboardSession from './drawingBoardClipboard.js';
 
@@ -499,12 +500,20 @@ export const DrawingBoard = {
 
     updateBrushSizeControls() { return ToolbarSession.updateBrushSizeControls(this); },
 
-    setColor(color, { rerender = true } = {}) {
-        this.prefs.styles[this.activeStyle].color = color;
-        writePrefs(this.prefs);
-        if (rerender) this.renderToolbar();
-        else this.updateColorChip(color);
-    },
+    /**
+     * Stroke colour: always remembered for future strokes, applied to the
+     * selection when it changes anything — the border of shapes and freehand
+     * strokes, mirroring what the fill swatch does for shape interiors.
+     * @param {string} color
+     * @param {{rerender?: boolean}} [opts]
+     */
+    setColor(color, { rerender = true } = {}) { return StrokeSession.setStrokeColor(this, color, { rerender }); },
+
+    /** Stored stroke colour for the active brush style. */
+    strokeColor() { return StrokeSession.strokeColor(this); },
+
+    /** Colour the chip shows: shared selection border, else the stored pref. */
+    currentStrokeColor() { return StrokeSession.currentStrokeColor(this); },
 
     updateColorChip(color) { return ToolbarSession.updateColorChip(this, color); },
 

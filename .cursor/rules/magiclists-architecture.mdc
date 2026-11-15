@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-15T16:50:31.798Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-15T17:15:36.838Z
 
 ## CSS load order
 
@@ -88,6 +88,7 @@ alwaysApply: true
 | js/drawingBoard/input.js | magicCanvas pointer and keyboard input - press routing, stroke drafting, gesture end and shortcuts | drawingBoard.js, drawingBoard/geometry.js, drawingBoard/fill.js, drawingBoardSelection.js, drawingBoardCrop.js, drawingBoardFlowchart.js, drawingBoardClipboard.js, canvasViewport.js, lassoGeometry.js | — | — |
 | js/drawingBoard/lifecycle.js | magicCanvas session enter/exit (workspace, note canvas) and toolbar chrome lifecycle | drawingBoard.js, drawingBoard/prefs.js, canvasViewport.js, noteModel.js | — | — |
 | js/drawingBoard/prefs.js | magicCanvas brush style, text style, shape fill, tool and canvas grid preferences in localStorage (matrix_drawing_prefs) | drawingBoard.js, drawingBoardCore.js, drawingBoard/text.js, drawingBoard/fill.js, canvasBrushes.js, flowchart.js | — | — |
+| js/drawingBoard/stroke.js | magicCanvas stroke colour - stroke-colour pref and selection-first restyling of shape borders and freehand strokes | drawingBoard.js, drawingBoardToolbar.js, drawingBoard/prefs.js, canvasBrushes.js | — | — |
 | js/drawingBoard/text.js | magicCanvas text styling - text colour/size prefs and selection-first restyling of shape labels and text boxes | drawingBoard.js, drawingBoardToolbar.js, drawingBoardFlowchart.js, drawingBoardSelection.js, flowchart.js, drawingBoard/prefs.js | — | — |
 | js/drawingBoard/view.js | magicCanvas rendering - redraw loop, viewport sizing, page background fill/swatch, note overlay fit | drawingBoard.js, canvasViewport.js, canvasDocument.js, canvasBrushes.js, canvasBackgrounds.js, canvasImages.js, noteCanvasTextOverlay.js, colorPicker.js | — | — |
 | js/drawingBoardBackup.js | magicCanvas backup/restore payload (document + prefs + toolbar) | drawingBoard.js, canvasDocument.js, layoutStorage.js | — | — |

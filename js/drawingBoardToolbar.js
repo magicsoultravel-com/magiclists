@@ -44,6 +44,17 @@ export function updateColorChip(board, color) {
         if (btn) btn.style.setProperty('--chip-color', color);
 }
 
+/**
+ * Swatch the colour chip shows and the picker opens on: the border colour the
+ * selection agrees on, otherwise the stored brush pref. Same rule for both call
+ * sites so the chip cannot disagree with the popover it opens.
+ */
+export function colorChipValue(board) {
+        if (typeof board?.currentStrokeColor === 'function') return board.currentStrokeColor();
+        const brush = typeof board?.currentBrush === 'function' ? board.currentBrush() : null;
+        return brush?.color || '';
+}
+
 export function updateTextColorChip(board, color) {
         const chip = board.toolbarEl?.querySelector('.drawing-text-color-chip');
         const btn = board.toolbarEl?.querySelector('#draw-text-color-btn');
@@ -161,11 +172,10 @@ export function toggleColorRollout(board, anchor) {
         }
         ColorPicker.close();
         board.bgColorRolloutOpen = false;
-        const brush = board.currentBrush();
         ColorPicker.open({
             anchor,
             presets: PALETTE_UNIFIED,
-            value: brush.color,
+            value: colorChipValue(board),
             align: 'end',
             onSelect: (c) => board.setColor(c, { rerender: false }),
             onClose: () => { board.colorRolloutOpen = false; }
@@ -536,6 +546,7 @@ export function renderToolbar(board) {
         DrawingToolbarMenu.close();
         const brush = board.currentBrush();
         const bgSwatch = board.pageBackgroundSwatch();
+        const strokeSwatch = colorChipValue(board);
         const isBrushActive = board.activeTool === 'brush';
         const isEraserActive = board.activeTool === 'eraser';
         const brushLabel = POINTER_ITEMS.find((item) => item.id === board.activeStyle)?.label || 'Brush';
@@ -563,8 +574,8 @@ export function renderToolbar(board) {
                 <button type="button" class="btn btn--compact btn--icon ${isEraserActive ? 'active' : ''}" id="draw-eraser" title="Eraser" aria-label="Eraser" aria-pressed="${isEraserActive ? 'true' : 'false'}">${DRAWING_ICONS.eraser}</button>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
                 <div class="drawing-color-group" id="draw-color-group">
-                    <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-color-btn" title="Color" aria-label="Color" aria-expanded="false" style="--chip-color:${brush.color}">
-                        <span class="drawing-color-chip" style="background:${brush.color}"></span>
+                    <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-color-btn" title="Color — brush and shape border" aria-label="Color — brush and shape border" aria-expanded="false" style="--chip-color:${strokeSwatch}">
+                        <span class="drawing-color-chip" style="background:${strokeSwatch}"></span>
                     </button>
                 </div>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
