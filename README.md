@@ -191,6 +191,45 @@ identical entry tail (chrome → toolbar mount → brand → aria →
 `renderToolbar` → `updateZoomLevel` → `resize` → `redraw`); deduping it is its
 own commit, with the lifecycle tests as the safety net.
 
+### Reorienting text: one angle, three readers
+
+`js/textAngle.js` is a dependency-free leaf (`normalizeTextAngle`,
+`textAngleOf`, `textObjectBox`, `textBoxPivot`, `rotatePointAround`,
+`rotatedRectAabb`, `textRotationCss`) because three very different consumers need
+the same answer: the canvas painter (`drawTextObject`, `drawFlowchartLabel`), the
+two DOM editors, and hit-testing (`itemContainsPoint`, marquee, lasso, page
+clamping). Anything else would let the preview, the painted glyphs and the click
+target drift apart.
+
+The angle is an **item property**, stored as `label.angle` for shape/connector
+labels and `angle` for a free text box, in whole degrees clockwise (0–359, wraps
+rather than clamps — a dial has no ends). `0` is stored as *absence*, exactly like
+`zLevel: 0`, so a document that was never rotated still saves byte-identically.
+The one pref that exists (`prefs.text.angle`) only decides what the *next* text
+box or new label starts at; editing an existing label never re-applies it.
+
+Each kind turns about the point its editor is centred on: a text box about the
+centre of its own block (measured on commit by `placeTextBox` and stored as
+`width`/`height` in canvas units; objects from before this feature fall back to
+the old heuristic box, so their hit area does not move), a label about
+`flowLabelCentre()` — the shape bbox middle or the connector's bend point. The
+painters apply that as a `translate → rotate → translate`-back sandwich so
+`fillText` coordinates stay absolute; the editors append
+`rotate(Ndeg)` to their transform (connectors keep their `translateY(-50%)`
+first, so the turn happens about the centred block). The overlay is
+`transform-origin: 50% 50%`, which is the same stored block centre.
+
+`js/angleDial.js` is the circular input: a pointer knob (`angleFromPointer` /
+`angleToPoint` are pure and exported for tests), eight preset dots that snap
+within 3°, arrow keys (±1, Shift ±15, Home upright, End opposed), Escape and
+outside-click close. Every drag step calls `board.setTextAngle()`, which writes
+the pref, restyles the selection *and* the open label editor, and folds the whole
+gesture into one undo entry: `beginTextAngleGesture()` clears
+`board.textAngleHistoryPushed`, the first change pushes history, the rest reuse
+it. `hitStroke`'s text branch now delegates to `itemContainsPoint`, which turns
+the pointer back into the text's own frame before testing the unrotated block —
+one rotated box for click, eraser, marquee and lasso.
+
 ### Variation: stateless modules instead of sessions
 
 `js/fileCabinet.js` (2965 lines) is the second file split this way, but its

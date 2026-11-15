@@ -1,9 +1,10 @@
-/** @module {"owns":"magicCanvas shape and connector label layout - the one wrap, size and centring model shared by the canvas painter and the inline editor", "related":["canvasBrushes.js","flowchart.js","drawingBoardFlowchart.js","drawingBoard/view.js"]} */
+/** @module {"owns":"magicCanvas shape and connector label layout - the one wrap, size and centring model shared by the canvas painter and the inline editor", "related":["canvasBrushes.js","flowchart.js","drawingBoardFlowchart.js","drawingBoard/view.js","textAngle.js"]} */
 import {
     FLOW_LABEL_DEFAULT,
     fitFlowLabelFontSize,
     normalizeFlowLabelSize
 } from './flowchart.js';
+import { normalizeTextAngle } from './textAngle.js';
 
 /**
  * The painter's font stack, repeated in the editor's inline styles. Both sides
@@ -53,6 +54,31 @@ export function flowLabelBox(stroke) {
 export function flowLabelMaxWidth(box) {
     if (!box || box.isConnector) return Infinity;
     return Math.max(10, box.w - FLOW_LABEL_PAD * 2);
+}
+
+/**
+ * Rotation of a shape/connector label, in whole degrees clockwise. Stored on the
+ * label itself so it travels with copy/paste, undo and the document round-trip;
+ * absent means upright.
+ *
+ * @param {object} stroke shape or connector stroke
+ * @returns {number} 0-359
+ */
+export function flowLabelAngle(stroke) {
+    return normalizeTextAngle(stroke?.label?.angle);
+}
+
+/**
+ * Point a label rotates around: the centre of its own box, which is the shape's
+ * bounding-box middle or the connector's bend point — the two places the editor
+ * is centred, so a rotated label previews exactly where the painter puts it.
+ *
+ * @param {object} stroke
+ * @returns {{x: number, y: number}}
+ */
+export function flowLabelCentre(stroke) {
+    const box = flowLabelBox(stroke);
+    return { x: box.centerX, y: box.centerY };
 }
 
 /**
@@ -169,7 +195,8 @@ export function flowLabelCanvasLayout(stroke, measure) {
         lineHeight,
         centerX: box.centerX,
         blockTop: box.centerY - blockHeight / 2,
-        blockHeight
+        blockHeight,
+        angle: flowLabelAngle(stroke)
     };
 }
 
@@ -196,13 +223,14 @@ export function flowLabelFirstBaseline(layout, ascent, descent) {
  *
  * @param {object} stroke
  * @param {{dpr?: number, fontSize?: number}} [opts] fontSize in canvas units
- * @returns {{isConnector: boolean, fontSizeCss: number, padCss: number, lineHeight: number, fontFamily: string, left: number, top: number, width: number, height: number}}
+ * @returns {{isConnector: boolean, fontSizeCss: number, padCss: number, lineHeight: number, fontFamily: string, left: number, top: number, width: number, height: number, angle: number}}
  */
 export function flowLabelEditorMetrics(stroke, opts = {}) {
     const dpr = Number(opts.dpr) > 0 ? Number(opts.dpr) : 1;
     const box = flowLabelBox(stroke);
     const fontSize = normalizeFlowLabelSize(opts.fontSize ?? stroke?.label?.fontSize);
     const fontSizeCss = fontSize / dpr;
+    const angle = opts.angle != null ? normalizeTextAngle(opts.angle) : flowLabelAngle(stroke);
     if (box.isConnector) {
         // Width 0 + centred text: every line overflows symmetrically around the
         // bend point, which is what ctx.textAlign = 'center' does at centerX.
@@ -215,7 +243,8 @@ export function flowLabelEditorMetrics(stroke, opts = {}) {
             left: box.centerX / dpr,
             top: box.centerY / dpr,
             width: 0,
-            height: 0
+            height: 0,
+            angle
         };
     }
     return {
@@ -227,6 +256,7 @@ export function flowLabelEditorMetrics(stroke, opts = {}) {
         left: box.left / dpr,
         top: box.top / dpr,
         width: box.w / dpr,
-        height: box.h / dpr
+        height: box.h / dpr,
+        angle
     };
 }

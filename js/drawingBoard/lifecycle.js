@@ -1,5 +1,6 @@
 /** @module {"owns":"magicCanvas session enter/exit (workspace, note canvas) and toolbar chrome lifecycle","related":["drawingBoard.js","drawingBoard/prefs.js","canvasViewport.js","noteModel.js"]} */
 import { ColorPicker } from '../colorPicker.js';
+import { closeAngleDial } from '../angleDial.js';
 import { DrawingToolbarMenu } from '../drawingToolbarMenu.js';
 import { CanvasViewport } from '../canvasViewport.js';
 import { readDocument } from '../canvasDocument.js';
@@ -24,10 +25,12 @@ export function init(board, app) {
     DrawingToolbarChrome.init();
     DrawingToolbarChrome.onCollapse = () => {
         ColorPicker.close();
+        closeAngleDial();
         DrawingToolbarMenu.close();
         board.colorRolloutOpen = false;
         board.bgColorRolloutOpen = false;
         board.textColorRolloutOpen = false;
+        board.textAngleRolloutOpen = false;
         requestAnimationFrame(() => board.resize());
     };
     DrawingToolbarChrome.onExpand = () => {
@@ -164,10 +167,12 @@ export async function deactivate(board) {
     clearTimeout(board.saveTimer);
     board.saveTimer = null;
     ColorPicker.close();
+    closeAngleDial();
     DrawingToolbarMenu.close();
     board.colorRolloutOpen = false;
     board.bgColorRolloutOpen = false;
     board.textColorRolloutOpen = false;
+    board.textAngleRolloutOpen = false;
     if (board.brandEl) board.brandEl.textContent = board.brandNotesText;
     board.boardEl?.classList.add('is-hidden');
     board.boardEl?.setAttribute('aria-hidden', 'true');
@@ -191,6 +196,7 @@ export async function deactivate(board) {
     board.flowLabelEl = null;
     board.flowLabelTarget = null;
     board.flowLabelSize = null;
+    board.flowLabelAngle = null;
     board.flowShapesCache = null;
     board.doc = null;
     board.docOwner = null;
@@ -198,6 +204,7 @@ export async function deactivate(board) {
     // Gesture-scoped history flags must not leak into the next session.
     board.eraseHistoryPushed = false;
     board.bgColorHistoryPushed = false;
+    board.textAngleHistoryPushed = false;
     board.updateNoteToolbarChrome();
 }
 

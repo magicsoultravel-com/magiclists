@@ -11,12 +11,13 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    TEXT_COLOR_DEFAULT, TEXT_SIZE_DEFAULT, TEXT_SIZE_MAX
+    TEXT_COLOR_DEFAULT, TEXT_SIZE_DEFAULT, TEXT_SIZE_MAX, PREFS_KEY
 } from '../js/drawingBoard/prefs.js';
 import {
     hasLabel, isTextBox, textTargets, textStyle, sizeForTarget, cssSizeOf,
     textSizeRange, currentTextSize, applyTextStyle, setTextColor, setTextSize,
-    stepTextSize
+    stepTextSize, currentTextAngle, setTextAngle,
+    beginTextAngleGesture, endTextAngleGesture
 } from '../js/drawingBoard/text.js';
 import { placeTextBox } from '../js/drawingBoardSelection.js';
 
@@ -52,12 +53,16 @@ function makeBoard({ selection = [], text = null } = {}) {
         redraws: 0,
         renders: 0,
         chipColour: null,
+        angleReadout: null,
+        restyles: [],
         getSelectedStrokesArray() { return Array.from(this.selectedStrokes); },
         pushLayerHistory() { this.historyPushes += 1; },
         scheduleSave() { this.saves += 1; },
         requestRedraw() { this.redraws += 1; },
         renderToolbar() { this.renders += 1; },
-        updateTextColorChip(colour) { this.chipColour = colour; }
+        updateTextColorChip(colour) { this.chipColour = colour; },
+        updateTextAngleControl(angle) { this.angleReadout = angle; },
+        flowRestyleLabelEditor(patch) { this.restyles.push(patch); return 1; }
     };
     if (text) board.prefs.text = text;
     return board;
@@ -119,10 +124,14 @@ describe('text targets', () => {
 
     it('reads the stored text style and defaults when it is missing', () => {
         withEnv(() => {
-            assert.deepEqual(textStyle(makeBoard()), { color: TEXT_COLOR_DEFAULT, size: TEXT_SIZE_DEFAULT });
+            assert.deepEqual(textStyle(makeBoard()), {
+                color: TEXT_COLOR_DEFAULT,
+                size: TEXT_SIZE_DEFAULT,
+                angle: 0
+            });
             assert.deepEqual(
-                textStyle(makeBoard({ text: { color: '#abcdef', size: 12 } })),
-                { color: '#abcdef', size: 12 }
+                textStyle(makeBoard({ text: { color: '#abcdef', size: 12, angle: 30 } })),
+                { color: '#abcdef', size: 12, angle: 30 }
             );
         });
     });
@@ -301,6 +310,119 @@ describe('text size stepping', () => {
 });
 
 
+describe('text angle', () => {
+    it('reads the selection angle, then the live editor, then the pref', () => {
+        withEnv(() => {
+            const rotated = shapeLabel();
+            rotated.label.angle = 45;
+            const board = makeBoard({ selection: [rotated], text: { color: '#fff', size: 40, angle: 10 } });
+            assert.equal(currentTextAngle(board), 45, 'a homogeneous selection wins');
+
+            const second = textBox();
+            second.angle = 90;
+            board.selectedStrokes.add(second);
+            assert.equal(currentTextAngle(board), 10, 'a mixed selection falls back to the pref');
+
+            board.selectedStrokes.clear();
+            assert.equal(currentTextAngle(board), 10, 'nothing selected: the pref');
+
+            board.flowLabelAngle = 200;
+            assert.equal(currentTextAngle(board), 200, 'an open editor is the live target');
+        });
+    });
+
+    it('applies an angle to labels and text boxes and remembers it', () => {
+        withEnv(() => {
+            const label = shapeLabel();
+            const box = textBox();
+            const board = makeBoard({
+                selection: [label, box],
+                text: { color: '#fff', size: 40, angle: 0 }
+            });
+
+            beginTextAngleGesture(board);
+            assert.equal(setTextAngle(board, 30), 2);
+            assert.equal(label.label.angle, 30, 'the angle lives on the label');
+            assert.equal(box.angle, 30, 'and on the text object itself');
+            assert.equal(board.historyPushes, 1, 'a gesture is one undo entry');
+            assert.equal(board.prefs.text.angle, 30, 'the next text box inherits it');
+            assert.equal(board.angleReadout, 30, 'the toolbar badge follows');
+            assert.deepEqual(board.restyles, [{ angle: 30 }], 'the open editor previews it');
+        });
+    });
+
+    it('folds a whole drag into the gesture\'s single undo entry', () => {
+        withEnv(() => {
+            const box = textBox();
+            const board = makeBoard({ selection: [box], text: { color: '#fff', size: 40, angle: 0 } });
+
+            beginTextAngleGesture(board);
+            setTextAngle(board, 30);
+            setTextAngle(board, 60);
+            setTextAngle(board, 90);
+            assert.equal(board.historyPushes, 1, 'three steps, one entry');
+
+            endTextAngleGesture(board);
+            setTextAngle(board, 120);
+            assert.equal(board.historyPushes, 2, 'the next gesture is its own entry');
+        });
+    });
+
+    it('wraps out-of-range degrees and stores upright as absence', () => {
+        withEnv(() => {
+            const label = shapeLabel();
+            const box = textBox();
+            box.angle = 90;
+            label.label.angle = 45;
+            const board = makeBoard({ selection: [label, box], text: { color: '#fff', size: 40, angle: 0 } });
+
+            setTextAngle(board, 400);
+            assert.equal(textTargetAngle(box), 40);
+            assert.equal(label.label.angle, 40);
+
+            setTextAngle(board, 0);
+            assert.equal('angle' in box, false, 'upright is stored-absent, like zLevel 0');
+            assert.equal('angle' in label.label, false);
+            assert.equal(board.prefs.text.angle, 0);
+        });
+    });
+
+    it('does not burn an undo entry on a no-op angle', () => {
+        withEnv(() => {
+            const box = textBox();
+            box.angle = 90;
+            const board = makeBoard({ selection: [box], text: { color: '#fff', size: 40, angle: 0 } });
+            assert.equal(setTextAngle(board, 90), 0);
+            assert.equal(board.historyPushes, 0);
+            assert.equal(board.saves, 0);
+            assert.equal(board.redraws, 0);
+        });
+    });
+
+    it('persists the pref once per gesture, with the angle it ended on', () => {
+        withEnv((store) => {
+            const box = textBox();
+            const board = makeBoard({ selection: [box], text: { color: '#fff', size: 40, angle: 0 } });
+
+            beginTextAngleGesture(board);
+            setTextAngle(board, 30);
+            setTextAngle(board, 60);
+            setTextAngle(board, 90);
+            assert.equal(JSON.parse(store.get(PREFS_KEY)).text.angle, 30,
+                'mid-drag writes are deferred, not one per pointermove');
+
+            endTextAngleGesture(board);
+            assert.equal(JSON.parse(store.get(PREFS_KEY)).text.angle, 90,
+                'the gesture ends on the value the user chose');
+        });
+    });
+});
+
+/** Angle of a text object, so the test does not import the model module too. */
+function textTargetAngle(item) {
+    return Number.isFinite(Number(item.angle)) ? Number(item.angle) : 0;
+}
+
 describe('placeTextBox', () => {
     /** Minimal DOM for placeTextBox's contentEditable overlay. */
     function installDom(dpr = 2) {
@@ -316,6 +438,8 @@ describe('placeTextBox', () => {
                     className: '',
                     contentEditable: '',
                     innerText: '',
+                    offsetWidth: 0,
+                    offsetHeight: 0,
                     focus() { el.focused = true; },
                     remove() { el.removed = true; },
                     addEventListener(type, fn) { (el.listeners[type] ||= []).push(fn); }
@@ -389,6 +513,41 @@ describe('placeTextBox', () => {
         created[0].listeners.blur[0]();
         assert.deepEqual(board.doc.pages[0].texts, []);
         assert.equal(board.historyPushes, 0);
+    });
+
+    it('previews the pref angle and stores it with the measured block', () => {
+        const created = installDom(2);
+        const board = textBoard({ color: '#fff', size: 28, angle: 45 });
+        placeTextBox(board, 100, 50);
+
+        const el = created[0];
+        assert.equal(el.style.transform, 'rotate(45deg)', 'the editor turns as the painter would');
+
+        el.offsetWidth = 60;
+        el.offsetHeight = 12;
+        el.innerText = 'Hi';
+        el.listeners.blur[0]();
+
+        const stored = board.doc.pages[0].texts[0];
+        assert.equal(stored.angle, 45);
+        assert.equal(stored.width, 120, 'measured block in canvas units (CSS px * dpr)');
+        assert.equal(stored.height, 24);
+    });
+
+    it('stores no angle and no block when upright and unmeasurable', () => {
+        const created = installDom(1);
+        const board = textBoard({ color: '#fff', size: 20 });
+        placeTextBox(board, 0, 0);
+
+        assert.equal(created[0].style.transform, undefined, 'upright leaves the transform alone');
+
+        created[0].innerText = 'Hi';
+        created[0].listeners.blur[0]();
+
+        const stored = board.doc.pages[0].texts[0];
+        assert.equal('angle' in stored, false, 'upright is stored-absent');
+        assert.equal('width' in stored, false, 'an unmeasured box keeps the legacy heuristic');
+        assert.equal('height' in stored, false);
     });
 });
 

@@ -132,8 +132,13 @@ describe('drawing board prefs', () => {
     it('defaults the text style to 40 CSS px in the default ink colour', () => {
         withStorage(() => {
             const prefs = readPrefs();
-            assert.deepEqual(prefs.text, { color: TEXT_COLOR_DEFAULT, size: TEXT_SIZE_DEFAULT });
+            assert.deepEqual(prefs.text, {
+                color: TEXT_COLOR_DEFAULT,
+                size: TEXT_SIZE_DEFAULT,
+                angle: 0
+            });
             assert.equal(prefs.text.size, 40, '40px matches the old width*4 default');
+            assert.equal(prefs.text.angle, 0, 'new text starts upright');
             assert.equal(prefs.textTipShown, false);
         });
     });
@@ -156,7 +161,11 @@ describe('drawing board prefs', () => {
         withStorage((store) => {
             store.set(PREFS_KEY, JSON.stringify({ text: { color: 42, size: 'big' } }));
             const prefs = readPrefs();
-            assert.deepEqual(prefs.text, { color: TEXT_COLOR_DEFAULT, size: TEXT_SIZE_DEFAULT });
+            assert.deepEqual(prefs.text, {
+                color: TEXT_COLOR_DEFAULT,
+                size: TEXT_SIZE_DEFAULT,
+                angle: 0
+            });
         });
     });
 
@@ -164,6 +173,21 @@ describe('drawing board prefs', () => {
         withStorage((store) => {
             store.set(PREFS_KEY, JSON.stringify({ text: { size: 33.6 } }));
             assert.equal(readPrefs().text.size, 34);
+        });
+    });
+
+    it('wraps a stored text angle into 0-359 instead of clamping it', () => {
+        withStorage((store) => {
+            store.set(PREFS_KEY, JSON.stringify({ text: { angle: 400 } }));
+            assert.equal(readPrefs().text.angle, 40, 'a dial has no ends: 400 is 40');
+        });
+        withStorage((store) => {
+            store.set(PREFS_KEY, JSON.stringify({ text: { angle: -90 } }));
+            assert.equal(readPrefs().text.angle, 270, 'negative degrees wrap forwards');
+        });
+        withStorage((store) => {
+            store.set(PREFS_KEY, JSON.stringify({ text: { angle: 'sideways' } }));
+            assert.equal(readPrefs().text.angle, 0, 'garbage is upright, not NaN');
         });
     });
 

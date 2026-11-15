@@ -532,6 +532,25 @@ export const DrawingBoard = {
     /** CSS-px size the text stepper shows for the current selection. */
     currentTextSize() { return TextSession.currentTextSize(this); },
 
+    /**
+     * Degrees the angle dial shows: the selection's shared angle, an open label
+     * editor's live angle, else the stored pref.
+     */
+    currentTextAngle() { return TextSession.currentTextAngle(this); },
+
+    /** Reorient text: remembered for future text, applied to the selection. */
+    setTextAngle(angle) { return TextSession.setTextAngle(this, angle); },
+
+    /** Open one undo entry for the dial gesture that is starting. */
+    beginTextAngleGesture() { return TextSession.beginTextAngleGesture(this); },
+
+    /** Close the dial's undo entry so the next gesture starts a fresh one. */
+    endTextAngleGesture() { return TextSession.endTextAngleGesture(this); },
+
+    openTextAngleDial(anchor) { return ToolbarSession.openTextAngleDial(this, anchor); },
+
+    updateTextAngleControl(angle) { return ToolbarSession.updateTextAngleControl(this, angle); },
+
     /** Allowed CSS-px range for the current selection (labels cap lower). */
     textSizeRange() { return TextSession.textSizeRange(this); },
 

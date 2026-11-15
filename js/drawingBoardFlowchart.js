@@ -5,6 +5,7 @@ import {
     createFlowchartConnector, routeFlowchartConnector
 } from './flowchart.js';
 import {
+    flowLabelAngle,
     flowLabelEditorMetrics,
     flowLabelInitialFontSize
 } from './flowchartLabel.js';
@@ -19,6 +20,7 @@ import { isDragShape } from './drawingBoardCore.js';
 import { orderedItems } from './canvasZOrder.js';
 import { writePrefs } from './drawingBoard/prefs.js';
 import { textStyle } from './drawingBoard/text.js';
+import { normalizeTextAngle, textRotationCss } from './textAngle.js';
 
 /**
  * Canvas grid preference. Shapes, connectors and the visible background all read
@@ -503,13 +505,16 @@ function applyLabelEditorMetrics(el, metrics, color) {
     el.style.overflow = 'visible';
     el.style.left = metrics.left + 'px';
     el.style.top = metrics.top + 'px';
+    const rotation = textRotationCss(metrics.angle);
     if (metrics.isConnector) {
         // Zero width + centred text: lines overflow both ways around the bend
         // point, which is what ctx.textAlign = 'center' at centerX paints.
-        // translateY(-50%) centres the block, matching the painter's blockTop.
+        // translateY(-50%) centres the block, matching the painter's blockTop;
+        // the rotation comes after it so it spins about that centred box, not
+        // about the un-translated element's middle.
         el.style.width = '0px';
         el.style.whiteSpace = 'pre';
-        el.style.transform = 'translateY(-50%)';
+        el.style.transform = rotation ? `translateY(-50%) ${rotation}` : 'translateY(-50%)';
         el.style.minHeight = (metrics.lineHeight * metrics.fontSizeCss) + 'px';
         return;
     }
@@ -521,6 +526,9 @@ function applyLabelEditorMetrics(el, metrics, color) {
     el.style.justifyContent = 'center';
     el.style.whiteSpace = 'pre-wrap';
     el.style.overflowWrap = 'anywhere';
+    // Default transform-origin (50% 50%) is the shape box's centre — the same
+    // point the painter rotates the label about.
+    el.style.transform = rotation;
 }
 
 /**
@@ -561,7 +569,10 @@ export function flowEditLabel(board, target) {
     // An explicit stored size always wins; only a brand-new label is fitted to
     // its box. Same rule the painter applies, decided by the same module.
     const fontSize = flowLabelInitialFontSize(target);
-    const metrics = flowLabelEditorMetrics(target, { dpr, fontSize });
+    // An existing label keeps its angle (editing the words never silently
+    // rotates it); a brand-new one starts at the remembered dial angle.
+    const angle = hasPrev ? flowLabelAngle(target) : textStyle(board).angle;
+    const metrics = flowLabelEditorMetrics(target, { dpr, fontSize, angle });
 
     const el = document.createElement('div');
     el.className = 'flow-label-editor' + (isConnector ? ' flow-label-editor--connector' : ' flow-label-editor--box');
@@ -585,6 +596,9 @@ export function flowEditLabel(board, target) {
     // its own size, so the stepper parks it here (flowRestyleLabelEditor) and
     // commit() writes it into the label.
     board.flowLabelSize = fontSize;
+    // Live angle, in degrees: the dial restyles an open editor through this and
+    // commit() writes it into the label (a label may not exist yet).
+    board.flowLabelAngle = normalizeTextAngle(angle);
     board.selectedStrokes.clear();
     board.selectedStrokes.add(target);
     // The text controls now speak for this label: refresh so the size stepper
@@ -602,14 +616,26 @@ export function flowEditLabel(board, target) {
         // Read the size at commit time, not open time: the toolbar's stepper can
         // restyle an open editor, and that pending size lives in flowLabelSize.
         const size = normalizeFlowLabelSize(board.flowLabelSize || (prevLabel && prevLabel.fontSize));
+        // Same rule as the size: read at commit time, because the dial can turn
+        // the editor while the user is still typing.
+        const liveAngle = board.flowLabelAngle != null
+            ? normalizeTextAngle(board.flowLabelAngle)
+            : normalizeTextAngle(prevLabel && prevLabel.angle);
         const nextLabel = text
-            ? { text, fontSize: size, color: hadText ? String(prevLabel.color || '') : textStyle(board).color }
+            ? {
+                text,
+                fontSize: size,
+                color: hadText ? String(prevLabel.color || '') : textStyle(board).color,
+                // Upright stays stored-absent so untouched documents save unchanged.
+                ...(liveAngle ? { angle: liveAngle } : {})
+            }
             : null;
         el.remove();
         if (board.flowLabelEl === el) {
             board.flowLabelEl = null;
             board.flowLabelTarget = null;
             board.flowLabelSize = null;
+            board.flowLabelAngle = null;
         }
         if (JSON.stringify(nextLabel) !== prevJson) {
             board.pushLayerHistory();
@@ -642,7 +668,7 @@ export function flowCloseLabel(board) {
  * and the committed label jumped on blur.
  *
  * @param {object} board
- * @param {{size?: number, color?: string}} patch `size` in CSS px, like the stepper
+ * @param {{size?: number, color?: string, angle?: number}} patch `size` in CSS px, like the stepper
  * @returns {number} how many style properties changed
  */
 export function flowRestyleLabelEditor(board, patch = {}) {
@@ -665,6 +691,21 @@ export function flowRestyleLabelEditor(board, patch = {}) {
     if (patch?.color) {
         el.style.color = String(patch.color);
         applied += 1;
+    }
+    if (patch?.angle != null) {
+        const angle = normalizeTextAngle(patch.angle);
+        const rotation = textRotationCss(angle);
+        if (target.flowchartKind === 'connector') {
+            // Keep the block centring translate the connector editor is built
+            // with; only a zero angle drops it back to the plain centring.
+            el.style.transform = rotation ? `translateY(-50%) ${rotation}` : 'translateY(-50%)';
+        } else {
+            el.style.transform = rotation;
+        }
+        if (board.flowLabelAngle !== angle) {
+            board.flowLabelAngle = angle;
+            applied += 1;
+        }
     }
     return applied;
 }

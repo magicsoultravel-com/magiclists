@@ -1,9 +1,13 @@
-/** @module {"owns":"magicCanvas text styling - text colour/size prefs and selection-first restyling of shape labels and text boxes","related":["drawingBoard.js","drawingBoardToolbar.js","drawingBoardFlowchart.js","drawingBoardSelection.js","flowchart.js","drawingBoard/prefs.js"]} */
+/** @module {"owns":"magicCanvas text styling - text colour/size/angle prefs and selection-first restyling of shape labels and text boxes","related":["drawingBoard.js","drawingBoardToolbar.js","drawingBoardFlowchart.js","drawingBoardSelection.js","flowchart.js","textAngle.js","drawingBoard/prefs.js"]} */
 import {
     FLOW_LABEL_MAX,
     FLOW_LABEL_MIN,
     normalizeFlowLabelSize
 } from '../flowchart.js';
+import {
+    normalizeTextAngle,
+    textAngleOf
+} from '../textAngle.js';
 import {
     TEXT_COLOR_DEFAULT,
     TEXT_SIZE_DEFAULT,
@@ -24,7 +28,7 @@ export function textDpr() {
     return Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
 }
 
-/** Stored text style ({ color, size } in CSS px) with defaults applied. */
+/** Stored text style ({ color, size, angle } in CSS px / degrees) with defaults applied. */
 export function textStyle(board) {
     return readTextPrefs(board?.prefs?.text);
 }
@@ -103,12 +107,31 @@ export function currentTextSize(board) {
 }
 
 /**
- * Apply a colour and/or CSS-px size to every selected text target.
- * Dry-run first so a no-op (same colour, size already at the label cap) does not
- * push an undo entry the next Ctrl+Z would burn on nothing.
+ * Value the dial shows: the shared angle when the selection agrees, an open
+ * label editor's live angle next (it may not exist as a label yet), else the
+ * remembered pref so the next text box starts where the last one was left.
+ */
+export function currentTextAngle(board) {
+    const angles = textTargets(board).map((item) => textAngleOf(item));
+    const common = angles.length && angles.every((angle) => angle === angles[0]) ? angles[0] : null;
+    const editing = board?.flowLabelAngle;
+    if (Number.isFinite(editing)) return normalizeTextAngle(editing);
+    if (common != null) return common;
+    return textStyle(board).angle;
+}
+
+/**
+ * Apply a colour, CSS-px size and/or angle to every selected text target.
+ * Dry-run first so a no-op (same colour, size already at the label cap, same
+ * angle) does not push an undo entry the next Ctrl+Z would burn on nothing.
+ *
+ * @param {object} board
+ * @param {{color?: string, size?: number, angle?: number}} [patch]
+ * @param {{history?: boolean}} [opts] `history: false` folds a dial drag into the
+ *   one undo entry its first change already pushed.
  * @returns {number} how many targets changed
  */
-export function applyTextStyle(board, patch = {}) {
+export function applyTextStyle(board, patch = {}, { history = true } = {}) {
     const dpr = textDpr();
     const updates = [];
     for (const target of textTargets(board)) {
@@ -125,11 +148,15 @@ export function applyTextStyle(board, patch = {}) {
                 : Math.round(Number(target.fontSize) || 0);
             if (size !== before) next.size = size;
         }
+        if (patch.angle != null) {
+            const angle = normalizeTextAngle(patch.angle);
+            if (textAngleOf(target) !== angle) next.angle = angle;
+        }
         if (Object.keys(next).length) updates.push([target, next]);
     }
     if (!updates.length) return 0;
 
-    board.pushLayerHistory();
+    if (history) board.pushLayerHistory();
     for (const [target, next] of updates) {
         if (next.size != null) {
             if (hasLabel(target)) target.label.fontSize = next.size;
@@ -139,10 +166,70 @@ export function applyTextStyle(board, patch = {}) {
             if (hasLabel(target)) target.label.color = next.color;
             else target.color = next.color;
         }
+        if (next.angle != null) {
+            // Upright is the stored-absent case (like `zLevel: 0`), so an
+            // unrotated document stays byte-identical across a save.
+            if (hasLabel(target)) {
+                if (next.angle) target.label.angle = next.angle;
+                else delete target.label.angle;
+            } else if (next.angle) {
+                target.angle = next.angle;
+            } else {
+                delete target.angle;
+            }
+        }
     }
     board.scheduleSave();
     requestRedraw(board);
     return updates.length;
+}
+
+/**
+ * Start a dial drag. Held on the board between `setTextAngle` calls so the whole
+ * drag costs one undo entry, not one per pointermove.
+ */
+export function beginTextAngleGesture(board) {
+    if (board) board.textAngleHistoryPushed = false;
+}
+
+/** End a dial drag; the next gesture starts a fresh undo entry. */
+export function endTextAngleGesture(board) {
+    if (!board) return;
+    board.textAngleHistoryPushed = false;
+    // The gesture deferred its pref writes; one here is enough for the whole
+    // drag (the doc itself was already saved step by step through scheduleSave).
+    if (board.prefs?.text) writePrefs(board.prefs);
+}
+
+/**
+ * Set the text angle (degrees, clockwise) on the selection and the open editor.
+ *
+ * The pref is always written so the next text box inherits the angle the user
+ * just chose. One undo entry per gesture: the first change in a drag pushes
+ * history, the rest reuse it via `beginTextAngleGesture`.
+ *
+ * @param {object} board
+ * @param {number} angle 0-359, wraps
+ * @returns {number} how many targets changed
+ */
+export function setTextAngle(board, angle) {
+    const next = normalizeTextAngle(angle);
+    const style = textStyle(board);
+    const inGesture = board?.textAngleHistoryPushed === true;
+    if (board?.prefs && style.angle !== next) {
+        board.prefs.text = { ...style, angle: next };
+        // A drag changes the angle on every pointermove; persist once at the
+        // start and once when the gesture ends instead of per degree.
+        if (!inGesture) writePrefs(board.prefs);
+    }
+    const history = board?.textAngleHistoryPushed !== true;
+    const changed = applyTextStyle(board, { angle: next }, { history });
+    if (changed && board) board.textAngleHistoryPushed = true;
+    // A label being typed has no stored angle yet, so the live DOM needs the
+    // same value the painter will use or the preview would jump on blur.
+    if (typeof board?.flowRestyleLabelEditor === 'function') board.flowRestyleLabelEditor({ angle: next });
+    if (typeof board?.updateTextAngleControl === 'function') board.updateTextAngleControl(next);
+    return changed;
 }
 
 /**

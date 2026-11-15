@@ -1,5 +1,12 @@
-/** @module {"owns":"lasso geometry utilities - ray casting, bounding boxes", "related":["drawingBoard.js","canvasZOrder.js"]} */
+/** @module {"owns":"lasso geometry utilities - ray casting, bounding boxes", "related":["drawingBoard.js","canvasZOrder.js","textAngle.js"]} */
 import { orderedItems } from './canvasZOrder.js';
+import {
+    rotatePointAround,
+    textAngleOf,
+    textBoxPivot,
+    textObjectBox,
+    textObjectBounds
+} from './textAngle.js';
 
 /**
  * Ray-casting algorithm to determine if a point is inside a polygon.
@@ -192,17 +199,9 @@ function getShapeBounds(item) {
 }
 
 function getTextBounds(item) {
-    // Approximate text box: use a stored width/height when available, else a
-    // heuristic based on font size. Matches the hit area used in drawingBoard.js.
-    const fontSize = item.fontSize || 16;
-    const width = item.width || Math.max(200, (item.text || '').length * fontSize * 0.6);
-    const height = item.height || Math.max(60, fontSize * 1.4);
-    return {
-        minX: item.x,
-        minY: item.y,
-        maxX: item.x + width,
-        maxY: item.y + height
-    };
+    // Rotated text is measured by the AABB of its turned block, so selection,
+    // marquee, lasso and page clamping all agree with the painted glyphs.
+    return textObjectBounds(item);
 }
 
 function getImageBounds(item) {
@@ -570,7 +569,14 @@ export function itemContainsPoint(item, x, y, radius = 0) {
     }
 
     if (item.tool === 'text') {
-        return rectContainsPoint(getTextBounds(item), x, y, radius);
+        // Turn the pointer back into the text's own frame, then test the
+        // unrotated block: one box, so clicking the corner of a turned label is
+        // as accurate as clicking an upright one.
+        const angle = textAngleOf(item);
+        const point = angle
+            ? rotatePointAround(x, y, textBoxPivot(item).x, textBoxPivot(item).y, 360 - angle)
+            : { x, y };
+        return rectContainsPoint(textObjectBox(item), point.x, point.y, radius);
     }
 
     if (item.flowchartKind === 'connector') {

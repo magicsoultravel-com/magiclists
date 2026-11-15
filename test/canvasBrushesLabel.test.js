@@ -13,7 +13,7 @@
 //      doubling every glyph.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { drawFlowchartLabel, drawShapeStroke } from '../js/canvasBrushes.js';
+import { drawFlowchartLabel, drawShapeStroke, drawTextObject } from '../js/canvasBrushes.js';
 import { FLOW_LABEL_FONT_STACK, FLOW_LABEL_LINE_HEIGHT } from '../js/flowchartLabel.js';
 
 /**
@@ -25,6 +25,7 @@ import { FLOW_LABEL_FONT_STACK, FLOW_LABEL_LINE_HEIGHT } from '../js/flowchartLa
 function recordingCtx({ bounds = true, ascent = 8, descent = 2 } = {}) {
     const texts = [];
     const stack = [];
+    const ops = [];
     const ctx = {
         font: '', fillStyle: '', strokeStyle: '', lineWidth: 1, globalAlpha: 1,
         lineCap: 'butt', lineJoin: 'miter', textAlign: 'start', textBaseline: 'alphabetic',
@@ -49,9 +50,10 @@ function recordingCtx({ bounds = true, ascent = 8, descent = 2 } = {}) {
         fillText(text, x, y) { texts.push({ text, x, y, font: this.font }); },
         beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, stroke() {}, fill() {},
         strokeRect() {}, fillRect() {}, rect() {}, roundRect() {}, ellipse() {},
-        arc() {}, setLineDash() {}, translate() {}, rotate() {}, scale() {}
+        arc() {}, setLineDash() {}, translate(x, y) { ops.push(['translate', x, y]); },
+        rotate(rad) { ops.push(['rotate', rad]); }, scale() {}
     };
-    return { ctx, texts };
+    return { ctx, texts, ops };
 }
 
 const rect = (overrides = {}) => ({
@@ -166,6 +168,39 @@ describe('drawFlowchartLabel', () => {
         assert.equal(ctx.fillStyle, '#123456');
         assert.equal(ctx.font, '9px monospace');
     });
+
+    it('turns a rotated label about the centre of its box', () => {
+        const { ctx, ops, texts } = recordingCtx();
+        drawFlowchartLabel(ctx, rect({ label: { text: 'x', fontSize: 20, angle: 90 } }));
+
+        // 0..200 x 0..100 box: centre (100, 50). Translate/rotate/translate back
+        // is the canvas sandwich that keeps the fillText coordinates absolute.
+        assert.deepEqual(ops, [
+            ['translate', 100, 50],
+            ['rotate', Math.PI / 2],
+            ['translate', -100, -50]
+        ]);
+        assert.equal(texts[0].x, 100, 'still painted at the box centre');
+    });
+
+    it('turns a connector label about its bend point', () => {
+        const { ctx, ops } = recordingCtx();
+        drawFlowchartLabel(ctx, {
+            tool: 'connector', color: '#fff', x0: 0, y0: 0, x1: 0, y1: 200,
+            midX: 40, midY: 100,
+            label: { text: 'yes', fontSize: 20, angle: 270 }
+        });
+        assert.deepEqual(ops[0], ['translate', 40, 100]);
+        assert.equal(ops[1][0], 'rotate');
+        assert.deepEqual(ops[2], ['translate', -40, -100]);
+    });
+
+    it('leaves an upright label untransformed', () => {
+        const { ctx, ops, texts } = recordingCtx();
+        drawFlowchartLabel(ctx, rect({ label: { text: 'x', fontSize: 20 } }));
+        assert.deepEqual(ops, [], 'no rotation, no transform ops');
+        assert.equal(texts.length, 1);
+    });
 });
 
 describe('drawShapeStroke label forwarding', () => {
@@ -180,5 +215,31 @@ describe('drawShapeStroke label forwarding', () => {
         const shape = rect({ label: { text: 'hi', fontSize: 20 } });
         drawShapeStroke(ctx, shape, { skipLabel: shape });
         assert.equal(texts.length, 0);
+    });
+});
+
+describe('drawTextObject rotation', () => {
+    const textObj = (overrides = {}) => ({
+        tool: 'text', x: 100, y: 50, text: 'Hi', fontSize: 20,
+        width: 120, height: 30,
+        ...overrides
+    });
+
+    it('turns a text box about the centre of its stored block', () => {
+        const { ctx, ops, texts } = recordingCtx();
+        drawTextObject(ctx, textObj({ angle: 30 }));
+        // 100..220 x 50..80: centre (160, 65) — the same point the DOM editor's
+        // transform-origin uses.
+        assert.deepEqual(ops[0], ['translate', 160, 65]);
+        assert.equal(ops[1][0], 'rotate');
+        assert.deepEqual(ops[2], ['translate', -160, -65]);
+        assert.equal(texts[0].x, 100, 'the words keep their stored origin');
+    });
+
+    it('paints upright text with no transform at all', () => {
+        const { ctx, ops, texts } = recordingCtx();
+        drawTextObject(ctx, textObj());
+        assert.deepEqual(ops, []);
+        assert.equal(texts.length, 1);
     });
 });

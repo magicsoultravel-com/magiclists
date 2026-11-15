@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-15T20:39:57.794Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-15T22:50:10.773Z
 
 ## CSS load order
 
@@ -53,6 +53,7 @@ alwaysApply: true
 
 | file | owns | related | events | notes |
 | --- | --- | --- | --- | --- |
+| js/angleDial.js | magicCanvas circular angle dial popover - pointer/keyboard degrees input with preset snapping, shared by the text rotation control | drawingBoardToolbar.js, textAngle.js, popoverPosition.js, drawingBoard.js | — | — |
 | js/api.js | item CRUD and matrix_database localStorage persistence | noteModel.js, layoutStorage.js, sync.js | — | — |
 | js/app.js | application orchestration, event bus listeners, workspace init | api.js, ui.js, layoutStorage.js | item:mutation_requested, item:selected_for_edit, board:visibility_changed, calendar:add_note | — |
 | js/app/drawingMode.js | the workspace-mode switches - notes board, file cabinet and note-canvas - plus leaving drawing when the focus editor opens and migrating a freeform overlay layout on the way out | ../app.js, state.js, listeners.js, ../drawingBoard.js | board:visibility_changed, workspace:mode_changed | — |
@@ -88,9 +89,9 @@ alwaysApply: true
 | js/drawingBoard/history.js | magicCanvas undo/redo stacks and their toolbar wiring | drawingBoard.js, drawingBoardCore.js, drawingBoard/document.js | — | — |
 | js/drawingBoard/input.js | magicCanvas pointer and keyboard input - press routing, stroke drafting, gesture end and shortcuts | drawingBoard.js, drawingBoard/geometry.js, drawingBoard/fill.js, drawingBoardSelection.js, drawingBoardCrop.js, drawingBoardFlowchart.js, drawingBoardClipboard.js, canvasViewport.js, lassoGeometry.js | — | — |
 | js/drawingBoard/lifecycle.js | magicCanvas session enter/exit (workspace, note canvas) and toolbar chrome lifecycle | drawingBoard.js, drawingBoard/prefs.js, canvasViewport.js, noteModel.js | — | — |
-| js/drawingBoard/prefs.js | magicCanvas brush style, text style, shape fill, tool and canvas grid preferences in localStorage (matrix_drawing_prefs) | drawingBoard.js, drawingBoardCore.js, drawingBoard/text.js, drawingBoard/fill.js, canvasBrushes.js, flowchart.js | — | — |
+| js/drawingBoard/prefs.js | magicCanvas brush style, text style, shape fill, tool and canvas grid preferences in localStorage (matrix_drawing_prefs) | drawingBoard.js, drawingBoardCore.js, drawingBoard/text.js, drawingBoard/fill.js, canvasBrushes.js, flowchart.js, textAngle.js | — | — |
 | js/drawingBoard/stroke.js | magicCanvas stroke colour - stroke-colour pref and selection-first restyling of shape borders and freehand strokes | drawingBoard.js, drawingBoardToolbar.js, drawingBoard/prefs.js, canvasBrushes.js | — | — |
-| js/drawingBoard/text.js | magicCanvas text styling - text colour/size prefs and selection-first restyling of shape labels and text boxes | drawingBoard.js, drawingBoardToolbar.js, drawingBoardFlowchart.js, drawingBoardSelection.js, flowchart.js, drawingBoard/prefs.js | — | — |
+| js/drawingBoard/text.js | magicCanvas text styling - text colour/size/angle prefs and selection-first restyling of shape labels and text boxes | drawingBoard.js, drawingBoardToolbar.js, drawingBoardFlowchart.js, drawingBoardSelection.js, flowchart.js, textAngle.js, drawingBoard/prefs.js | — | — |
 | js/drawingBoard/view.js | magicCanvas rendering - redraw loop, viewport sizing, page background fill/swatch, note overlay fit | drawingBoard.js, canvasViewport.js, canvasDocument.js, canvasBrushes.js, canvasBackgrounds.js, canvasImages.js, noteCanvasTextOverlay.js, colorPicker.js | — | — |
 | js/drawingBoard/zLevel.js | magicCanvas z-level of the current selection - top/middle/bottom buttons act on selected items only | drawingBoard.js, drawingBoardToolbar.js, canvasZOrder.js, lassoGeometry.js | — | — |
 | js/drawingBoardBackup.js | magicCanvas backup/restore payload (document + prefs + toolbar) | drawingBoard.js, canvasDocument.js, layoutStorage.js | — | — |
@@ -99,7 +100,7 @@ alwaysApply: true
 | js/drawingBoardCrop.js | magicCanvas crop session (frame gesture, overlay) | drawingBoard.js, canvasImages.js, lassoGeometry.js | — | — |
 | js/drawingBoardFlowchart.js | magicCanvas shapes and connectors - port magnet, routing, bend and endpoint drags, inline labels | drawingBoard.js, flowchart.js, flowchartGeometry.js, canvasBrushes.js | — | — |
 | js/drawingBoardSelection.js | magicCanvas selection session (box select, lasso drag, resize handles) | drawingBoard.js, lassoGeometry.js, canvasDocument.js | — | — |
-| js/drawingBoardToolbar.js | magicCanvas toolbar session (render, bind, menu chrome) | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | — | — |
+| js/drawingBoardToolbar.js | magicCanvas toolbar session (render, bind, menu chrome) | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js, angleDial.js, textAngle.js | — | — |
 | js/editor.js | modal note editor overlay, save flow | noteSurface.js, noteQuickActions.js, editorModalChrome.js, sheet.js | item:selected_for_edit, editor:reveal_on_board | — |
 | js/fileCabinet.js | file cabinet facade - the public surface ui.js/shellResize.js/dragdrop.js import, plus the four board-side helpers that compose the split modules | fileCabinet/order.js, fileCabinet/layout.js, fileCabinet/chrome.js, fileCabinet/transfer.js, fileCabinet/render.js, fileCabinet/categoryRail.js, fileCabinet/drag.js, noteSurface.js, dragdrop.js | filecabinet:layout_changed | — |
 | js/fileCabinet/categoryRail.js | file cabinet category rail - folded-slot hover previews, rename/color/hide actions, empty-shelf toggles and dragging a whole shelf onto another desktop | fileCabinet.js, fileCabinet/render.js, fileCabinet/transfer.js, desktopManager.js | — | — |
@@ -111,11 +112,11 @@ alwaysApply: true
 | js/fileCabinet/transfer.js | file cabinet item transfers - filing a board note into a drawer, expanding a drawer note back onto the board, and moving a note between categories | fileCabinet.js, fileCabinet/order.js, noteSurface.js, uiTransitions.js | — | — |
 | js/flowchart.js | shape and connector model - grid prefs, label sizing, connector routing helpers | flowchartGeometry.js, drawingBoardFlowchart.js, drawingBoardCore.js | — | — |
 | js/flowchartGeometry.js | flowchart geometry — shape ports, connector routing, hit-test, reroute | flowchart.js, lassoGeometry.js, canvasBrushes.js | — | — |
-| js/flowchartLabel.js | magicCanvas shape and connector label layout - the one wrap, size and centring model shared by the canvas painter and the inline editor | canvasBrushes.js, flowchart.js, drawingBoardFlowchart.js, drawingBoard/view.js | — | — |
+| js/flowchartLabel.js | magicCanvas shape and connector label layout - the one wrap, size and centring model shared by the canvas painter and the inline editor | canvasBrushes.js, flowchart.js, drawingBoardFlowchart.js, drawingBoard/view.js, textAngle.js | — | — |
 | js/hamburger.js | side panel shell, notes list, category summary, sort | searchBar.js, ui.js, sidebarHistory.js, sidebarStats.js, categoriesOverlay.js | categories:manage_requested, category:order_changed | — |
 | js/icons.js | CARD_ICONS, ACTION_ICONS, FORMAT_ICONS, DRAWING_ICONS SVG constants | ui.js | — | — |
 | js/itemMerge.js | shared merge helper for undo/redo restore (preserves note metadata) | undo.js, app.js | — | — |
-| js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js, canvasZOrder.js | — | — |
+| js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js, canvasZOrder.js, textAngle.js | — | — |
 | js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js, sync.js | — | — |
 | js/linksModel.js | pure link URL normalization, dedup keys, folder records/grouping, display/thumb helpers, favicon cache-busting and manual/name/date sorting | linksStore.js, linksOverlay.js, sidebarLinks.js, backupDelta.js | — | DOM-free except bindLinkThumbFallbacks; no storage access |
 | js/linksOverlay.js | Links manager floating panel: folders, add/edit/delete, drag reorder/move, favicon refresh, tile/list views, opt-in thum.io screenshots | linksStore.js, linksModel.js, sidebarLinks.js, desktopFloatChrome.js | links:changed, links:previews_changed, links:manage_requested | — |
@@ -221,6 +222,7 @@ alwaysApply: true
 | js/sidebarUndock.js | shared undock/drag/clamp for sidebar panels | desktopStack.js, popoverPosition.js, sidebarPrefs.js | — | — |
 | js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js, sidebarModules.js | — | — |
 | js/sync.js | cross-tab state sync — BroadcastChannel primary, storage-event insurance | app.js, api.js, layoutStorage.js, displayOptions.js, appTheme.js, popoutNote.js | — | — |
+| js/textAngle.js | magicCanvas text rotation model - typed angle normalisation, text-box pivots and bounds, plus the rotation math hit tests and marquee share | canvasBrushes.js, flowchartLabel.js, lassoGeometry.js, drawingBoardSelection.js, drawingBoard/text.js, drawingBoardFlowchart.js | — | — |
 | js/toolPanelPopout.js | tool panel popout open/focus/pop-in, DOM portal | toolPanelChrome.js, toolsManager.js, popoutWindows.js, appDocuments.js | — | — |
 | js/ui.js | the board facade - the one handle six modules import; hold the shared state seam and one-line delegates into ui/* | ui/boardState.js, ui/gridPack.js, ui/spatial.js, ui/render.js | — | — |
 | js/ui/boardState.js | the two pieces of board state the ui sessions read - the id->item lookup that render fills and the mutations update, plus the view mode the spatial layer falls back to; accessors only, so no session reaches into another session's closure | ui.js, ui/spatial.js, ui/render.js | — | — |

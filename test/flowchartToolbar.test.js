@@ -14,7 +14,7 @@ import {
     stepCanvasGrid
 } from '../js/drawingBoardToolbar.js';
 import { canvasGrid, renderFlowchartOverlay } from '../js/drawingBoardFlowchart.js';
-import { textStyle, currentTextSize } from '../js/drawingBoard/text.js';
+import { textStyle, currentTextSize, currentTextAngle } from '../js/drawingBoard/text.js';
 import { FLOWCHART_GRID_STEPS } from '../js/flowchart.js';
 
 /** Board stub with the shared prefs the string builders read. */
@@ -32,6 +32,7 @@ function makeBoard(overrides = {}) {
     board.getSelectedStrokesArray = function () { return Array.from(this.selectedStrokes); };
     board.textStyle = function () { return textStyle(this); };
     board.currentTextSize = function () { return currentTextSize(this); };
+    board.currentTextAngle = function () { return currentTextAngle(this); };
     return board;
 }
 
@@ -117,6 +118,39 @@ describe('textControlsHtml', () => {
         const html = textControlsHtml(board);
         assert.ok(html.includes('>40px<'), '40 CSS px default from the prefs layer');
         assert.ok(html.includes('background:#f8fafc'));
+    });
+
+    it('renders the angle button with an upright badge by default', () => {
+        const html = textControlsHtml(makeBoard());
+        assert.ok(html.includes('id="draw-text-angle-btn"'), 'the dial needs a trigger');
+        assert.ok(html.includes('aria-haspopup="dialog"'));
+        assert.ok(html.includes('aria-expanded="false"'));
+        assert.ok(html.includes('<span class="drawing-text-angle" id="draw-text-angle"'), 'badge the dial updates');
+        assert.ok(html.includes('>0\u00b0<'), 'upright reads 0 degrees');
+        assert.ok(!html.includes('is-rotated'), 'no accent until something is turned');
+        assert.ok(html.includes('title="Text angle — reorient text and labels"'));
+        assert.ok(
+            html.indexOf('draw-text-size-larger') < html.indexOf('draw-text-angle-btn'),
+            'the dial sits after the size stepper, not between its buttons'
+        );
+    });
+
+    it('shows the selected angle and marks the button rotated', () => {
+        const shape = {
+            id: 'shape-1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 100, y1: 100,
+            label: { text: 'x', fontSize: 20, angle: 45 }
+        };
+        const html = textControlsHtml(makeBoard({ selection: [shape] }));
+        assert.ok(html.includes('class="btn btn--compact btn--icon drawing-text-angle-btn is-rotated"'));
+        assert.ok(html.includes('>45\u00b0<'));
+        assert.ok(html.includes('title="Text angle 45\u00b0 — drag the dial'), 'the tip names the angle');
+    });
+
+    it('prefers the remembered pref angle when nothing is selected', () => {
+        const html = textControlsHtml(makeBoard({ text: { color: '#f8fafc', size: 40, angle: 270 } }));
+        assert.ok(html.includes('>270\u00b0<'));
+        assert.ok(html.includes('is-rotated'));
     });
 
     it('shows the selection size, not the pref, when a text box is selected', () => {

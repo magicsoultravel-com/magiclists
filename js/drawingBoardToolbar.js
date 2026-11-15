@@ -1,6 +1,8 @@
-/** @module {"owns":"magicCanvas toolbar session (render, bind, menu chrome)", "related":["drawingBoard.js","drawingToolbarMenu.js","drawingToolbarChrome.js"]} */
+/** @module {"owns":"magicCanvas toolbar session (render, bind, menu chrome)", "related":["drawingBoard.js","drawingToolbarMenu.js","drawingToolbarChrome.js","angleDial.js","textAngle.js"]} */
 import { ACTION_ICONS, CARD_ICONS, DRAWING_ICONS, FORMAT_ICONS } from './icons.js';
 import { ColorPicker, PALETTE_UNIFIED } from './colorPicker.js';
+import { closeAngleDial, isAngleDialOpen, openAngleDial } from './angleDial.js';
+import { normalizeTextAngle } from './textAngle.js';
 import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
 import { Fullscreen } from './fullscreen.js';
 import {
@@ -80,6 +82,64 @@ export function updateTextSizeControls(board) {
         const larger = board.toolbarEl.querySelector('#draw-text-size-larger');
         if (smaller) smaller.disabled = value <= range.min;
         if (larger) larger.disabled = value >= range.max;
+}
+
+/**
+ * Angle badge + dial button state. The number is the *effective* angle for the
+ * current selection (shared angle, else the open editor's, else the pref), so
+ * the popover always opens on the number the badge shows.
+ *
+ * @param {object} board
+ * @param {number} [angle] explicit value (used by the live `setTextAngle` path)
+ */
+export function updateTextAngleControl(board, angle) {
+        if (!board.toolbarEl) return;
+        const value = angle != null
+            ? normalizeTextAngle(angle)
+            : (typeof board.currentTextAngle === 'function' ? board.currentTextAngle() : 0);
+        const label = board.toolbarEl.querySelector('#draw-text-angle');
+        if (label) label.textContent = value + '\u00b0';
+        const btn = board.toolbarEl.querySelector('#draw-text-angle-btn');
+        if (!btn) return;
+        btn.setAttribute('aria-expanded', isAngleDialOpen() ? 'true' : 'false');
+        btn.classList.toggle('is-rotated', value !== 0);
+        btn.title = value
+            ? `Text angle ${value}\u00b0 — drag the dial to reorient text and labels`
+            : 'Text angle — reorient text and labels';
+}
+
+/**
+ * Angle dial rollout. Only one popover is ever open: opening the dial closes the
+ * colour pickers, and clicking the button again closes it.
+ *
+ * The dial reports every drag step; `setTextAngle` folds them into one undo
+ * entry per gesture (see beginTextAngleGesture), so a long drag is one Ctrl+Z.
+ */
+export function openTextAngleDial(board, anchor) {
+        if (isAngleDialOpen()) {
+            closeAngleDial();
+            return false;
+        }
+        ColorPicker.close();
+        board.colorRolloutOpen = false;
+        board.bgColorRolloutOpen = false;
+        board.textColorRolloutOpen = false;
+        board.shapeFillRolloutOpen = false;
+        const value = typeof board.currentTextAngle === 'function' ? board.currentTextAngle() : 0;
+        openAngleDial({
+            anchor,
+            value,
+            onGestureStart: () => board.beginTextAngleGesture?.(),
+            onChange: (deg) => board.setTextAngle(deg),
+            onClose: () => {
+                board.textAngleRolloutOpen = false;
+                board.endTextAngleGesture?.();
+                updateTextAngleControl(board);
+            }
+        });
+        board.textAngleRolloutOpen = true;
+        anchor?.setAttribute('aria-expanded', 'true');
+        return true;
 }
 
 /** Text colour rollout — same picker as the brush, wired to the text pref. */
@@ -498,10 +558,14 @@ export function flowGridControlsHtml(board) {
  * selected they only change what the next label/text box gets.
  */
 export function textControlsHtml(board) {
-        const style = board.textStyle ? board.textStyle() : { color: '#f8fafc', size: 40 };
+        const style = board.textStyle ? board.textStyle() : { color: '#f8fafc', size: 40, angle: 0 };
         const size = typeof board.currentTextSize === 'function' ? board.currentTextSize() : style.size;
+        const angle = typeof board.currentTextAngle === 'function' ? board.currentTextAngle() : (style.angle || 0);
         const active = board.activeTool === 'text';
         const sizeTip = 'Text size — shape labels cap at 72 canvas units so they stay inside their box';
+        const angleTip = angle
+            ? `Text angle ${angle}\u00b0 — drag the dial to reorient text and labels`
+            : 'Text angle — reorient text and labels';
         return '<span class="format-toolbar-sep" aria-hidden="true"></span>'
             + '<span class="drawing-text-controls" id="draw-text-controls" role="group" aria-label="Text style">'
             + '<button type="button" class="btn btn--compact btn--icon' + (active ? ' active' : '') + '" id="draw-text-tool" title="Text — click bare canvas for a text box, or a shape to edit its label" aria-label="Text tool" aria-pressed="' + (active ? 'true' : 'false') + '">' + DRAWING_ICONS.text + '</button>'
@@ -513,6 +577,10 @@ export function textControlsHtml(board) {
             + '<span class="drawing-brush-size__value" id="draw-text-size" aria-live="polite" title="' + sizeTip + '">' + size + 'px</span>'
             + '<button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-text-size-larger" title="Larger text" aria-label="Larger text">' + ACTION_ICONS.plus + '</button>'
             + '</span>'
+            + '<button type="button" class="btn btn--compact btn--icon drawing-text-angle-btn' + (angle ? ' is-rotated' : '') + '" id="draw-text-angle-btn" title="' + angleTip + '" aria-label="Text angle" aria-haspopup="dialog" aria-expanded="false">'
+            + DRAWING_ICONS.textAngle
+            + '<span class="drawing-text-angle" id="draw-text-angle" aria-live="polite">' + angle + '\u00b0</span>'
+            + '</button>'
             + '</span>';
 }
 
@@ -569,6 +637,7 @@ export function updateLayerControls(board) {
  */
 export function refreshSelectionControls(board) {
         updateTextSizeControls(board);
+        updateTextAngleControl(board);
         updateLayerControls(board);
 }
 
@@ -597,6 +666,7 @@ export function renderToolbar(board) {
         const wasColorOpen = board.colorRolloutOpen;
         const wasBgColorOpen = board.bgColorRolloutOpen;
         const wasTextColorOpen = board.textColorRolloutOpen;
+        const wasTextAngleOpen = board.textAngleRolloutOpen;
         const wasShapeFillOpen = board.shapeFillRolloutOpen;
         DrawingToolbarMenu.close();
         const brush = board.currentBrush();
@@ -687,6 +757,7 @@ export function renderToolbar(board) {
         board.updateNoteToolbarChrome();
         board.updateBrushSizeControls();
         board.updateTextSizeControls();
+        board.updateTextAngleControl?.();
         if (wasColorOpen) {
             board.colorRolloutOpen = false;
             const btn = board.toolbarEl.querySelector('#draw-color-btn');
@@ -699,6 +770,14 @@ export function renderToolbar(board) {
             board.textColorRolloutOpen = false;
             const btn = board.toolbarEl.querySelector('#draw-text-color-btn');
             if (btn) board.openTextColorPicker(btn);
+        } else if (wasTextAngleOpen) {
+            board.textAngleRolloutOpen = false;
+            // The popover lives on body and survives the re-render, but its
+            // anchor element does not: close it, then re-open under the new
+            // button (openTextAngleDial toggles, so it must start closed).
+            closeAngleDial();
+            const btn = board.toolbarEl.querySelector('#draw-text-angle-btn');
+            if (btn) board.openTextAngleDial(btn);
         } else if (wasShapeFillOpen) {
             board.shapeFillRolloutOpen = false;
             const btn = board.toolbarEl.querySelector('#draw-shape-fill-btn');
@@ -758,6 +837,10 @@ export function bindToolbar(board) {
         q('#draw-text-size-larger')?.addEventListener('click', (e) => {
             e.stopPropagation();
             board.stepTextSize(1);
+        });
+        q('#draw-text-angle-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            board.openTextAngleDial(e.currentTarget);
         });
         q('#draw-zoom-in')?.addEventListener('click', () => { CanvasViewport.stepZoom(0.1); board.persistViewport(); });
         q('#draw-zoom-out')?.addEventListener('click', () => { CanvasViewport.stepZoom(-0.1); board.persistViewport(); });

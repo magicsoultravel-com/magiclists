@@ -388,6 +388,9 @@
     outline: 1px dashed rgba(255, 255, 255, 0.35);
     background: rgba(0, 0, 0, 0.15);
     border-radius: 0.2rem;
+    /* Rotated text box: the dial spins the editor about its own centre, which is
+       the stored block centre drawTextObject() rotates about. */
+    transform-origin: 50% 50%;
     /* Must match drawTextObject's stack, or the editor previews a different face
        than the one the canvas paints after commit. */
     font-family: Inter, sans-serif;
@@ -752,6 +755,145 @@
 #btn-fullscreen.is-active,
 #draw-fullscreen.is-active {
     color: var(--accent);
+}
+
+/* ==========================================================================
+   TEXT ANGLE DIAL
+   ========================================================================== */
+
+/* Tiny degree readout tucked into the corner of the angle button (the button
+   itself is already `position: relative` from `.btn`). */
+.drawing-text-angle {
+    position: absolute;
+    right: -0.1rem;
+    bottom: -0.15rem;
+    padding: 0 0.12rem;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--text-muted, var(--text-main));
+    font-size: 0.5rem;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+
+/* Accent while the selection is actually reoriented — upright stays neutral. */
+.drawing-text-angle-btn.is-rotated {
+    color: var(--accent);
+}
+
+.drawing-text-angle-btn.is-rotated .drawing-text-angle {
+    color: var(--text-main);
+}
+
+.drawing-text-angle-btn[aria-expanded="true"] {
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Fixed like the colour pickers: floats over the toolbar and canvas overlays. */
+.angle-dial-popover {
+    position: fixed;
+    z-index: 2500;
+    padding: 0.45rem 0.5rem 0.3rem;
+    background: rgba(20, 20, 24, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    outline: none;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+.angle-dial {
+    position: relative;
+    width: 168px;
+    height: 168px;
+    cursor: grab;
+}
+
+.angle-dial:active {
+    cursor: grabbing;
+}
+
+.angle-dial__ring {
+    display: block;
+    pointer-events: none;
+}
+
+.angle-dial__track {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.16);
+    stroke-width: 1.5;
+}
+
+.angle-dial__hand {
+    stroke: var(--accent);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+}
+
+.angle-dial__knob {
+    fill: var(--accent);
+    stroke: rgba(20, 20, 24, 0.97);
+    stroke-width: 1.5;
+}
+
+.angle-dial__hub {
+    fill: rgba(255, 255, 255, 0.4);
+}
+
+/* 24px hit target around a 7px dot: the presets stay clickable on touch. */
+.angle-dial__preset {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+}
+
+.angle-dial__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.angle-dial__preset:hover .angle-dial__dot {
+    background: color-mix(in srgb, var(--accent) 65%, transparent);
+}
+
+.angle-dial__preset.is-active .angle-dial__dot {
+    background: var(--accent);
+}
+
+.angle-dial__foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0 0.1rem;
+}
+
+.angle-dial__readout {
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-main);
+}
+
+.angle-dial__hint {
+    font-size: 0.55rem;
+    color: var(--text-muted, var(--text-main));
+    opacity: 0.7;
 }
 
 /* ==========================================================================

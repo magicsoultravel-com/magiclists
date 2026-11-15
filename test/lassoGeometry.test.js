@@ -50,6 +50,16 @@ describe('lassoGeometry', () => {
         assert.equal(strokeHasPointInPolygon(outside, polygon), false);
     });
 
+    it('measures a rotated text box by its turned AABB', () => {
+        // 100..220 x 50..80 turned 90 degrees about (160, 65) becomes a tall
+        // strip: x 145..175, y 5..125.
+        const text = { tool: 'text', x: 100, y: 50, text: 'hi', fontSize: 20, width: 120, height: 30, angle: 90 };
+        assert.equal(strokeHasPointInPolygon(text, rectToPolygon(150, 110, 170, 120)), true,
+            'the turned part of the block is selectable');
+        assert.equal(itemIntersectsRect(text, { minX: 200, minY: 55, maxX: 215, maxY: 75 }), false,
+            'the space the block used to occupy is not');
+    });
+
     it('detects image boxes intersecting a polygon', () => {
         const polygon = rectToPolygon(0, 0, 100, 100);
         const inside = { id: 'img1', tool: 'image', mediaId: 'm1', x: 10, y: 10, width: 40, height: 30 };
@@ -187,6 +197,17 @@ describe('lassoGeometry click hit-testing and z-order', () => {
         assert.equal(itemContainsPoint(text, 20, 60), false);
 
         assert.equal(itemContainsPoint(null, 0, 0), false);
+    });
+
+    it('itemContainsPoint turns the pointer back into the text\'s own frame', () => {
+        // 10..50 x 10..30 turned 90 degrees about its centre (30, 20) becomes a
+        // tall strip: x 20..40, y 0..40.
+        const turned = { ...text, angle: 90 };
+        assert.equal(itemContainsPoint(turned, 30, 35), true, 'the turned block is clickable');
+        assert.equal(itemContainsPoint(turned, 45, 20), false, 'the vacated side is not');
+
+        const upright = { ...text };
+        assert.equal(itemContainsPoint(upright, 45, 20), true, 'and upright is unchanged');
     });
 
     it('findTopmostItemAt walks texts, then strokes, then images', () => {

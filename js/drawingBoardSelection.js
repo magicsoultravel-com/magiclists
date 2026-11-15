@@ -10,6 +10,7 @@ import {
     boxSelectThresholdWorld,
     findTopmostItemAt,
     raiseItemInLayer,
+    itemContainsPoint,
     BOX_SELECT_CLICK_THRESHOLD
 } from './lassoGeometry.js';
 import {
@@ -22,6 +23,7 @@ import { DRAWING_PREFS_KEY } from './drawingBoardBackup.js';
 import { RESIZE_HANDLE_SIZE, RESIZE_HANDLE_HIT } from './drawingBoardCore.js';
 import { MIN_IMAGE_SIDE } from './canvasImages.js';
 import { textStyle } from './drawingBoard/text.js';
+import { normalizeTextAngle, textRotationCss } from './textAngle.js';
 
 function writePrefs(prefs) {
     try { localStorage.setItem(DRAWING_PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore quota */ }
@@ -150,16 +152,25 @@ export function placeTextBox(board, x, y) {
         el.style.color = style.color;
         // The pref is CSS px; the editor lives in CSS px too, so no dpr math here.
         el.style.fontSize = style.size + 'px';
+        // Dial preview: same pivot (`transform-origin: 50% 50%`) and same degrees
+        // the painter will use once the text is committed.
+        const angle = normalizeTextAngle(style.angle);
+        if (angle) el.style.transform = textRotationCss(angle);
         board.textLayer.appendChild(el);
         el.focus();
 
         const commit = () => {
             const text = el.innerText.trim();
+            // Measure before removing: the box the words were laid out in is the
+            // block the painter rotates about, so the stored size must be the
+            // editor's own (CSS px -> canvas units, padding included).
+            const boxWidth = Math.round((el.offsetWidth || 0) * dpr);
+            const boxHeight = Math.round((el.offsetHeight || 0) * dpr);
             el.remove();
             if (!text) return;
             board.pushLayerHistory();
             const texts = getActiveTexts(board.doc);
-            texts.push({
+            const item = {
                 id: createId('text'),
                 tool: 'text',
                 x, y,
@@ -167,7 +178,16 @@ export function placeTextBox(board, x, y) {
                 fontSize,
                 color: style.color,
                 fontFamily: 'Inter, sans-serif'
-            });
+            };
+            // An unmeasurable editor keeps the legacy heuristic box instead of
+            // storing a 1px block, which would collapse its hit area.
+            if (boxWidth > 0 && boxHeight > 0) {
+                item.width = boxWidth;
+                item.height = boxHeight;
+            }
+            // Upright stays stored-absent, so untouched documents save unchanged.
+            if (angle) item.angle = angle;
+            texts.push(item);
             setActiveTexts(board.doc, texts);
             board.scheduleSave();
             board.redraw();
@@ -207,7 +227,9 @@ export function hitStroke(board, stroke, x, y, radius) {
             return stroke.points.some((pt) => Math.hypot(pt.x - x, pt.y - y) <= radius + (stroke.width || 3));
         }
         if (stroke.tool === 'text') {
-            return x >= stroke.x - radius && x <= stroke.x + 200 && y >= stroke.y - radius && y <= stroke.y + 60;
+            // One rotated box for click, eraser, marquee and lasso: the same
+            // helper that draws the block decides whether the pointer is on it.
+            return itemContainsPoint(stroke, x, y, radius);
         }
         if (stroke.tool === 'image') {
             return board.hitImage(stroke, x, y, radius);
@@ -488,6 +510,10 @@ export function applyResize(board, x, y) {
                 item.x = newMinX + (snap.x - start.minX) * scaleX;
                 item.y = newMinY + (snap.y - start.minY) * scaleY;
                 if (item.fontSize) item.fontSize = Math.max(8, (snap.height || item.fontSize) * scaleY);
+                // Keep the stored block in step with the drag: it is the pivot
+                // rotated text spins about, so a stale size would drift.
+                if (snap.width) item.width = Math.max(1, snap.width * scaleX);
+                if (snap.height) item.height = Math.max(1, snap.height * scaleY);
             } else if (snap.x0 != null) {
                 item.x0 = newMinX + (snap.x0 - start.minX) * scaleX;
                 item.y0 = newMinY + (snap.y0 - start.minY) * scaleY;

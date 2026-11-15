@@ -1,7 +1,8 @@
-/** @module {"owns":"magicCanvas brush style, text style, shape fill, tool and canvas grid preferences in localStorage (matrix_drawing_prefs)","related":["drawingBoard.js","drawingBoardCore.js","drawingBoard/text.js","drawingBoard/fill.js","canvasBrushes.js","flowchart.js"]} */
+/** @module {"owns":"magicCanvas brush style, text style, shape fill, tool and canvas grid preferences in localStorage (matrix_drawing_prefs)","related":["drawingBoard.js","drawingBoardCore.js","drawingBoard/text.js","drawingBoard/fill.js","canvasBrushes.js","flowchart.js","textAngle.js"]} */
 import { BRUSH_STYLES, DRAG_SHAPE_TOOLS } from '../canvasBrushes.js';
 import { defaultWidthForStyle } from '../drawingBoardCore.js';
 import { normalizeFlowchartGrid, FLOWCHART_ROUTINGS } from '../flowchart.js';
+import { normalizeTextAngle, TEXT_ANGLE_DEFAULT } from '../textAngle.js';
 
 export const PREFS_KEY = 'matrix_drawing_prefs';
 
@@ -38,11 +39,14 @@ export function normalizeShapeFill(raw) {
     return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : '';
 }
 
-/** Normalize the stored text style ({ color, size }) or fall back to defaults. */
+/** Normalize the stored text style ({ color, size, angle }) or fall back to defaults. */
 export function readTextPrefs(raw) {
     return {
         color: normalizeTextColor(raw?.color),
-        size: normalizeTextSize(raw?.size)
+        size: normalizeTextSize(raw?.size),
+        // The dial remembers the last angle a new text box was placed at; an
+        // absent field is simply upright, so old payloads keep working.
+        angle: normalizeTextAngle(raw?.angle ?? TEXT_ANGLE_DEFAULT)
     };
 }
 

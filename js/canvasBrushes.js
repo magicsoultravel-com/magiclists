@@ -2,8 +2,14 @@ import { normalizeFlowLabelSize } from './flowchart.js';
 import {
     FLOW_LABEL_FONT_STACK,
     flowLabelCanvasLayout,
+    flowLabelCentre,
     flowLabelFirstBaseline
 } from './flowchartLabel.js';
+import {
+    textAngleOf,
+    textAngleRadians,
+    textBoxPivot
+} from './textAngle.js';
 
 export const BRUSH_STYLES = ['pen', 'marker', 'highlighter', 'pencil', 'spray', 'calligraphy', 'brush'];
 
@@ -356,6 +362,16 @@ export function drawFlowchartLabel(ctx, stroke, opts = {}) {
     const rawDescent = Number(metrics?.fontBoundingBoxDescent);
     const ascent = Number.isFinite(rawAscent) && rawAscent > 0 ? rawAscent : fontSize * 0.8;
     const descent = Number.isFinite(rawDescent) && rawDescent >= 0 ? rawDescent : fontSize * 0.2;
+    // Labels spin around the centre of the box they are centred in — the shape's
+    // middle or the connector's bend point — which is exactly where the editor's
+    // CSS box is centred, so a rotated label previews where it will be painted.
+    const angle = layout.angle;
+    if (angle) {
+        const pivot = flowLabelCentre(stroke);
+        ctx.translate(pivot.x, pivot.y);
+        ctx.rotate(textAngleRadians(angle));
+        ctx.translate(-pivot.x, -pivot.y);
+    }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     let y = flowLabelFirstBaseline(layout, ascent, descent);
@@ -668,6 +684,15 @@ export function drawTextObject(ctx, textObj) {
     ctx.fillStyle = textObj.color || '#f1f5f9';
     ctx.font = `${textObj.fontSize || 24}px ${textObj.fontFamily || 'Inter, sans-serif'}`;
     ctx.textBaseline = 'top';
+    // Reoriented text spins around the centre of its own block — the same point
+    // the DOM editor's transform-origin uses, so the preview cannot drift.
+    const angle = textAngleOf(textObj);
+    if (angle) {
+        const pivot = textBoxPivot(textObj);
+        ctx.translate(pivot.x, pivot.y);
+        ctx.rotate(textAngleRadians(angle));
+        ctx.translate(-pivot.x, -pivot.y);
+    }
     String(textObj.text).split('\n').forEach((line, i) => {
         ctx.fillText(line, textObj.x, textObj.y + i * (textObj.fontSize || 24) * 1.25);
     });

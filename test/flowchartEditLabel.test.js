@@ -359,6 +359,99 @@ describe('flowEditLabel', () => {
         created[0].listeners.blur.forEach((fn) => fn());
         assert.equal(shape.label.color, '', 'still inheriting, never silently stamped');
     });
+
+    it('turns a shape editor in place about the box centre', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100,
+            label: { text: 'Tilt', fontSize: 20, color: '', angle: 45 }
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+
+        // Default transform-origin (50% 50%) is the shape box centre: the same
+        // point drawFlowchartLabel rotates the committed label about.
+        const el = created[0];
+        assert.equal(el.style.transform, 'rotate(45deg)');
+        assert.equal(el.style.width, '100px', 'the box, padding and centring are unchanged');
+        assert.equal(el.style.display, 'flex');
+    });
+
+    it('keeps the connector centring translate when it rotates', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        const conn = {
+            id: 'c1', flowchartKind: 'connector', tool: 'connector',
+            x0: 0, y0: 0, x1: 400, y1: 0, midX: 200, midY: 0,
+            label: { text: 'yes', fontSize: 20, color: '', angle: 90 }
+        };
+        DrawingBoard.flowEditLabel.call(board, conn);
+        // translateY first (block centred on the bend line), then the turn, so
+        // the rotation happens about that centred block, not the raw element.
+        assert.equal(created[0].style.transform, 'translateY(-50%) rotate(90deg)');
+    });
+
+    it('gives a brand-new label the remembered angle and commits it', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        board.prefs.text = { color: '#f8fafc', size: 40, angle: 30 };
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100, label: null
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+
+        const el = created[0];
+        assert.equal(el.style.transform, 'rotate(30deg)', 'a new label starts at the dial angle');
+        assert.equal(board.flowLabelAngle, 30);
+
+        el.innerText = 'New';
+        el.listeners.blur.forEach((fn) => fn());
+        assert.equal(shape.label.angle, 30);
+        assert.equal(board.flowLabelAngle, null, 'the live angle is cleared on commit');
+    });
+
+    it('never rotates an existing upright label just because the pref changed', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        board.prefs.text = { color: '#f8fafc', size: 40, angle: 30 };
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100,
+            label: { text: 'Old', fontSize: 20, color: '' }
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+
+        const el = created[0];
+        assert.equal(el.style.transform, '', 'editing the words does not turn the label');
+
+        el.innerText = 'Newer';
+        el.listeners.blur.forEach((fn) => fn());
+        assert.equal('angle' in shape.label, false, 'still upright, still stored-absent');
+    });
+
+    it('turns an open editor and commits the angle the user dragged to', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100, label: null
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+        const el = created[0];
+
+        assert.equal(DrawingBoard.flowRestyleLabelEditor.call(board, { angle: 120 }), 1);
+        assert.equal(el.style.transform, 'rotate(120deg)');
+        assert.equal(board.flowLabelAngle, 120);
+        assert.equal(DrawingBoard.flowRestyleLabelEditor.call(board, { angle: 120 }), 0,
+            'the same angle again is not a change');
+
+        el.innerText = 'Turned';
+        el.listeners.blur.forEach((fn) => fn());
+        assert.equal(shape.label.angle, 120, 'the commit writes the angle the editor showed');
+        assert.equal(board.historyPushes, 1, 'one undo entry for the committed edit');
+    });
 });
 
 describe('note canvas exit path', () => {
