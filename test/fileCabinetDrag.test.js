@@ -316,6 +316,51 @@ describe('file cabinet drag · ghosts and highlight state', () => {
     });
 });
 
+// Every preview dimension comes from layout.js, and in the drag layer those names
+// only ever appear inside `${...}` — exactly where the extraction dropped them and
+// where nothing noticed, because a missing import still parses.
+describe('file cabinet drag · preview stack metrics', () => {
+    it('sizes a rolled-out preview from the cascade metrics', async () => {
+        installGlobals();
+        const drag = await import('../js/fileCabinet/drag.js');
+        const layout = await import('../js/fileCabinet/layout.js');
+
+        const rollout = makeEl();
+        const stack = makeEl();
+        stack.inside({ '.file-cabinet-filed-rollout': rollout });
+        // Stale values from the open-drawer branch must not survive the preview.
+        stack.style.minWidth = '160px';
+        rollout.style.width = '999px';
+
+        drag.updateStackPreviewDimensions(stack, 3);
+
+        assert.equal(stack.style.width, `${layout.fileCabinetStackWidth(3)}px`, 'preview hugs the wrapped cascade');
+        assert.equal(stack.style.height, `${layout.fileCabinetStackHeight(3)}px`);
+        assert.equal(stack.style.minWidth, '', 'the chip-width floor is dropped on the popover');
+        assert.equal(rollout.style.width, '', 'the popover keeps shrink-wrapping the stack');
+    });
+
+    it('lays out preview tabs with the cascade offsets', async () => {
+        installGlobals();
+        const drag = await import('../js/fileCabinet/drag.js');
+        const layout = await import('../js/fileCabinet/layout.js');
+
+        const rollout = makeEl();
+        const tabs = [makeEl(), makeEl()];
+        const stack = makeEl();
+        stack.inside({ '.file-cabinet-filed-rollout': rollout });
+        stack.querySelectorAll = () => tabs;
+
+        drag.applyStackPreviewPositions(stack, { draggedId: null, insertIndex: 1 });
+
+        assert.equal(tabs[0].style.left, `${layout.fileCabinetTabLeft(0)}px`);
+        assert.equal(tabs[1].style.left, `${layout.fileCabinetTabLeft(2)}px`, 'the insert gap shifts later tabs');
+        assert.equal(tabs[1].style.top, `${layout.fileCabinetTabTop(2)}px`);
+        assert.equal(tabs[0].style.width, `${layout.collapsedTabWidth()}px`);
+        assert.equal(stack.style.width, `${layout.fileCabinetStackWidth(3)}px`, 'two tabs plus the insert slot');
+    });
+});
+
 // The drag layer moved to js/fileCabinet/drag.js. dragdrop.js imports nine
 // functions from the facade to run board-side filing, so they have to be the
 // same objects; the 17 internal helpers (ghosts, previews, markers, targeting

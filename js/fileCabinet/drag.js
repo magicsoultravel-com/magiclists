@@ -10,12 +10,20 @@ import {
 import { getFileCabinetOrder, reorderInCategory } from './order.js';
 import {
     DRAG_THRESHOLD,
+    FILE_CABINET_DRAWER_CARDS_PER_COL,
+    FILE_CABINET_STACK_OFFSET_Y,
     applyFileCabinetStackPositions,
     applyOpenDrawerStackDimensions,
+    collapsedTabWidth,
     fileCabinetCascadeCol,
     fileCabinetCascadeSlot,
+    fileCabinetCascadeWidth,
     fileCabinetInsertIndexFromPoint,
-    fileCabinetStackHeight
+    fileCabinetStackHeight,
+    fileCabinetStackPitch,
+    fileCabinetStackWidth,
+    fileCabinetTabLeft,
+    fileCabinetTabTop
 } from './layout.js';
 import { syncFileCabinetDrawerHeight } from './chrome.js';
 import {

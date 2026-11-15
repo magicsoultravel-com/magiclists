@@ -1,6 +1,9 @@
 /** @module {"owns":"file cabinet drawer metrics - cascade geometry, drawer height, UI scale and the stack positioner every rail layer reuses", "related":["fileCabinet.js","fileCabinet/chrome.js","fileCabinet/render.js","fileCabinet/drag.js","tileGeometry.js"]} */
 import { getLabelRect } from '../tileGeometry.js';
 
+// Consumed all over the cabinet inside template literals (`` `${...}px` ``), where a
+// missing import reads as plain interpolation and no runtime test notices until the
+// stack is rendered. test/freeIdentifierScan.test.js walks those expressions.
 export const FILE_CABINET_STACK_OFFSET_Y = 18;
 export const FILE_CABINET_STACK_OFFSET_X = 10;
 export const FILE_CABINET_DRAWER_WIDTH = 160;

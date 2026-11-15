@@ -17,7 +17,11 @@ import {
     toggleFileCabinetCategoryFiled,
     toggleFileCabinetEmptyShelvesCollapsed
 } from './order.js';
-import { applyFileCabinetStackPositions, DRAG_THRESHOLD } from './layout.js';
+import {
+    DRAG_THRESHOLD,
+    applyFileCabinetStackPositions,
+    fileCabinetStackWidth
+} from './layout.js';
 import { ensureFileCabinetTabDragHandle } from './render.js';
 import { expandFileCabinetCategoryToBoard } from './transfer.js';
 

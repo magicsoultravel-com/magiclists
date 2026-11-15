@@ -5,7 +5,8 @@
 // (js/board, js/storage, js/radioVisualizer, …) get the same protection as the
 // flat entry files.
 // Catches the "extraction dropped the import" bug class (e.g. isDragShape,
-// createId, showAppToast, RESIZE_HANDLE_*, grow, buildNotesExportPayload).
+// createId, showAppToast, RESIZE_HANDLE_*, grow, buildNotesExportPayload, and the
+// fileCabinetStackWidth family that only ever appeared inside `${...}`).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -129,7 +130,11 @@ function analyze(src) {
             case 'ArrayExpression': for (const el of node.elements) walk(el); return;
             case 'WithStatement': walk(node.object); walk(node.body); return;
             case 'LabeledStatement': walk(node.body); return;
-            case 'Literal': case 'ThisExpression': case 'Super': case 'TemplateLiteral':
+            // `${...}` and tag`${...}` hold code, not text: walk the expressions or an
+            // import that only appears inside a template literal stays invisible.
+            case 'TemplateLiteral': for (const ex of node.expressions) walk(ex); return;
+            case 'TaggedTemplateExpression': walk(node.tag); walk(node.quasi); return;
+            case 'Literal': case 'ThisExpression': case 'Super':
             case 'EmptyStatement': case 'BreakStatement': case 'ContinueStatement':
             case 'DebuggerStatement': case 'MetaProperty': return;
             case 'TryStatement': walk(node.block); walk(node.handler); walk(node.finalizer); return;
@@ -155,5 +160,27 @@ describe('free identifier scan across js modules', () => {
             if (r.unresolved?.size) failures.push(`${f}: unresolved -> ${[...r.unresolved].sort().join(', ')}`);
         }
         assert.deepEqual(failures, [], 'missing import / undefined identifier in js modules:\n' + failures.join('\n'));
+    });
+});
+
+// The repo scan is only as good as the walker, so pin the two shapes that let the
+// categoryRail/drag extraction regressions through: a bare template literal and a
+// tagged one. Both used to be skipped wholesale as "text".
+describe('free identifier scan · template literals', () => {
+    it('flags an identifier used only inside ${...}', () => {
+        const { unresolved } = analyze('import { w } from "./x.js";\nconst s = `zero ${missing}px`;');
+        assert.deepEqual([...unresolved].sort(), ['missing']);
+    });
+
+    it('flags an identifier used inside a tagged template', () => {
+        const { unresolved } = analyze('import { tag } from "./x.js";\nconst s = tag`zero ${missing}`;');
+        assert.deepEqual([...unresolved].sort(), ['missing']);
+    });
+
+    it('resolves imported names inside templates and ignores the text around them', () => {
+        const { unresolved } = analyze(
+            'import { w, tag } from "./x.js";\nconst a = `${w}px`;\nconst b = tag`plain ${w} text`;'
+        );
+        assert.deepEqual([...unresolved].sort(), []);
     });
 });

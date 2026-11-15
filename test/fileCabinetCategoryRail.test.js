@@ -27,6 +27,7 @@ function makeMount() {
         dataset: {},
         style: { setProperty() {}, removeProperty() {} },
         className: 'file-cabinet',
+        classList: classListStub(),
         innerHTML: '',
         children: [],
         isConnected: true,
@@ -42,6 +43,21 @@ function makeMount() {
         getBoundingClientRect: () => ({ top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 })
     };
     return { mount, listeners };
+}
+
+/** Class list stand-in that remembers what was added, for assertions. */
+function classListStub() {
+    const classes = new Set();
+    return {
+        add: (...names) => names.forEach((name) => classes.add(name)),
+        remove: (...names) => names.forEach((name) => classes.delete(name)),
+        toggle: (name, force) => {
+            const want = force === undefined ? !classes.has(name) : !!force;
+            if (want) classes.add(name); else classes.delete(name);
+            return want;
+        },
+        contains: (name) => classes.has(name)
+    };
 }
 
 /** Fire the delegated listeners of `type` with a target that answers `closest`. */
@@ -87,11 +103,16 @@ function installGlobals({ order = {}, filed = [], emptyCollapsed = null } = {}) 
         dataset: {},
         classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
         children: [],
+        innerHTML: '',
+        className: '',
+        id: '',
+        title: '',
+        type: '',
         isConnected: true,
         setAttribute() {},
         getAttribute: () => null,
         addEventListener() {},
-        appendChild(child) { return child; },
+        appendChild(child) { this.children.push(child); return child; },
         remove() {},
         querySelector: () => null,
         querySelectorAll: () => [],
@@ -144,6 +165,51 @@ function makeUI(overrides = {}) {
         saveGridLayout(id, rect) { saved[id] = rect; },
         ...overrides
     };
+}
+
+/**
+ * The UI surface buildFileCabinetRolloutStack touches: three calls of its own plus
+ * the ones createCardComponent/renderBoardEditorCard make on every card.
+ */
+function makeRolloutUI() {
+    const calls = { applied: [], finalized: 0, toggled: 0, pinned: 0, raised: 0 };
+    return makeUI({
+        calls,
+        applyNoteRect(card, rect) { calls.applied.push({ card, rect }); },
+        finalizeDesktopCard() { calls.finalized += 1; },
+        syncSpatialToggleButton() { calls.toggled += 1; },
+        syncBoardPinClass() { calls.pinned += 1; },
+        raiseDesktopCard() { calls.raised += 1; },
+        buildCardActionsHtml: () => '',
+        getCardActionsOptions: () => ({}),
+        bindBoardEditorFocusChrome() {},
+        focusPendingBoardField() {}
+    });
+}
+
+/** A folded rail slot: the chip plus the empty rollout the preview fills. */
+function makeSlot(catName) {
+    const rollout = {
+        innerHTML: '',
+        children: [],
+        setAttribute() {},
+        removeAttribute() {},
+        appendChild(child) { this.children.push(child); return child; },
+        querySelector: () => null
+    };
+    const chip = { classList: classListStub() };
+    const slot = {
+        dataset: { category: catName },
+        classList: classListStub(),
+        isConnected: true,
+        chip,
+        rollout,
+        contains: () => false,
+        querySelector: (sel) => (sel === '.file-cabinet-filed-rollout' ? rollout
+            : sel === '.file-cabinet-filed-chip' ? chip
+                : null)
+    };
+    return slot;
 }
 
 const eventsOf = (type) => dispatched.filter((ev) => ev.type === type);
@@ -279,6 +345,78 @@ describe('file cabinet category rail · shelf drag note ids', () => {
 // initFileCabinetDrag, and categoriesOverlay.js renders the rollout through the
 // facade. Identity matters for the same reason as the other slices, and the
 // ghost/desktop helpers must stay internal.
+// The folded-slot hover preview appends exactly this builder's output, so a metric
+// that is used here but not imported (fileCabinetStackWidth was) kills the preview
+// with a ReferenceError before the rollout ever lands in the DOM.
+describe('file cabinet category rail · folded-slot rollout stack', () => {
+    it('builds a tab per note and pins the stack to the cascade width', async () => {
+        installGlobals();
+        await load(); // globals first: the rail module imports the facade's peers
+        const rail = await import('../js/fileCabinet/categoryRail.js');
+        const layout = await import('../js/fileCabinet/layout.js');
+        const UI = makeRolloutUI();
+        const calls = UI.calls;
+        const items = [
+            { id: 'n1', title: 'One', categories: ['Office'], desktopId: 1 },
+            { id: 'n2', title: 'Two', categories: ['Office'], desktopId: 1 },
+            { id: 'n3', title: 'Three', categories: ['Office'], desktopId: 1 }
+        ];
+
+        const stack = rail.buildFileCabinetRolloutStack({
+            catName: 'Office',
+            items,
+            activeCategories: [{ name: 'Office', color: '#abc' }],
+            UI
+        });
+
+        assert.equal(stack.className, 'file-cabinet-tab-stack');
+        assert.equal(stack.dataset.category, 'Office');
+        assert.equal(stack.children.length, 3, 'one tab per note in the shelf');
+        assert.deepEqual(stack.children.map((tab) => tab.dataset.id), ['n1', 'n2', 'n3']);
+        assert.equal(calls.applied.length, 3, 'every tab takes the shelf label footprint');
+        assert.equal(calls.toggled, 3, 'every tab gets its spatial toggle');
+        for (const { rect } of calls.applied) {
+            assert.deepEqual([rect.x, rect.y], [0, 0]);
+            assert.ok(rect.w > 0 && rect.h > 0);
+        }
+        assert.equal(stack.style.width, `${layout.fileCabinetStackWidth(3)}px`, 'the popover hugs the wrapped cascade');
+    });
+});
+
+// The reported symptom, end to end: pointerover a folded slot has to leave a rendered
+// stack in the rollout and mark the slot open. When the builder threw, the listener
+// died before any of these classes were applied and hover did nothing.
+describe('file cabinet category rail · folded-slot hover preview', () => {
+    it('opens the rollout with the shelf notes on pointerover', async () => {
+        installGlobals();
+        await load();
+        const rail = await import('../js/fileCabinet/categoryRail.js');
+        const UI = makeRolloutUI();
+        const { mount, listeners } = makeMount();
+        const slot = makeSlot('Office');
+        const items = [
+            { id: 'n1', title: 'One', categories: ['Office'], desktopId: 1 },
+            { id: 'n2', title: 'Two', categories: ['Office'], desktopId: 1 }
+        ];
+
+        rail.initFileCabinetFoldedHoverPreview(mount, () => ({
+            byCategory: new Map([['Office', items]]),
+            activeCategories: [{ name: 'Office', color: '#abc' }],
+            order: {},
+            UI
+        }), new AbortController().signal);
+
+        fire(listeners, 'pointerover', { '.file-cabinet-filed-slot': slot });
+
+        assert.ok(slot.classList.contains('is-fold-rollout-open'), 'hover opens the folded drawer');
+        assert.ok(slot.chip.classList.contains('is-fold-preview-source'), 'the chip it came from is marked');
+        assert.ok(mount.classList.contains('is-rollout-active'), 'the cabinet knows a rollout is up');
+        assert.equal(slot.rollout.children.length, 1, 'the stack lands in the rollout');
+        assert.equal(slot.rollout.children[0].className, 'file-cabinet-tab-stack');
+        assert.equal(slot.rollout.children[0].children.length, 2, 'one tab per note in the shelf');
+    });
+});
+
 describe('file cabinet category rail · module boundary', () => {
     const PUBLIC = [
         'buildFileCabinetRolloutStack', 'initFileCabinetFoldedHoverPreview',
