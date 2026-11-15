@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-13T23:58:14.119Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-15T11:06:21.536Z
 
 ## CSS load order
 
@@ -130,7 +130,7 @@ alwaysApply: true
 | js/mediaLibrary.js | media library CRUD, thumbs, size limits | storage/indexedDbMediaStore.js, mediaMetadata.js, mediaBackup.js | — | — |
 | js/mediaLibraryOverlay.js | media library overlay gallery browser | mediaLibrary.js, mediaStagingDialog.js, noteQuickActions.js, mediaAttachments.js | — | — |
 | js/mediaMetadata.js | media file metadata and EXIF extraction | mediaLibrary.js | — | — |
-| js/mediaPasteCatcher.js | global clipboard paste catcher for media staging | mediaStagingDialog.js, notePasteContext.js | — | — |
+| js/mediaPasteCatcher.js | global clipboard paste catcher for media staging | mediaStagingDialog.js, notePasteContext.js, drawingBoardClipboard.js | — | — |
 | js/mediaQuickActions.js | shared media hover quick actions | mediaLibrary.js, noteAttachmentsUi.js, mediaLibraryOverlay.js, mediaTransformUi.js | — | — |
 | js/mediaStagingDialog.js | media staging upload dialogue before library commit | mediaLibrary.js, mediaPasteCatcher.js, mediaLibraryOverlay.js, notePasteContext.js, mediaAttachments.js | — | — |
 | js/mediaTransform.js | image optimize/resample helpers for media library | mediaMetadata.js, mediaLibrary.js, mediaTransformUi.js | — | — |

@@ -3,7 +3,11 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     CLIP_MIME,
+    boardOwnsPasteEvent,
+    clipboardWriteState,
     eventHasBoardMime,
+    markPasteOwned,
+    pasteEventIsOwned,
     peekBoardPasteArmed,
     isTextEditingTarget,
     handleCopyKey,
@@ -267,14 +271,26 @@ describe('handleDeleteKey', () => {
 });
 
 describe('handlePasteEvent', () => {
-    it('unarmed paste is ignored (notes-mode / browser territory)', () => {
+    it('unarmed plain-text paste is ignored (notes-mode / browser territory)', () => {
         const b = makeBoard({ strokes: [brush()] });
         bindBoard(b);
-        const e = markerEvent(1);
+        const e = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, clipboardData: { types: ['text/plain'], getData: () => 'just text' } };
         handlePasteEvent(e);
         assert.equal(b.strokes().length, 1);
         assert.equal(b.historyPushes, 0);
         assert.equal(e.defaultPrevented, false);
+    });
+
+    it('unarmed board-marker paste is owned (context-menu / programmatic paste)', () => {
+        const b = makeBoard({ strokes: [brush()] });
+        bindBoard(b);
+        const e = markerEvent(1);
+        handlePasteEvent(e);
+        // Defect 3b: a paste with no keydown arm used to be dropped outright, so the
+        // payload fell through to the media catcher. Ownership is marker-based now.
+        assert.equal(e.defaultPrevented, true, 'a board copy must never reach the staging dialog');
+        assert.equal(pasteEventIsOwned(e), true);
+        assert.equal(b.strokes().length, 1, 'no local payload on this tab → nothing to paste');
     });
 
     it('marker paste: fresh ids, +20 offset, selection replaced, one history entry', () => {
@@ -319,18 +335,33 @@ describe('handlePasteEvent', () => {
         assert.equal(b.strokes()[3].points[0].x, 30, 'after copy, cascade restarts at +20');
     });
 
-    it('arm is one-shot: a second paste event does not double-paste (Issue 1)', () => {
+    it('re-entrancy: the same event object pastes once', () => {
         const b = makeBoard({ strokes: [brush('src1')] });
         bindBoard(b);
         b._boardClipboard = payload(brush('src1'));
         b._clipboardTimestamp = Date.now();
         handlePasteKey(b, keyEvent('v'));
-        handlePasteEvent(markerEvent(1));
-        const afterFirst = b.strokes().length;
-        // second event arrives with token already consumed — no paste despite valid marker
-        handlePasteEvent(markerEvent(1));
-        assert.equal(b.strokes().length, afterFirst);
+        const e = markerEvent(1);
+        handlePasteEvent(e);
+        handlePasteEvent(e);            // same instance: second capture listener or re-dispatch
+        assert.equal(b.strokes().length, 2);
         assert.equal(b.historyPushes, 1);
+    });
+
+    it('each distinct paste event pastes once (one paste action = one event)', () => {
+        const b = makeBoard({ strokes: [brush('src1')] });
+        bindBoard(b);
+        b._boardClipboard = payload(brush('src1'));
+        b._clipboardTimestamp = Date.now();
+        // Deliberate change: ownership no longer rides on the one-shot arm token — a
+        // board payload is identified by its own marker, which is what makes menu and
+        // unarmed pastes work. Brackets fire exactly one paste event per action, so
+        // two events mean two pastes.
+        handlePasteKey(b, keyEvent('v'));
+        handlePasteEvent(markerEvent(1));
+        handlePasteEvent(markerEvent(1));
+        assert.equal(b.strokes().length, 3);
+        assert.equal(b.historyPushes, 2);
     });
 
     it('marker count mismatch is rejected (Issue 4 anti-collision)', () => {
@@ -342,7 +373,22 @@ describe('handlePasteEvent', () => {
         const e = markerEvent(99);
         handlePasteEvent(e);
         assert.equal(b.strokes().length, 1, 'stale/foreign marker ignored');
-        assert.equal(e.defaultPrevented, false);
+        // Owned but not pasted: a wrong paste is worse than a toast, and the payload
+        // must still not be handed to the media catcher (that was the bug).
+        assert.equal(e.defaultPrevented, true);
+        assert.equal(pasteEventIsOwned(e), true);
+    });
+
+    it('mismatched marker is not rescued by the same-tab trust window (anti-collision)', () => {
+        const b = makeBoard({ strokes: [brush('src1')] });
+        bindBoard(b);
+        b.selectedStrokes.add(b.strokes()[0]);
+        handleCopyKey(b, keyEvent('c'));      // writeState pending/failed → trust window open
+        handlePasteKey(b, keyEvent('v'));
+        const e = markerEvent(99);            // another tab's copy: count does not describe ours
+        handlePasteEvent(e);
+        assert.equal(b.strokes().length, 1, 'never paste a payload the marker does not describe');
+        assert.equal(e.defaultPrevented, true);
     });
 
     it('custom MIME path: preventDefault + async read falls back to fresh local payload', async () => {
@@ -381,6 +427,96 @@ describe('handlePasteEvent', () => {
         handlePasteEvent(e);
         assert.equal(b.strokes().length, 1);
         assert.equal(e.defaultPrevented, false, 'browser/catcher keeps ownership');
+    });
+});
+
+describe('boardOwnsPasteEvent', () => {
+    it('owns the custom MIME type', () => {
+        bindBoard(makeBoard());
+        assert.equal(boardOwnsPasteEvent({ clipboardData: { types: [CLIP_MIME] } }), true);
+    });
+
+    it('owns the text marker even without an arm (menu paste)', () => {
+        bindBoard(makeBoard());
+        assert.equal(boardOwnsPasteEvent(markerEvent(1)), true);
+    });
+
+    it('leaves ordinary file / text pastes to the media catcher', () => {
+        bindBoard(makeBoard());
+        assert.equal(boardOwnsPasteEvent({ clipboardData: { types: ['image/png'], getData: () => '' } }), false);
+        assert.equal(boardOwnsPasteEvent({ clipboardData: { types: ['text/plain'], getData: () => 'hello' } }), false);
+        assert.equal(boardOwnsPasteEvent({}), false);
+    });
+
+    it('owns nothing while the board is inactive', () => {
+        bindBoard(makeBoard({ active: false }));
+        assert.equal(boardOwnsPasteEvent({ clipboardData: { types: [CLIP_MIME] } }), false);
+        assert.equal(boardOwnsPasteEvent(markerEvent(1)), false);
+    });
+
+    it('leaves the clipboard to a focused text editor', () => {
+        bindBoard(makeBoard());
+        installDomStub({ tagName: 'TEXTAREA' });
+        assert.equal(boardOwnsPasteEvent({ clipboardData: { types: [CLIP_MIME] } }), false);
+        assert.equal(boardOwnsPasteEvent(markerEvent(1)), false);
+    });
+
+    it('armed paste with writeState idle (no copy this session) is not owned', () => {
+        const b = makeBoard({ strokes: [brush()] });
+        bindBoard(b);
+        handlePasteKey(b, keyEvent('v'));
+        assert.equal(clipboardWriteState(), 'idle');
+        assert.equal(boardOwnsPasteEvent({ clipboardData: { types: ['text/plain'], getData: () => 'typed' } }), false);
+    });
+
+    it('owns an armed artefact-less paste while the OS write is unconfirmed (fast Ctrl+C followed by Ctrl+V)', () => {
+        const b = makeBoard({ strokes: [brush('src1')] });
+        bindBoard(b);
+        b.selectedStrokes.add(b.strokes()[0]);
+        handleCopyKey(b, keyEvent('c'));      // write starts → pending (failed in Node)
+        handlePasteKey(b, keyEvent('v'));
+        const e = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, clipboardData: { types: ['text/html'], getData: () => '' } };
+        assert.equal(boardOwnsPasteEvent(e), true, 'the OS clipboard cannot hold this copy yet');
+        handlePasteEvent(e);
+        assert.equal(e.defaultPrevented, true);
+        assert.equal(b.strokes().length, 2, 'local payload pasted without clipboard.read');
+    });
+
+    it('stops trusting the local payload after the 3s window (an external copy wins)', () => {
+        const b = makeBoard({ strokes: [brush('src1')] });
+        bindBoard(b);
+        b.selectedStrokes.add(b.strokes()[0]);
+        handleCopyKey(b, keyEvent('c'));
+        b._clipboardTimestamp = Date.now() - 4000;   // old enough that the copy is on the OS clipboard
+        handlePasteKey(b, keyEvent('v'));
+        const e = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, clipboardData: { types: ['text/plain'], getData: () => 'typed elsewhere' } };
+        assert.equal(boardOwnsPasteEvent(e), false);
+        handlePasteEvent(e);
+        assert.equal(e.defaultPrevented, false);
+        assert.equal(b.strokes().length, 1);
+    });
+
+    it('markPasteOwned is idempotent and keyed by event object', () => {
+        const a = markerEvent(1);
+        const other = markerEvent(1);
+        markPasteOwned(a);
+        markPasteOwned(a);
+        assert.equal(pasteEventIsOwned(a), true);
+        assert.equal(pasteEventIsOwned(other), false);
+        assert.equal(pasteEventIsOwned(null), false);
+    });
+});
+
+describe('clipboard write state', () => {
+    it('idle until a copy, pending on the copy tick, failed when the write cannot land', async () => {
+        const b = makeBoard({ strokes: [brush('src1')] });
+        bindBoard(b);
+        b.selectedStrokes.add(b.strokes()[0]);
+        assert.equal(clipboardWriteState(), 'idle', 'rule 3 must be off before any copy');
+        handleCopyKey(b, keyEvent('c'));
+        assert.equal(clipboardWriteState(), 'pending', 'set synchronously so the same-tick paste sees it');
+        await new Promise((r) => setTimeout(r, 20));
+        assert.equal(clipboardWriteState(), 'failed', 'Node exposes no navigator.clipboard.write');
     });
 });
 

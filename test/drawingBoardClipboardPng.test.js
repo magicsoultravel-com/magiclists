@@ -3,7 +3,9 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     CLIP_MIME,
+    clipboardWriteState,
     renderSelectionPng,
+    resetClipboardSessionForTests,
     writePortableClipboard
 } from '../js/drawingBoardClipboard.js';
 import { CanvasViewport } from '../js/canvasViewport.js';
@@ -46,7 +48,7 @@ function installCanvas(blob = PNG_BLOB) {
     globalThis.__canvasStub = () => canvasStub;
 }
 
-function installWrite({ failOnCustom = false } = {}) {
+function installWrite({ failOnCustom = false, failAll = false } = {}) {
     const calls = [];
     globalThis.ClipboardItem = class {
         constructor(map) { this.map = map; }
@@ -59,6 +61,7 @@ function installWrite({ failOnCustom = false } = {}) {
                 async write(items) {
                     const kinds = Object.keys((items && items[0] && items[0].map) || {});
                     calls.push(kinds);
+                    if (failAll) throw new Error('everything unsupported');
                     if (failOnCustom && kinds.includes(CLIP_MIME)) throw new Error('custom unsupported');
                 }
             }
@@ -67,7 +70,7 @@ function installWrite({ failOnCustom = false } = {}) {
     return calls;
 }
 
-beforeEach(() => { CanvasViewport.scale = 2; });
+beforeEach(() => { CanvasViewport.scale = 2; resetClipboardSessionForTests(); });
 afterEach(() => {
     CanvasViewport.scale = 1;
     delete globalThis.document;
@@ -107,28 +110,39 @@ describe('writePortableClipboard', () => {
         assert.ok(calls[0].includes('text/plain'), 'marker sentinel');
     });
 
-    it('falls back to a png-only item when the composite write is rejected (Firefox)', async () => {
+    it('keeps the marker when the composite write is rejected (custom web types refused)', async () => {
         installCanvas(PNG_BLOB);
         const calls = installWrite({ failOnCustom: true });
         await writePortableClipboard({}, payloadOf());
-        assert.ok(calls.length >= 2, 'composite attempt then png-only fallback');
-        assert.deepEqual(calls[calls.length - 1], ['image/png'], 'image stays portable');
+        assert.ok(calls.length >= 2, 'composite attempt, then narrower entries');
+        // Defect 2: dropping to png-only made the clipboard unrecognisable at paste
+        // time, so copies were staged in the media library. The marker must survive.
+        assert.deepEqual(calls[calls.length - 1], ['text/plain', 'image/png'], 'marker + picture, no custom MIME');
+        assert.equal(clipboardWriteState(), 'done');
     });
 
-    it('writes custom MIME + marker when png rendering is unavailable and custom is rejected', async () => {
+    it('keeps the marker when png rendering is unavailable and custom is rejected', async () => {
         globalThis.document = undefined;            // no canvas → png is null
         const calls = installWrite({ failOnCustom: true });
         await writePortableClipboard({}, payloadOf());
-        const last = calls[calls.length - 1];
-        assert.ok(last.includes(CLIP_MIME), 'custom pair still attempted');
-        assert.ok(!last.includes('image/png'), 'no png available');
+        assert.deepEqual(calls[calls.length - 1], ['text/plain'], 'marker alone is still a board copy');
+        assert.equal(clipboardWriteState(), 'done');
+    });
+
+    it('records writeState failed only when every representation is refused', async () => {
+        installCanvas(PNG_BLOB);
+        const calls = installWrite({ failAll: true });
+        await writePortableClipboard({}, payloadOf());
+        assert.deepEqual(calls[calls.length - 1], ['image/png'], 'last rung is the plain picture');
+        assert.equal(calls.length, 5, 'one attempt per rung');
+        assert.equal(clipboardWriteState(), 'failed');
     });
 
     it('no-ops safely when the clipboard write API is unavailable', async () => {
         installCanvas(PNG_BLOB);
         Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
         await writePortableClipboard({}, payloadOf()); // must not throw
-        assert.ok(true);
+        assert.equal(clipboardWriteState(), 'failed');
     });
 });
 

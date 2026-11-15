@@ -1,11 +1,11 @@
-/** @module {"owns":"global clipboard paste catcher for media staging", "related":["mediaStagingDialog.js","notePasteContext.js"]} */
+/** @module {"owns":"global clipboard paste catcher for media staging", "related":["mediaStagingDialog.js","notePasteContext.js","drawingBoardClipboard.js"]} */
 import { appendMediaStaging, isMediaStagingOpen, openMediaStaging } from './mediaStagingDialog.js';
 import {
     resolveImagePasteAttachNoteId,
     resolveNotePasteTarget
 } from './notePasteContext.js';
 import { showAppToast } from './toast.js';
-import { eventHasBoardMime, peekBoardPasteArmed } from './drawingBoardClipboard.js';
+import { boardOwnsPasteEvent, pasteEventIsOwned } from './drawingBoardClipboard.js';
 
 /**
  * Collect File/Blob items from a ClipboardEvent or ClipboardItem list.
@@ -87,12 +87,26 @@ async function stageFiles(files, opts = {}) {
     return true;
 }
 
+/**
+ * True when the drawing board owns this paste event, so the media catcher must
+ * leave it alone. Pure peek, no side effects: evaluating it before or after the
+ * board's own paste listener gives the same answer, which is what makes the two
+ * capture listeners order-independent (they are registered in different orders
+ * in index.html and the popout). When the board is not active — e.g. notes mode —
+ * this is false and pasting behaves exactly as before.
+ * @param {ClipboardEvent|object} e
+ * @returns {boolean}
+ */
+export function shouldYieldBoardPaste(e) {
+    return pasteEventIsOwned(e) || boardOwnsPasteEvent(e);
+}
+
 function onPaste(e) {
-    // Yield to the drawing board: an armed Ctrl+V carrying a board payload is
-    // not media. Peek (non-consuming) — the board's own paste listener owns
-    // the token; when the board isn't armed this never triggers, so notes-mode
-    // pastes behave exactly as before.
-    if (peekBoardPasteArmed() && eventHasBoardMime(e)) return;
+    // Yield to the drawing board: a board copy is not media. It is identified by
+    // its own markers (custom MIME / text marker / just-copied local payload),
+    // never by our PNG — which is exactly why a board copy must not fall through
+    // to the staging dialog here.
+    if (shouldYieldBoardPaste(e)) return;
     const files = filesFromDataTransfer(e.clipboardData);
     if (!files.length) return; // text-only: leave alone
     e.preventDefault();
@@ -137,5 +151,6 @@ export const MediaPasteCatcher = {
     },
     filesFromDataTransfer,
     readClipboardIntoStaging,
-    resolvePasteStagingOpts
+    resolvePasteStagingOpts,
+    shouldYieldBoardPaste
 };

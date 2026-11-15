@@ -17,6 +17,13 @@ const PASTE_ARM_WINDOW_MS = 250;
 const CASCADE_OFFSET = 20;
 /** Local payload stays eligible as read-error fallback for this long. */
 const FALLBACK_FRESH_MS = 5000;
+/**
+ * Same-tab trust window: after a copy whose OS write is still in flight (or was
+ * refused), an armed Ctrl+V this soon can only mean our own payload — the
+ * clipboard cannot hold it yet. Shorter than FALLBACK_FRESH_MS on purpose: an
+ * external copy taken right after a board copy must not be swallowed.
+ */
+const SAME_TAB_TRUST_MS = 3000;
 
 /** @type {object|null} DrawingBoard singleton — bound once at drawingBoard.js load. */
 let board = null;
@@ -25,6 +32,22 @@ let bound = false;
 let armedAt = 0;
 /** Consecutive-paste cascade counter; reset on copy/cut and on any pointerdown. */
 let cascadeN = 0;
+/**
+ * OS clipboard write lifecycle for the last copy/cut:
+ *   'idle'    — nothing written this session (hijack-proof default: rule 3 is off)
+ *   'pending' — write started, not settled yet (a paste must use the local payload)
+ *   'done'    — a representation landed; the OS clipboard is authoritative
+ *   'failed'  — every representation was refused (local payload only)
+ */
+let writeState = 'idle';
+/** Bumped per copy so a superseded async write cannot report its own state. */
+let writeSeq = 0;
+/**
+ * Paste events the board took ownership of. WeakSet → no leak; membership is by
+ * event *identity*, which holds because nothing in the app clones or re-dispatches
+ * paste events. Answers "already handled?" for a repeated call on the same event.
+ */
+let ownedPasteEvents = new WeakSet();
 
 function markerText(n) { return `${MARKER_PREFIX} ${n} object(s)`; }
 
@@ -76,6 +99,39 @@ function markerMatchesPayload(e, payload) {
         const m = text.match(/⟦MagicLists canvas⟧\s+(\d+)\s+object/);
         return !!m && Number(m[1]) === totalOf(payload);
     } catch { return false; }
+}
+
+/**
+ * Ownership predicate — pure peek, never consumes the arm token. The board's
+ * paste handler and mediaPasteCatcher both ask this, so the answer cannot depend
+ * on listener registration order (index.html/popout differ, and the old
+ * `peekBoardPasteArmed()` yield clause always lost the token to the board).
+ * Text editors keep the clipboard while focused, like copy/cut/delete.
+ * @param {ClipboardEvent|object} e
+ */
+export function boardOwnsPasteEvent(e) {
+    if (!board?.active) return false;
+    if (isTextEditingTarget()) return false;
+    if (eventHasBoardMime(e)) return true;   // ours — also owns menu/programmatic pastes
+    if (eventHasMarker(e)) return true;      // browsers that drop custom MIME keep the marker
+    // Same-tab trust: armed Ctrl+V, our copy alive, and the OS clipboard
+    // demonstrably cannot hold it yet (write in flight or refused).
+    return sameTabTrust() && peekBoardPasteArmed();
+}
+
+/** Mark an event as handled by the board (idempotent). */
+export function markPasteOwned(e) {
+    if (e && typeof e === 'object') ownedPasteEvents.add(e);
+}
+
+/** True when this exact event object was already taken by the board. */
+export function pasteEventIsOwned(e) {
+    return !!e && typeof e === 'object' && ownedPasteEvents.has(e);
+}
+
+/** Last OS-clipboard write state — test hook (see writeState docs). */
+export function clipboardWriteState() {
+    return writeState;
 }
 
 /** Text inputs / contentEditable overlays own the clipboard while focused. */
@@ -170,43 +226,54 @@ export async function renderSelectionPng(b, payload) {
 }
 
 /**
- * Fire-and-forget OS clipboard write — ONE clipboard entry, three representations:
- *   custom MIME   → editable objects (magiclists round-trip)
- *   image/png     → portable picture (paste into any app)
- *   text/plain    → marker sentinel (Firefox same-tab path, plain-text targets)
- * If the composite write is rejected (browsers that refuse custom types), fall
- * back to a PNG-only item so the image stays portable. If the PNG render failed,
- * fall back to the custom MIME + marker pair (previous behavior). The local
- * payload is set by the caller synchronously first, so this promise never gates
- * the keydown tick.
+ * Fire-and-forget OS clipboard write — one clipboard entry per attempt, ordered
+ * widest-first, because a browser rejects the whole item when any one
+ * representation is unsupported:
+ *   custom MIME       → editable objects (magiclists round-trip)
+ *   text/plain marker → the recognition channel (also the only type every browser
+ *                       lets us write, and the only one that survives the paste
+ *                       round-trip where custom web types are refused)
+ *   image/png         → portable picture (paste into any app)
+ * Each rejected attempt drops only what was just refused, and the marker outlives
+ * every rung above a png-only fallback: a png-only clipboard cannot be identified
+ * at paste time, which is how copies ended up staged in the media library instead
+ * of dropped on the board. `writeState` records the outcome for the paste handler
+ * (see its docs) — the local payload is set by the caller synchronously first, so
+ * this promise never gates the keydown tick.
  * @param {object} b
  * @param {object} payload
  */
 export async function writePortableClipboard(b, payload) {
+    const seq = ++writeSeq;
+    writeState = 'pending';
     let png = null;
     try { png = await renderSelectionPng(b, payload); } catch { png = null; }
     try {
-        if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return;
-        const json = JSON.stringify(payload);
-        const custom = new Blob([json], { type: CLIP_MIME });
-        const marker = new Blob([markerText(totalOf(payload))], { type: 'text/plain' });
-        try {
-            const item = { [CLIP_MIME]: custom, 'text/plain': marker };
-            if (png) item['image/png'] = png;
-            await navigator.clipboard.write([new ClipboardItem(item)]);
+        if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+            if (seq === writeSeq) writeState = 'failed';
             return;
-        } catch (compositeErr) {
-            if (png) {
-                // Browsers that refuse custom types still take image/png — keep it portable.
-                await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]).catch(() => {});
-                return;
-            }
-            // No PNG available: retry the custom pair alone (never write nothing).
-            try {
-                await navigator.clipboard.write([new ClipboardItem({ [CLIP_MIME]: custom, 'text/plain': marker })]);
-            } catch { /* swallow — local payload covers same-tab */ }
         }
-    } catch { /* unsupported context — local payload covers it */ }
+        const custom = new Blob([JSON.stringify(payload)], { type: CLIP_MIME });
+        const marker = new Blob([markerText(totalOf(payload))], { type: 'text/plain' });
+        const ladder = [
+            { [CLIP_MIME]: custom, 'text/plain': marker, 'image/png': png },
+            { [CLIP_MIME]: custom, 'text/plain': marker },
+            { 'text/plain': marker, 'image/png': png },
+            { 'text/plain': marker },
+            { 'image/png': png }
+        ];
+        for (const rung of ladder) {
+            const item = {};
+            for (const [type, blob] of Object.entries(rung)) if (blob) item[type] = blob;
+            if (!Object.keys(item).length) continue;
+            try {
+                await navigator.clipboard.write([new ClipboardItem(item)]);
+                if (seq === writeSeq) writeState = 'done';
+                return;
+            } catch { /* narrower rung next */ }
+        }
+    } catch { /* unsupported context (no Blob/ClipboardItem) — local payload covers it */ }
+    if (seq === writeSeq) writeState = 'failed';
 }
 
 /** Async custom-MIME read via the Clipboard API. Rejects when unavailable/absent. */
@@ -219,8 +286,18 @@ function readPayloadAsync() {
     });
 }
 
-function localPayloadFresh() {
-    return !!(board?._boardClipboard && Date.now() - (board._clipboardTimestamp || 0) <= FALLBACK_FRESH_MS);
+function localPayloadFresh(windowMs = FALLBACK_FRESH_MS) {
+    return !!(board?._boardClipboard && Date.now() - (board._clipboardTimestamp || 0) <= windowMs);
+}
+
+/** Write in flight or refused — the OS clipboard cannot be trusted yet. */
+function clipboardWriteUnconfirmed() {
+    return writeState === 'pending' || writeState === 'failed';
+}
+
+/** Same-tab trust: our copy is alive and the OS clipboard cannot hold it yet. */
+function sameTabTrust() {
+    return clipboardWriteUnconfirmed() && localPayloadFresh(SAME_TAB_TRUST_MS);
 }
 
 /** Visible world rect of the board canvas, or null when unavailable. */
@@ -337,33 +414,53 @@ export function pastePayload(b, payload) {
 
 /**
  * Persistent document capture-phase paste handler (registered once at bindBoard).
- * Order-independent vs mediaPasteCatcher: whichever runs first, the catcher's
- * yield clause and the token consumption keep a single owner per paste event.
+ * Order-independent vs mediaPasteCatcher: ownership comes from
+ * `boardOwnsPasteEvent`, which both listeners evaluate identically *before* the
+ * one-shot arm token is consumed, and the event is then marked so the catcher
+ * cannot stage a payload that is really a board copy. The previous token-peek
+ * yield clause could never fire — this handler is registered first (static
+ * import) and always consumed the token the catcher was still asking about.
  */
 export function handlePasteEvent(e) {
-    if (!board) return;
-    // consume on any paste while armed — arm is one-shot regardless of payload type.
-    // Do NOT move this below the MIME check: an image paste inside the arm window
-    // must eat the token too, or the next paste event would double-fire.
-    if (!consumeArmed()) return;
+    if (!board || !e) return;
+    // Re-entrancy: the same event object only ever produces one paste.
+    if (pasteEventIsOwned(e)) return;
+    const owns = boardOwnsPasteEvent(e);      // peek only — must run before the token is gone
+    // Arm is one-shot for the same-tab trust window, whoever owns the paste.
+    consumeArmed();
+    if (!owns) return;
+    markPasteOwned(e);
+    e.preventDefault?.();                     // board payload — never let it hit text fields
+    e.stopImmediatePropagation?.();           // …nor the media catcher / staging dialog
 
-    if (eventHasBoardMime(e)) {
-        e.preventDefault();                               // board payload — never let it hit text fields
-        readPayloadAsync()
-            .then((payload) => pastePayload(board, payload))
-            .catch(() => {
-                if (localPayloadFresh()) pastePayload(board, board._boardClipboard);
-                else showAppToast('Couldn\'t read clipboard — copy again');
-            });
+    const local = localPayloadFresh() ? board._boardClipboard : null;
+    const localMatches = !!(local && eventHasMarker(e) && markerMatchesPayload(e, local));
+    // The marker proves the local payload *is* the copy this event describes: paste
+    // it without a clipboard.read() permission prompt. A mismatched marker must
+    // never take this shortcut, however recent our own copy is — a wrong paste is
+    // worse than a toast (and on browsers that refuse every write, `failed` sticks
+    // for the whole session, so the same-tab trust window proves nothing here).
+    if (local && localMatches) {
+        pastePayload(board, local);
         return;
     }
-
-    // Firefox same-tab: custom MIME dropped, marker text survives + fresh local payload.
-    if (eventHasMarker(e) && localPayloadFresh() && markerMatchesPayload(e, board._boardClipboard)) {
-        e.preventDefault();
-        pastePayload(board, board._boardClipboard);
+    if (!eventHasBoardMime(e) && !eventHasMarker(e)) {
+        // No board artefacts on the event, yet it is ours: the only way in is the
+        // same-tab trust window in boardOwnsPasteEvent (armed Ctrl+V right after a
+        // copy whose OS write has not landed), so the clipboard is still the stale
+        // one — use the in-memory payload instead.
+        if (local) pastePayload(board, local);
+        return;
     }
-    // else: not ours — media catcher / browser default handles it (files, plain text…).
+    readPayloadAsync()
+        .then((payload) => pastePayload(board, payload))
+        .catch(() => {
+            // Anti-collision: the marker proves whether the local buffer is the copy
+            // this event describes. A wrong paste is worse than a toast.
+            if (localMatches) pastePayload(board, local);
+            else if (local && eventHasBoardMime(e)) pastePayload(board, local);  // our MIME, read unavailable
+            else showAppToast('Couldn\'t read clipboard — copy again');
+        });
 }
 
 /** Ctrl+C — serialize selection, mirror to OS clipboard, one sync tick. */
@@ -480,13 +577,13 @@ export function bindBoard(b) {
     document.addEventListener('pointerdown', () => { cascadeN = 0; }, true);
 }
 
-/** Test-only: reset armed token, cascade counter, and board binding. */
+/** Test-only: reset armed token, cascade counter, write state, and board binding. */
 export function resetClipboardSessionForTests() {
     armedAt = 0;
     cascadeN = 0;
     board = null;
     bound = false;
+    writeState = 'idle';
+    writeSeq = 0;
+    ownedPasteEvents = new WeakSet();
 }
-
-
-
