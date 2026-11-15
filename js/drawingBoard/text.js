@@ -72,12 +72,14 @@ export function cssSizeOf(target, dpr = textDpr()) {
 }
 
 /**
- * Allowed CSS-px range for the current selection. A label-only selection caps at
- * the label painter's ceiling, so "+" never looks dead on a retina canvas.
+ * Allowed CSS-px range for the current selection. A label selection — or an
+ * open label editor, whose label may not exist yet — caps at the label painter's
+ * ceiling, so "+" never looks live while the painted size stays clamped.
  */
 export function textSizeRange(board, dpr = textDpr()) {
     const targets = textTargets(board);
-    const labelOnly = targets.some(hasLabel) && !targets.some(isTextBox);
+    const labelOnly = !targets.some(isTextBox)
+        && (targets.some(hasLabel) || !!board?.flowLabelTarget);
     const labelCap = Math.max(TEXT_SIZE_MIN, Math.min(TEXT_SIZE_MAX, Math.floor(FLOW_LABEL_MAX / dpr)));
     return { min: TEXT_SIZE_MIN, max: labelOnly ? labelCap : TEXT_SIZE_MAX };
 }
@@ -91,7 +93,12 @@ export function currentTextSize(board) {
     const range = textSizeRange(board, dpr);
     const sizes = textTargets(board).map((item) => Math.round(cssSizeOf(item, dpr)));
     const common = sizes.length && sizes.every((size) => size === sizes[0]) ? sizes[0] : null;
-    const raw = common != null ? common : textStyle(board).size;
+    // An open label editor is the live target: show the size its text is painted
+    // at, even when the label does not exist yet (fitted-to-box previews).
+    const editing = Number(board?.flowLabelSize);
+    const raw = Number.isFinite(editing) && editing > 0
+        ? Math.round(editing / dpr)
+        : (common != null ? common : textStyle(board).size);
     return Math.min(range.max, Math.max(range.min, raw));
 }
 
@@ -154,6 +161,9 @@ export function setTextColor(board, colour, { rerender = true } = {}) {
         writePrefs(board.prefs);
     }
     const changed = applyTextStyle(board, { color: next });
+    // An open editor may show a label that does not exist yet, so `applyTextStyle`
+    // has nothing to write: push the colour into the live DOM as well.
+    if (typeof board?.flowRestyleLabelEditor === 'function') board.flowRestyleLabelEditor({ color: next });
     if (rerender && typeof board?.renderToolbar === 'function') board.renderToolbar();
     else if (typeof board?.updateTextColorChip === 'function') board.updateTextColorChip(next);
     return changed;
@@ -168,7 +178,11 @@ export function setTextSize(board, size) {
         board.prefs.text = { ...style, size: next };
         writePrefs(board.prefs);
     }
-    return applyTextStyle(board, { size: next });
+    const changed = applyTextStyle(board, { size: next });
+    // Restyle the open editor too: a label being typed has no stored size yet,
+    // and its preview must not drift from the size the painter would use.
+    if (typeof board?.flowRestyleLabelEditor === 'function') board.flowRestyleLabelEditor({ size: next });
+    return changed;
 }
 
 /** Step the text size by one increment (+1 / -1) through the stepper. */

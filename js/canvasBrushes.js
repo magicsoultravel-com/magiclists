@@ -1,3 +1,10 @@
+import { normalizeFlowLabelSize } from './flowchart.js';
+import {
+    FLOW_LABEL_FONT_STACK,
+    flowLabelCanvasLayout,
+    flowLabelFirstBaseline
+} from './flowchartLabel.js';
+
 export const BRUSH_STYLES = ['pen', 'marker', 'highlighter', 'pencil', 'spray', 'calligraphy', 'brush'];
 
 /** Drag-to-place geometric tools shared by the drawing board and note-canvas preview. */
@@ -320,53 +327,41 @@ export function drawConnectorStroke(ctx, stroke) {
 }
 
 /**
- * Centered, word-wrapped label painted inside a shape bbox.
- * Pure canvas — same wrap idiom as the planner overlay.
+ * Centred label painted inside a shape bbox, or on a connector's bend point.
+ *
+ * Layout (wrap, soft breaks, size, padding, block position) comes from
+ * `flowchartLabel.js` — the same module the inline editor reads — so the typed
+ * preview and the committed paint agree line for line. Lines are never capped
+ * and never clipped: a label that overflows its shape keeps painting, exactly
+ * as the editor shows it.
+ *
+ * `opts.skipLabel` names the stroke the inline editor currently owns: the
+ * editor is drawing that text, so painting it too would double the glyphs.
  */
-export function drawFlowchartLabel(ctx, stroke) {
-    const label = stroke && stroke.label;
+export function drawFlowchartLabel(ctx, stroke, opts = {}) {
+    if (!stroke || (opts && opts.skipLabel === stroke)) return;
+    const label = stroke.label;
     if (!label || !String(label.text || '').trim()) return;
-    const left = Math.min(stroke.x0, stroke.x1);
-    const top = Math.min(stroke.y0, stroke.y1);
-    const w = Math.abs(stroke.x1 - stroke.x0);
-    const h = Math.abs(stroke.y1 - stroke.y0);
-    // Connector labels anchor on the bend midpoint, not a bounding box.
-    if (stroke.tool === 'connector') {
-        const fontSize = Math.max(8, Number(label.fontSize) || 20);
-        ctx.save();
-        ctx.fillStyle = label.color || stroke.color || '#f1f5f9';
-        ctx.font = fontSize + 'px Inter, system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(label.text), Number(stroke.midX) || (left + w / 2), Number(stroke.midY) || (top + h / 2));
+    const fontSize = normalizeFlowLabelSize(label.fontSize);
+    ctx.save();
+    ctx.fillStyle = label.color || stroke.color || '#f1f5f9';
+    ctx.font = fontSize + 'px ' + FLOW_LABEL_FONT_STACK;
+    const layout = flowLabelCanvasLayout(stroke, (text) => ctx.measureText(text).width);
+    if (!layout) {
         ctx.restore();
         return;
     }
-    if (!(w > 8) || !(h > 8)) return;
-    const fontSize = Math.max(8, Number(label.fontSize) || 20);
-    ctx.save();
-    ctx.fillStyle = label.color || stroke.color || '#f1f5f9';
-    ctx.font = fontSize + 'px Inter, system-ui, sans-serif';
+    const metrics = ctx.measureText('Hg');
+    const rawAscent = Number(metrics?.fontBoundingBoxAscent);
+    const rawDescent = Number(metrics?.fontBoundingBoxDescent);
+    const ascent = Number.isFinite(rawAscent) && rawAscent > 0 ? rawAscent : fontSize * 0.8;
+    const descent = Number.isFinite(rawDescent) && rawDescent >= 0 ? rawDescent : fontSize * 0.2;
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const pad = 6;
-    const maxW = Math.max(10, w - pad * 2);
-    const words = String(label.text).split(/\s+/).filter(Boolean);
-    const lines = [];
-    let cur = '';
-    for (const word of words) {
-        const next = cur ? cur + ' ' + word : word;
-        if (ctx.measureText(next).width <= maxW || !cur) cur = next;
-        else { lines.push(cur); cur = word; }
-    }
-    if (cur) lines.push(cur);
-    const lineH = fontSize * 1.2;
-    const totalH = lines.length * lineH;
-    let y = top + h / 2 - totalH / 2 + lineH / 2;
-    const cx = left + w / 2;
-    for (const line of lines.slice(0, 8)) {
-        ctx.fillText(line, cx, y);
-        y += lineH;
+    ctx.textBaseline = 'alphabetic';
+    let y = flowLabelFirstBaseline(layout, ascent, descent);
+    for (const line of layout.lines) {
+        if (line) ctx.fillText(line, layout.centerX, y);
+        y += layout.lineHeight;
     }
     ctx.restore();
 }
@@ -594,7 +589,12 @@ function fillShapeGeometry(ctx, tool, b) {
     }
 }
 
-export function drawShapeStroke(ctx, stroke) {
+/**
+ * Paint one shape (or connector) stroke.
+ * `opts` is forwarded to the label painter; `opts.skipLabel` is the stroke whose
+ * inline editor is open, so its text is not drawn twice.
+ */
+export function drawShapeStroke(ctx, stroke, opts = {}) {
     const cfg = STYLE_CONFIG[stroke.style] || STYLE_CONFIG.pen;
     ctx.save();
     ctx.strokeStyle = stroke.color;
@@ -655,10 +655,10 @@ export function drawShapeStroke(ctx, stroke) {
     } else if (tool === 'connector') {
         ctx.restore();
         drawConnectorStroke(ctx, stroke);
-        drawFlowchartLabel(ctx, stroke);
+        drawFlowchartLabel(ctx, stroke, opts);
         return;
     }
-    drawFlowchartLabel(ctx, stroke);
+    drawFlowchartLabel(ctx, stroke, opts);
     ctx.restore();
 }
 

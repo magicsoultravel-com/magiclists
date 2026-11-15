@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-15T19:43:04.943Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-15T20:39:57.794Z
 
 ## CSS load order
 
@@ -111,6 +111,7 @@ alwaysApply: true
 | js/fileCabinet/transfer.js | file cabinet item transfers - filing a board note into a drawer, expanding a drawer note back onto the board, and moving a note between categories | fileCabinet.js, fileCabinet/order.js, noteSurface.js, uiTransitions.js | — | — |
 | js/flowchart.js | shape and connector model - grid prefs, label sizing, connector routing helpers | flowchartGeometry.js, drawingBoardFlowchart.js, drawingBoardCore.js | — | — |
 | js/flowchartGeometry.js | flowchart geometry — shape ports, connector routing, hit-test, reroute | flowchart.js, lassoGeometry.js, canvasBrushes.js | — | — |
+| js/flowchartLabel.js | magicCanvas shape and connector label layout - the one wrap, size and centring model shared by the canvas painter and the inline editor | canvasBrushes.js, flowchart.js, drawingBoardFlowchart.js, drawingBoard/view.js | — | — |
 | js/hamburger.js | side panel shell, notes list, category summary, sort | searchBar.js, ui.js, sidebarHistory.js, sidebarStats.js, categoriesOverlay.js | categories:manage_requested, category:order_changed | — |
 | js/icons.js | CARD_ICONS, ACTION_ICONS, FORMAT_ICONS, DRAWING_ICONS SVG constants | ui.js | — | — |
 | js/itemMerge.js | shared merge helper for undo/redo restore (preserves note metadata) | undo.js, app.js | — | — |

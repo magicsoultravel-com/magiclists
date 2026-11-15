@@ -96,7 +96,54 @@ describe('flowEditLabel', () => {
         assert.equal(board.appended.length, 1, 'editor should be appended to the text layer');
         assert.equal(board.flowLabelTarget, shape, 'editor should latch onto its target');
         assert.ok(board.selectedStrokes.set.has(shape), 'target should be selected');
-        assert.equal(board.toolbarRenders, undefined, 'label editing must not repaint the toolbar');
+        assert.equal(board.toolbarRenders, undefined,
+            'label editing must not re-render the whole toolbar (that steals focus mid-typing)');
+    });
+
+    it('refreshes the selection controls so the text stepper drives the editor', () => {
+        installEditorDom();
+        const board = makeBoard();
+        board.refreshSelectionControls = function () { this.controlRefreshes = (this.controlRefreshes || 0) + 1; };
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100, label: null
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+        assert.equal(board.controlRefreshes, 1, 'open refreshes once');
+        assert.equal(board.toolbarRenders, undefined, 'but never the whole toolbar');
+
+        board.appended[0].innerText = 'Done';
+        board.appended[0].listeners.blur.forEach((fn) => fn());
+        assert.equal(board.controlRefreshes, 2, 'commit refreshes again (the label now exists)');
+    });
+
+    it('styles the editor exactly like the painter', () => {
+        const created = installEditorDom(); // dpr = 2
+        const board = makeBoard();
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100, label: null
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+        const el = created[0];
+
+        // The editor used to inherit system-ui from the body while the painter
+        // drew Inter: every preview re-wrapped on commit.
+        assert.equal(el.style.fontFamily, 'Inter, system-ui, sans-serif');
+        assert.equal(el.style.lineHeight, '1.2', 'same line advance as the painter');
+        // Shape box: 200x100 world -> 100x50 CSS px, 6 world units of padding -> 3px.
+        assert.equal(el.style.left, '0px');
+        assert.equal(el.style.top, '0px');
+        assert.equal(el.style.width, '100px');
+        assert.equal(el.style.height, '50px');
+        assert.equal(el.style.padding, '3px');
+        assert.equal(el.style.display, 'flex');
+        assert.equal(el.style.whiteSpace, 'pre-wrap');
+        assert.equal(el.style.overflowWrap, 'anywhere');
+        // No clipping in either state (WYSIWYG overflow).
+        assert.equal(el.style.overflow, 'visible');
+        // No min-width/min-height cheat: the box is the box the painter fills.
+        assert.equal(el.style.minWidth, undefined);
     });
 
     it('positions the editor in text-layer space (world / dpr, no viewport scale)', () => {
@@ -144,9 +191,56 @@ describe('flowEditLabel', () => {
             midX: 300, midY: 100, label: null
         };
         DrawingBoard.flowEditLabel.call(board, conn);
-        const left = parseFloat(created[0].style.left);
-        // midX 300 / dpr 2 = 150, minus half box width.
-        assert.ok(left < 150 && left > 0, `connector editor should centre on the bend, got ${left}`);
+        const el = created[0];
+        // width 0 at midX 300 / dpr 2 = 150: centred text overflows both ways,
+        // the DOM twin of ctx.textAlign = 'center' at centerX.
+        assert.equal(el.style.left, '150px');
+        assert.equal(el.style.width, '0px');
+        assert.equal(el.style.transform, 'translateY(-50%)', 'block centred on the bend line');
+        assert.equal(el.style.whiteSpace, 'pre', 'connectors do not wrap, they honour Shift+Enter');
+        assert.equal(el.style.textAlign, 'center');
+    });
+
+    it('keeps the size a stepper applies while the editor is open', () => {
+        const created = installEditorDom(); // dpr = 2
+        const board = makeBoard();
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100, label: null
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+        const el = created[0];
+        const openingSize = parseFloat(el.style.fontSize);
+
+        // The label does not exist yet, so applyTextStyle has nothing to write:
+        // the editor restyle is the only place this size can live.
+        const applied = DrawingBoard.flowRestyleLabelEditor.call(board, { size: 24 });
+        assert.equal(applied, 1);
+        assert.equal(parseFloat(el.style.fontSize), 24, 'editor preview follows the stepper');
+        assert.equal(board.flowLabelSize, 48, 'pending size is held in canvas units');
+
+        el.innerText = 'Sized';
+        el.listeners.blur.forEach((fn) => fn());
+        assert.equal(shape.label.fontSize, 48, 'commit writes the size the user saw, not the opening one');
+        assert.notEqual(shape.label.fontSize, openingSize * 2);
+        assert.equal(board.flowLabelSize, null, 'pending size is cleared on commit');
+    });
+
+    it('a stepper size change alone is not an extra undo step', () => {
+        const created = installEditorDom();
+        const board = makeBoard();
+        const shape = {
+            id: 's1', flowchartKind: 'shape', tool: 'rect',
+            x0: 0, y0: 0, x1: 200, y1: 100,
+            // 40 canvas units = the 20px the stepper below asks for, already
+            // written by applyTextStyle in the real flow.
+            label: { text: 'Same', fontSize: 40, color: '' }
+        };
+        DrawingBoard.flowEditLabel.call(board, shape);
+        DrawingBoard.flowRestyleLabelEditor.call(board, { size: 20 });
+        created[0].innerText = 'Same';
+        created[0].listeners.blur.forEach((fn) => fn());
+        assert.equal(board.historyPushes, undefined, 'unchanged text + unchanged size = no undo entry');
     });
 
     it('is a no-op without a target', () => {

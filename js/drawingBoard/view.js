@@ -140,8 +140,10 @@ export function redraw(board) {
             drawTextObject(board.ctx, item);
             return;
         }
+        // The open label editor paints its own text; skip the committed copy so
+        // a half-typed label is not drawn twice (bolder + stale under the caret).
         if (item.tool === 'brush') drawBrushStroke(board.ctx, item);
-        else drawShapeStroke(board.ctx, item);
+        else drawShapeStroke(board.ctx, item, { skipLabel: board.flowLabelTarget });
     });
 
     // Uncommitted previews always paint above the document, whatever level the

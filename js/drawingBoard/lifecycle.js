@@ -190,6 +190,7 @@ export async function deactivate(board) {
     board.flowEndpointDrag = null;
     board.flowLabelEl = null;
     board.flowLabelTarget = null;
+    board.flowLabelSize = null;
     board.flowShapesCache = null;
     board.doc = null;
     board.docOwner = null;

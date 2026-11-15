@@ -147,6 +147,42 @@ and after a handled `handleKeydown`, and `updateToolbarState` covers the
 programmatic paths. A new selection-dependent control belongs in that function,
 not in each call site.
 
+### Labels: the editor is a preview of the painter, not a lookalike
+
+`js/flowchartLabel.js` is a DOM-free leaf. `flowLabelBox`, `wrapLabelLines`,
+`flowLabelCanvasLayout`, `flowLabelFirstBaseline` and `flowLabelEditorMetrics`
+are read by **both** `drawFlowchartLabel()` (`js/canvasBrushes.js`) and
+`flowEditLabel()` (`js/drawingBoardFlowchart.js`), so the `contentEditable`
+overlay cannot drift from what the canvas paints. The values that used to
+disagree now exist once: `FLOW_LABEL_FONT_STACK` (the editor used to inherit
+`system-ui` while the painter drew Inter), `FLOW_LABEL_LINE_HEIGHT` (1.2) and
+`FLOW_LABEL_PAD` (6). Gone with them: the editor's 11px CSS floor, the painter's
+8-line cap, and the `w <= 8` bail that painted no label at all on a small shape.
+Both sides run the size through `normalizeFlowLabelSize`, so a label can never
+preview at a size the painter refuses to paint.
+
+Soft breaks are layout, not whitespace. The painter splits on `\n` **first** and
+wraps each segment (an over-long word is broken character by character, the
+canvas twin of `overflow-wrap: anywhere`), so Shift+Enter gives stacked lines
+instead of being collapsed to one long sentence. Connector labels do not wrap —
+a connector has no box — but they do stack between `midX`/`midY`. Overflow is
+visible in both states, and baselines come from the CSS half-leading model
+(`fontBoundingBoxAscent + (lineHeight - ascent - descent) / 2`, falling back to
+0.8/0.2 em) rather than canvas `textBaseline: 'middle'`, which is where the last
+pixel of vertical disagreement lived.
+
+Two consequences for the rest of the board. While an editor is open, `view.js`
+passes `{ skipLabel: board.flowLabelTarget }` to `drawShapeStroke`, so the
+committed text is not painted underneath the text being typed. And the toolbar's
+text controls reach the live DOM through
+`board.flowRestyleLabelEditor({ size, color })`: `applyTextStyle` can only
+restyle labels that already exist, while a label being typed has no `label`
+object until it commits. That is why `flowEditLabel` calls
+`board.refreshSelectionControls()` (so the stepper knows the label includes the
+new ones) and why `commit()` reads the size back from `board.flowLabelSize`
+instead of a value captured at open — a stepper press mid-edit survives blur
+instead of being silently reverted.
+
 What deliberately stays in the facade: `init`, the tool and preference setters,
 and the toolbar/DOM orchestration that every entry path needs — the seam the
 sessions call back into. `activate` and `activateForNote` still share an

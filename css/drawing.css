@@ -388,6 +388,9 @@
     outline: 1px dashed rgba(255, 255, 255, 0.35);
     background: rgba(0, 0, 0, 0.15);
     border-radius: 0.2rem;
+    /* Must match drawTextObject's stack, or the editor previews a different face
+       than the one the canvas paints after commit. */
+    font-family: Inter, sans-serif;
     white-space: pre-wrap;
     /* Must match drawTextObject's line advance (fontSize * 1.25), or typed text
        reflows when the canvas repaints it. */

@@ -1,9 +1,13 @@
 /** @module {"owns":"magicCanvas shapes and connectors - port magnet, routing, bend and endpoint drags, inline labels", "related":["drawingBoard.js","flowchart.js","flowchartGeometry.js","canvasBrushes.js"]} */
 import {
     FLOWCHART_CONNECTOR_TOOL, FLOWCHART_DEFAULT_GRID_SIZE,
-    FLOW_LABEL_DEFAULT, normalizeFlowLabelSize, fitFlowLabelFontSize,
+    normalizeFlowLabelSize,
     createFlowchartConnector, routeFlowchartConnector
 } from './flowchart.js';
+import {
+    flowLabelEditorMetrics,
+    flowLabelInitialFontSize
+} from './flowchartLabel.js';
 import {
     shapeBounds, nearestPort, portPointFor, snapEndpointToShapes, routeConnector,
     rerouteAttachedConnectors
@@ -483,16 +487,60 @@ export function commitFlowConnect(board) {
 }
 
 /**
+ * Style the editor element with the painter's numbers.
+ *
+ * All layout is inline (and therefore dpr- and zoom-aware): the stylesheet keeps
+ * only chrome, so there is exactly one source of geometry per side of the
+ * painter/editor divide and no chance of a CSS rule quietly winning.
+ */
+function applyLabelEditorMetrics(el, metrics, color) {
+    el.style.boxSizing = 'border-box';
+    el.style.fontFamily = metrics.fontFamily;
+    el.style.fontSize = metrics.fontSizeCss + 'px';
+    el.style.lineHeight = String(metrics.lineHeight);
+    el.style.color = color;
+    el.style.textAlign = 'center';
+    el.style.overflow = 'visible';
+    el.style.left = metrics.left + 'px';
+    el.style.top = metrics.top + 'px';
+    if (metrics.isConnector) {
+        // Zero width + centred text: lines overflow both ways around the bend
+        // point, which is what ctx.textAlign = 'center' at centerX paints.
+        // translateY(-50%) centres the block, matching the painter's blockTop.
+        el.style.width = '0px';
+        el.style.whiteSpace = 'pre';
+        el.style.transform = 'translateY(-50%)';
+        el.style.minHeight = (metrics.lineHeight * metrics.fontSizeCss) + 'px';
+        return;
+    }
+    el.style.width = metrics.width + 'px';
+    el.style.height = metrics.height + 'px';
+    el.style.padding = metrics.padCss + 'px';
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
+    el.style.whiteSpace = 'pre-wrap';
+    el.style.overflowWrap = 'anywhere';
+}
+
+/**
  * Inline contentEditable editor for the label of a shape or connector.
  *
- * Shape path: the editor IS the shape box — absolute at the shape's top-left,
- * sized to its bounds, flex-centred with wrapping text, clipped on overflow.
- * Connector path: a fixed-width box centred on the bend midpoint, so a
- * zero-width (vertical) connector still gets a usable editor.
+ * The editor is a WYSIWYG clone of the painter: font stack, size, line height,
+ * padding, box, centring and soft-break handling all come from
+ * `flowchartLabel.js` — the module `drawFlowchartLabel()` also lays the painted
+ * label out with — so nothing re-wraps or shifts on commit. Overflow stays
+ * visible in both states: a long label spills out of its shape instead of being
+ * clipped, exactly as the canvas paints it.
+ *
+ * Shape path: the editor IS the shape box — padding-box, flex-centred, wrapping
+ * like the painter. Connector path: width 0, centred on the bend midpoint, text
+ * overflowing both sides (the DOM twin of ctx.textAlign = 'center' at centerX).
  *
  * Enter commits, Shift+Enter inserts a newline, Escape aborts, blur commits.
  * Committing empty text on an existing label deletes it as one undo step.
- * The editor never repaints the toolbar: label chrome is gone from it.
+ * Taking over the selection refreshes the toolbar so the size stepper and colour
+ * chip drive the live editor (see flowRestyleLabelEditor).
  */
 export function flowEditLabel(board, target) {
     if (!target) return;
@@ -501,10 +549,6 @@ export function flowEditLabel(board, target) {
     // world coords are dpr-scaled, innerEl's CSS transform carries the zoom.
     const dpr = window.devicePixelRatio || 1;
     const isConnector = target.flowchartKind === 'connector';
-    const minX = Math.min(target.x0, target.x1);
-    const minY = Math.min(target.y0, target.y1);
-    const boxW = Math.abs(target.x1 - target.x0);
-    const boxH = Math.abs(target.y1 - target.y0);
     const existing = target.label && target.label.text ? String(target.label.text) : '';
     const hasPrev = !!(target.label && String(target.label.text || '').trim());
     const textPref = textStyle(board);
@@ -515,37 +559,16 @@ export function flowEditLabel(board, target) {
         ? (target.label.color || target.color || textPref.color)
         : textPref.color;
     // An explicit stored size always wins; only a brand-new label is fitted to
-    // the box, and fitting never dips below the readable floor.
-    const fontSize = target.label && target.label.fontSize
-        ? normalizeFlowLabelSize(target.label.fontSize)
-        : normalizeFlowLabelSize(isConnector ? FLOW_LABEL_DEFAULT : fitFlowLabelFontSize(boxH));
-    const cssFont = Math.max(11, fontSize / dpr);
+    // its box. Same rule the painter applies, decided by the same module.
+    const fontSize = flowLabelInitialFontSize(target);
+    const metrics = flowLabelEditorMetrics(target, { dpr, fontSize });
 
     const el = document.createElement('div');
     el.className = 'flow-label-editor' + (isConnector ? ' flow-label-editor--connector' : ' flow-label-editor--box');
     el.contentEditable = 'true';
     el.spellcheck = false;
     el.dataset.placeholder = 'Type\u2026';
-    el.style.fontSize = cssFont + 'px';
-    // Same colour the painter will use for this label, so typed text does not
-    // jump tone when it is committed.
-    el.style.color = labelFill;
-
-    if (isConnector) {
-        const cx = Number.isFinite(Number(target.midX)) ? Number(target.midX) : (target.x0 + target.x1) / 2;
-        const cy = Number.isFinite(Number(target.midY)) ? Number(target.midY) : (target.y0 + target.y1) / 2;
-        const w = Math.max(90, cssFont * 6);
-        el.style.left = (cx / dpr - w / 2) + 'px';
-        el.style.top = (cy / dpr - cssFont * 0.75) + 'px';
-        el.style.width = w + 'px';
-    } else {
-        const w = Math.max(60, boxW / dpr);
-        const h = Math.max(cssFont * 1.2, boxH / dpr);
-        el.style.left = (minX / dpr) + 'px';
-        el.style.top = (minY / dpr) + 'px';
-        el.style.width = w + 'px';
-        el.style.height = h + 'px';
-    }
+    applyLabelEditorMetrics(el, metrics, labelFill);
 
     el.textContent = existing;
     board.textLayer.appendChild(el);
@@ -558,8 +581,15 @@ export function flowEditLabel(board, target) {
 
     board.flowLabelEl = el;
     board.flowLabelTarget = target;
+    // Pending size, in canvas units: a label that does not exist yet cannot hold
+    // its own size, so the stepper parks it here (flowRestyleLabelEditor) and
+    // commit() writes it into the label.
+    board.flowLabelSize = fontSize;
     board.selectedStrokes.clear();
     board.selectedStrokes.add(target);
+    // The text controls now speak for this label: refresh so the size stepper
+    // shows the painted size and the range caps at the label ceiling.
+    board.refreshSelectionControls?.();
 
     const commit = () => {
         const text = String(el.innerText || '').replace(/\u00a0/g, ' ').trim();
@@ -569,17 +599,27 @@ export function flowEditLabel(board, target) {
         // outline"); only a brand-new label is stamped with the text pref. Read
         // at commit time, not open time, so a pick during the edit still wins.
         const hadText = !!(prevLabel && String(prevLabel.text || '').trim());
+        // Read the size at commit time, not open time: the toolbar's stepper can
+        // restyle an open editor, and that pending size lives in flowLabelSize.
+        const size = normalizeFlowLabelSize(board.flowLabelSize || (prevLabel && prevLabel.fontSize));
         const nextLabel = text
-            ? { text, fontSize, color: hadText ? String(prevLabel.color || '') : textStyle(board).color }
+            ? { text, fontSize: size, color: hadText ? String(prevLabel.color || '') : textStyle(board).color }
             : null;
         el.remove();
-        if (board.flowLabelEl === el) { board.flowLabelEl = null; board.flowLabelTarget = null; }
+        if (board.flowLabelEl === el) {
+            board.flowLabelEl = null;
+            board.flowLabelTarget = null;
+            board.flowLabelSize = null;
+        }
         if (JSON.stringify(nextLabel) !== prevJson) {
             board.pushLayerHistory();
             target.label = nextLabel;
             board.scheduleSave();
         }
         board.redraw();
+        // A committed edit changes what the text controls target (or deletes the
+        // label outright), so bring the toolbar back in step.
+        board.refreshSelectionControls?.();
     };
     el.addEventListener('blur', commit, { once: true });
     el.addEventListener('keydown', (ev) => {
@@ -591,4 +631,40 @@ export function flowEditLabel(board, target) {
 
 export function flowCloseLabel(board) {
     if (board.flowLabelEl) board.flowLabelEl.blur();
+}
+
+/**
+ * Push a text style change into the open label editor.
+ *
+ * `applyTextStyle` can only restyle labels that already exist; a label being
+ * typed has no `label` object yet, so without this the stepper and colour chip
+ * would silently do nothing while the editor stayed at its opening size/colour
+ * and the committed label jumped on blur.
+ *
+ * @param {object} board
+ * @param {{size?: number, color?: string}} patch `size` in CSS px, like the stepper
+ * @returns {number} how many style properties changed
+ */
+export function flowRestyleLabelEditor(board, patch = {}) {
+    const el = board?.flowLabelEl;
+    const target = board?.flowLabelTarget;
+    if (!el || !target) return 0;
+    const dpr = window.devicePixelRatio || 1;
+    let applied = 0;
+    const cssSize = Number(patch?.size);
+    if (patch?.size != null && Number.isFinite(cssSize)) {
+        const size = normalizeFlowLabelSize(Math.round(cssSize * dpr));
+        const metrics = flowLabelEditorMetrics(target, { dpr, fontSize: size });
+        el.style.fontSize = metrics.fontSizeCss + 'px';
+        if (metrics.isConnector) el.style.minHeight = (metrics.lineHeight * metrics.fontSizeCss) + 'px';
+        if (board.flowLabelSize !== size) {
+            board.flowLabelSize = size;
+            applied += 1;
+        }
+    }
+    if (patch?.color) {
+        el.style.color = String(patch.color);
+        applied += 1;
+    }
+    return applied;
 }

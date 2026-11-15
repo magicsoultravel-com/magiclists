@@ -2,21 +2,23 @@
 
 /* --- Inline label editor (magicCanvas) ---------------------------------- */
 
+/*
+ * Chrome only. Every metric that decides where a glyph lands — font stack, size,
+ * line-height, padding, box, wrapping, alignment — is written inline by
+ * flowEditLabel() from flowchartLabel.js, the same module drawFlowchartLabel()
+ * lays the painted label out with. Keep layout rules out of this rule or the
+ * editor will drift from the canvas.
+ */
 .flow-label-editor {
     position: absolute;
     z-index: 3;
-    min-width: 4rem;
-    min-height: 1.2em;
-    padding: 0.15rem 0.25rem;
     pointer-events: auto;
     outline: 1px dashed rgba(96, 165, 250, 0.8);
     background: rgba(0, 0, 0, 0.35);
     border-radius: 0.2rem;
     color: #f8fafc;
-    text-align: center;
-    line-height: 1.2;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    /* WYSIWYG: the painter does not clip an overflowing label either. */
+    overflow: visible;
 }
 
 .flow-label-editor:empty::before {

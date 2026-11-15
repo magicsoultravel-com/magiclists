@@ -138,6 +138,8 @@ export const DrawingBoard = {
     /** Double-click label editor overlay + the stroke it edits. */
     flowLabelEl: null,
     flowLabelTarget: null,
+    /** Pending label size in canvas units while a label editor is open. */
+    flowLabelSize: null,
     /** Session owner for flush routing: 'workspace' | 'note' | 'flowchart' | null when idle. */
     docOwner: null,
 
@@ -285,6 +287,12 @@ export const DrawingBoard = {
     flowEditLabel(target) { return FlowSession.flowEditLabel(this, target); },
 
     flowCloseLabel() { return FlowSession.flowCloseLabel(this); },
+
+    /**
+     * Restyle the open label editor (`{ size, color }`, size in CSS px) so the
+     * toolbar's stepper and colour chip preview a label that does not exist yet.
+     */
+    flowRestyleLabelEditor(patch) { return FlowSession.flowRestyleLabelEditor(this, patch); },
 
     /**
      * Request exit from note-canvas. App owns deactivate via note:canvas_draw_exited
