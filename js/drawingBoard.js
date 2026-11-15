@@ -37,6 +37,7 @@ import * as CropSession from './drawingBoardCrop.js';
 import * as SelectSession from './drawingBoardSelection.js';
 import * as TextSession from './drawingBoard/text.js';
 import * as FillSession from './drawingBoard/fill.js';
+import * as ZSession from './drawingBoard/zLevel.js';
 import * as StrokeSession from './drawingBoard/stroke.js';
 import * as ToolbarSession from './drawingBoardToolbar.js';
 import * as ClipboardSession from './drawingBoardClipboard.js';
@@ -548,6 +549,21 @@ export const DrawingBoard = {
     updateTextColorChip(color) { return ToolbarSession.updateTextColorChip(this, color); },
 
     updateTextSizeControls() { return ToolbarSession.updateTextSizeControls(this); },
+
+    /**
+     * Z-level of the current selection: a level is a property of the item, so
+     * there is no pref and nothing is staged for the next stroke — the two
+     * toolbar buttons read and write the selection only.
+     * @param {number} level -1 (bottom) or 1 (top); pressing it again returns items to the middle
+     */
+    setZLevel(level) { return ZSession.setZLevel(this, level); },
+
+    selectionZLevel() { return ZSession.selectionZLevel(this); },
+
+    updateLayerControls() { return ToolbarSession.updateLayerControls(this); },
+
+    /** Refresh every selection-driven control (text size readout, layer buttons). */
+    refreshSelectionControls() { return ToolbarSession.refreshSelectionControls(this); },
 
     openTextColorPicker(anchor) { return ToolbarSession.openTextColorPicker(this, anchor); },
 

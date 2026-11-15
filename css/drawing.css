@@ -590,6 +590,16 @@
     margin-inline-start: 0.1rem;
 }
 
+/* Z-level cluster: same footprint as the text controls. Both buttons disabled
+   is the "nothing selected" state — a level only exists on items, so there is
+   nothing to show or stage while the selection is empty. */
+.drawing-layer-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+}
+
 .drawing-brush-size__btn {
     opacity: 0.75;
     min-width: 1.35rem;

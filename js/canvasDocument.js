@@ -1,3 +1,5 @@
+import { normalizeZLevel, Z_MIDDLE } from './canvasZOrder.js';
+
 const STORAGE_KEY = 'matrix_global_drawing';
 
 export const PAGE_FORMATS = {
@@ -48,6 +50,25 @@ export function createEmptyDocument(canvasMode) {
     };
 }
 
+/**
+ * Drop or repair per-item `zLevel` values so nothing downstream has to defend
+ * against junk. Middle (0) is deleted rather than stored: a document that never
+ * used layers must keep saving byte-identically, and "no field" already means
+ * middle everywhere in the paint order.
+ */
+function normalizeLayerZLevels(layer) {
+    if (!layer) return;
+    ['images', 'strokes', 'texts'].forEach((key) => {
+        const items = Array.isArray(layer[key]) ? layer[key] : [];
+        for (const item of items) {
+            if (!item || typeof item !== 'object' || item.zLevel === undefined) continue;
+            const level = normalizeZLevel(item.zLevel);
+            if (level === Z_MIDDLE) delete item.zLevel;
+            else item.zLevel = level;
+        }
+    });
+}
+
 export function migrateDocument(raw) {
     if (!raw || typeof raw !== 'object') return createEmptyDocument();
     if (raw.version === 2) {
@@ -72,6 +93,9 @@ export function migrateDocument(raw) {
         if (doc.infinite && doc.infinite.backgroundColor == null) doc.infinite.backgroundColor = '';
         normalizeInfiniteBounds(doc);
         promoteInfiniteLayerToActivePage(doc);
+        // After promotion, so both the page and the infinite layer are covered.
+        doc.pages.forEach(normalizeLayerZLevels);
+        normalizeLayerZLevels(doc.infinite);
         return doc;
     }
     const strokes = Array.isArray(raw.strokes) ? raw.strokes : [];

@@ -11,6 +11,7 @@ import {
     activePageIndex
 } from './noteCanvasTextOverlay.js';
 import { resolveNoteColor } from './colorPicker.js';
+import { orderedItems } from './canvasZOrder.js';
 
 const IS_DRAG_SHAPE = new Set([...DRAG_SHAPE_TOOLS, 'connector']);
 
@@ -135,20 +136,18 @@ function drawLayer(ctx, layer) {
     const strokes = layer.strokes || [];
     const texts = layer.texts || [];
 
-    for (const img of images) {
-        drawImageObject(ctx, img);
-    }
-
-    for (const stroke of strokes) {
-        if (stroke.tool && IS_DRAG_SHAPE.has(stroke.tool)) {
-            drawShapeStroke(ctx, stroke);
+    // Same z-level-aware order as the board painter, so a note card preview (and
+    // anything exported from it) shows the stack the user actually built.
+    for (const { kind, item } of orderedItems({ images, strokes, texts })) {
+        if (kind === 'images') {
+            drawImageObject(ctx, item);
+        } else if (kind === 'texts') {
+            drawTextObject(ctx, item);
+        } else if (item.tool && IS_DRAG_SHAPE.has(item.tool)) {
+            drawShapeStroke(ctx, item);
         } else {
-            drawBrushStroke(ctx, stroke);
+            drawBrushStroke(ctx, item);
         }
-    }
-
-    for (const text of texts) {
-        drawTextObject(ctx, text);
     }
 }
 

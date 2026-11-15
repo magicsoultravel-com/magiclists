@@ -1,4 +1,5 @@
-/** @module {"owns":"lasso geometry utilities - ray casting, bounding boxes", "related":["drawingBoard.js"]} */
+/** @module {"owns":"lasso geometry utilities - ray casting, bounding boxes", "related":["drawingBoard.js","canvasZOrder.js"]} */
+import { orderedItems } from './canvasZOrder.js';
 
 /**
  * Ray-casting algorithm to determine if a point is inside a polygon.
@@ -586,8 +587,8 @@ export function itemContainsPoint(item, x, y, radius = 0) {
 }
 
 /**
- * Topmost item at a point, in paint order: texts over strokes over images, and
- * within a layer the last entry (painted last) wins.
+ * Topmost item at a point, in paint order: walk the shared ordering backwards,
+ * so the last thing painted is the first thing hit.
  *
  * @param {number} x
  * @param {number} y
@@ -596,16 +597,10 @@ export function itemContainsPoint(item, x, y, radius = 0) {
  * @returns {Object|null}
  */
 export function findTopmostItemAt(x, y, layers = {}, radius = 0) {
-    const groups = [
-        Array.isArray(layers.texts) ? layers.texts : [],
-        Array.isArray(layers.strokes) ? layers.strokes : [],
-        Array.isArray(layers.images) ? layers.images : []
-    ];
-
-    for (const group of groups) {
-        for (let i = group.length - 1; i >= 0; i -= 1) {
-            if (itemContainsPoint(group[i], x, y, radius)) return group[i];
-        }
+    const ordered = orderedItems(layers);
+    for (let i = ordered.length - 1; i >= 0; i -= 1) {
+        const item = ordered[i].item;
+        if (itemContainsPoint(item, x, y, radius)) return item;
     }
     return null;
 }

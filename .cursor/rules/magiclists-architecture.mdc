@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-15T18:14:59.915Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-15T19:43:04.943Z
 
 ## CSS load order
 
@@ -69,6 +69,7 @@ alwaysApply: true
 | js/boardOperations.js | item visibility, archiving, calendar integration, card actions | noteSurface.js, noteQuickActions.js, desktopManager.js | — | — |
 | js/boardRulers.js | board px rulers chrome | displayOptions.js, desktopZoom.js, fileCabinet.js | — | — |
 | js/canvasImages.js | magicCanvas image cache and draw helpers | mediaLibrary.js, drawingBoard.js, canvasDocument.js | — | — |
+| js/canvasZOrder.js | magicCanvas per-item z-level (top/middle/bottom) normalisation and the one paint order shared by the board, note previews and hit-testing | drawingBoard/view.js, noteCanvasRenderer.js, lassoGeometry.js, canvasDocument.js, drawingBoard/zLevel.js | — | — |
 | js/categoriesOverlay.js | categories manager floating panel | categories.js, fileCabinet.js, noteQuickActions.js, hamburger.js | category:hide_requested, category:show_requested, category:color_changed, category:add_requested, categories:toggled | — |
 | js/checklistSteps.js | checklist tree logic, step reorder, indent/outdent | noteSurface.js, noteBodyConversion.js | — | — |
 | js/checkpointBundle.js | checkpoint bundle export — one ZIP per scheduled tick with the incremental parts inside | backup.js, mediaBackup.js, scheduledBackupConfig.js, scheduledBackup.js | — | — |
@@ -91,6 +92,7 @@ alwaysApply: true
 | js/drawingBoard/stroke.js | magicCanvas stroke colour - stroke-colour pref and selection-first restyling of shape borders and freehand strokes | drawingBoard.js, drawingBoardToolbar.js, drawingBoard/prefs.js, canvasBrushes.js | — | — |
 | js/drawingBoard/text.js | magicCanvas text styling - text colour/size prefs and selection-first restyling of shape labels and text boxes | drawingBoard.js, drawingBoardToolbar.js, drawingBoardFlowchart.js, drawingBoardSelection.js, flowchart.js, drawingBoard/prefs.js | — | — |
 | js/drawingBoard/view.js | magicCanvas rendering - redraw loop, viewport sizing, page background fill/swatch, note overlay fit | drawingBoard.js, canvasViewport.js, canvasDocument.js, canvasBrushes.js, canvasBackgrounds.js, canvasImages.js, noteCanvasTextOverlay.js, colorPicker.js | — | — |
+| js/drawingBoard/zLevel.js | magicCanvas z-level of the current selection - top/middle/bottom buttons act on selected items only | drawingBoard.js, drawingBoardToolbar.js, canvasZOrder.js, lassoGeometry.js | — | — |
 | js/drawingBoardBackup.js | magicCanvas backup/restore payload (document + prefs + toolbar) | drawingBoard.js, canvasDocument.js, layoutStorage.js | — | — |
 | js/drawingBoardClipboard.js | magicCanvas clipboard session (Ctrl+C/X/V, Delete, selection serialization) | drawingBoard.js, mediaPasteCatcher.js, canvasDocument.js, flowchart.js | — | — |
 | js/drawingBoardCore.js | magicCanvas shared board constants (brush widths, menu items) | drawingBoard.js, drawingBoardToolbar.js, canvasBrushes.js | — | — |
@@ -112,7 +114,7 @@ alwaysApply: true
 | js/hamburger.js | side panel shell, notes list, category summary, sort | searchBar.js, ui.js, sidebarHistory.js, sidebarStats.js, categoriesOverlay.js | categories:manage_requested, category:order_changed | — |
 | js/icons.js | CARD_ICONS, ACTION_ICONS, FORMAT_ICONS, DRAWING_ICONS SVG constants | ui.js | — | — |
 | js/itemMerge.js | shared merge helper for undo/redo restore (preserves note metadata) | undo.js, app.js | — | — |
-| js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js | — | — |
+| js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js, canvasZOrder.js | — | — |
 | js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js, sync.js | — | — |
 | js/linksModel.js | pure link URL normalization, dedup keys, folder records/grouping, display/thumb helpers, favicon cache-busting and manual/name/date sorting | linksStore.js, linksOverlay.js, sidebarLinks.js, backupDelta.js | — | DOM-free except bindLinkThumbFallbacks; no storage access |
 | js/linksOverlay.js | Links manager floating panel: folders, add/edit/delete, drag reorder/move, favicon refresh, tile/list views, opt-in thum.io screenshots | linksStore.js, linksModel.js, sidebarLinks.js, desktopFloatChrome.js | links:changed, links:previews_changed, links:manage_requested | — |

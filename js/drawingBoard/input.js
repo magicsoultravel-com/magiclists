@@ -314,6 +314,15 @@ export function abortGesture(board) {
 }
 
 export function onPointerUp(board, e) {
+    const handled = handlePointerUp(board, e);
+    // Every canvas selection change ends at a pointerup (click-select, marquee,
+    // lasso drag, image/paste landing), so this is the one place the
+    // selection-driven toolbar controls are re-synced from live state.
+    board?.refreshSelectionControls?.();
+    return handled;
+}
+
+function handlePointerUp(board, e) {
     if (e.pointerType === 'pen') board.penPointerActive = false;
     try { board.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     // Capture is released first, then the pan wins: a two-finger pan must not
@@ -398,6 +407,14 @@ export function onPointerUp(board, e) {
 }
 
 export function handleKeydown(board, e) {
+    const handled = handleKeydownCore(board, e);
+    // Keyboard is the other path that moves the selection: undo/redo restore it,
+    // Delete drops it, Escape clears it, paste replaces it.
+    if (handled) board?.refreshSelectionControls?.();
+    return handled;
+}
+
+function handleKeydownCore(board, e) {
     if (!board.active) return false;
     // The note UndoManager listens on document too. If it already claimed the
     // chord, undoing here as well would swallow two steps per Ctrl+Z.

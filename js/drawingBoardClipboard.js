@@ -6,6 +6,7 @@ import { FLOWCHART_CONNECTOR_TOOL, FLOWCHART_SHAPE_TOOLS, routeFlowchartConnecto
 import { showAppToast } from './toast.js';
 import { drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
 import { drawImageObject } from './canvasImages.js';
+import { orderedItems } from './canvasZOrder.js';
 
 /** Custom MIME carrying the serialized board payload (Chromium cross-tab path). */
 export const CLIP_MIME = 'application/x-magiclists-drawing';
@@ -210,12 +211,18 @@ export async function renderSelectionPng(b, payload) {
     ctx.fillRect(0, 0, pxW, pxH);
     ctx.scale(scale, scale);
     ctx.translate(-bounds.minX, -bounds.minY);
-    for (const s of payload.strokes || []) {
-        if (s.tool === 'brush') drawBrushStroke(ctx, s);
-        else drawShapeStroke(ctx, s);
+    // Clipboard bitmap: the same ordered walk the board paints with (z-level,
+    // then images → strokes → texts), so a copy looks like what was copied.
+    for (const { kind, item } of orderedItems({
+        images: payload.images || [],
+        strokes: payload.strokes || [],
+        texts: payload.texts || []
+    })) {
+        if (kind === 'images') drawImageObject(ctx, item); // bitmap self-resolves from cache
+        else if (kind === 'texts') drawTextObject(ctx, item);
+        else if (item.tool === 'brush') drawBrushStroke(ctx, item);
+        else drawShapeStroke(ctx, item);
     }
-    for (const t of payload.texts || []) drawTextObject(ctx, t);
-    for (const im of payload.images || []) drawImageObject(ctx, im); // bitmap self-resolves from cache
     return await new Promise((resolve) => {
         try {
             canvas.toBlob((blob) => resolve(blob), 'image/png');

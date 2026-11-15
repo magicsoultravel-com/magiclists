@@ -94,7 +94,7 @@ trip through the one-row strip (and is re-persisted rather than written as
 ## Splitting a big module: facade + session modules
 
 `js/drawingBoard.js` was 1874 lines of one object literal. It is now a facade
-plus `js/drawingBoard/{geometry,prefs,history,input,view,document,lifecycle,text}.js`,
+plus `js/drawingBoard/{geometry,prefs,history,input,view,document,lifecycle,text,zLevel}.js`,
 and the same shape is the target for the other oversized files. The rules that
 keep it reviewable:
 
@@ -118,6 +118,34 @@ first — the next label/text box inherits it — and then restyles the current
 selection through a dry run, so a no-op (same colour, size already at the label
 ceiling) pushes no undo entry. Shape labels clamp to `FLOW_LABEL_MAX`, text boxes
 do not, which is why the range is computed per selection instead of disabled.
+
+### Z-levels: an item property, not a mode
+
+`js/drawingBoard/zLevel.js` is the smallest session and the counter-example to
+the paragraph above: the two layer buttons (**top / bottom**, neither = middle)
+carry **no pref**. A level belongs to the item (`zLevel: 1 | -1`, absent means
+middle), so the buttons act on `board.selectedStrokes` only and render `disabled`
+whenever that set is empty — there is nothing to stage for the next stroke. The
+pressed button is latched to `selectionZLevel()`; pressing it again deletes the
+field, so "both off" and "middle layer" are the same state and an untouched
+document saves byte-identically.
+
+Paint order lives in exactly one place, `js/canvasZOrder.js`:
+`orderedItems()` sorts by `(zLevel, kind, arrayIndex)` — z-level first, then the
+existing images → strokes → texts ladder — with a fast path that skips the sort
+when no item sets a level. The board painter, the note preview, the clipboard
+bitmap and `findTopmostItemAt`/`flowHit` (both walking it **backwards**) all read
+that list; two orderings that drift apart is how a click starts selecting the
+item that is not visually on top. `canvasDocument.migrateDocument` normalises the
+field on load instead of bumping the version, and middle (0) is deleted rather
+than stored.
+
+Because selection changes on many paths (click, marquee, lasso drag, paste,
+delete, Escape, undo), the toolbar controls that read it are refreshed from one
+place: `board.refreshSelectionControls()` is called at the end of `onPointerUp`
+and after a handled `handleKeydown`, and `updateToolbarState` covers the
+programmatic paths. A new selection-dependent control belongs in that function,
+not in each call site.
 
 What deliberately stays in the facade: `init`, the tool and preference setters,
 and the toolbar/DOM orchestration that every entry path needs — the seam the

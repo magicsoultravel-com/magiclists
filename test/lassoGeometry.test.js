@@ -240,3 +240,36 @@ describe('lassoGeometry click hit-testing and z-order', () => {
     });
 });
 
+describe('findTopmostItemAt honours per-item z-levels', () => {
+    // Everything overlaps at (50, 50) so only the ordering decides the winner.
+    const image = { id: 'img', tool: 'image', x: 0, y: 0, width: 100, height: 100 };
+    const text = { id: 'txt', tool: 'text', x: 10, y: 10, text: 'hi', fontSize: 16, width: 80, height: 40 };
+    const stroke = { id: 'st', tool: 'rect', x0: 0, y0: 0, x1: 100, y1: 100 };
+
+    it('leaves the kind ladder alone when no item uses a level', () => {
+        const layers = { images: [image], strokes: [stroke], texts: [text] };
+        assert.equal(findTopmostItemAt(50, 50, layers), text);
+    });
+
+    it('puts a bottom-layer item under everything and a top-layer item over it', () => {
+        const sunk = { ...text, zLevel: -1 };
+        assert.equal(findTopmostItemAt(50, 50, { images: [image], strokes: [stroke], texts: [sunk] }), stroke);
+
+        const raised = { ...image, zLevel: 1 };
+        assert.equal(findTopmostItemAt(50, 50, { images: [raised], strokes: [stroke], texts: [text] }), raised);
+    });
+
+    it('still prefers the last painted item inside one level', () => {
+        const low = { ...image, id: 'low', zLevel: -1 };
+        const high = { ...image, id: 'high', zLevel: -1 };
+        assert.equal(findTopmostItemAt(50, 50, { images: [low, high] }), high);
+        assert.equal(findTopmostItemAt(50, 50, { images: [high, low] }), low);
+    });
+
+    it('raises a stroke above a text on the middle layer', () => {
+        const lifted = { ...stroke, zLevel: 1 };
+        assert.equal(findTopmostItemAt(50, 50, { images: [image], strokes: [lifted], texts: [text] }), lifted);
+    });
+});
+
+

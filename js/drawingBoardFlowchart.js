@@ -12,6 +12,7 @@ import { CanvasViewport } from './canvasViewport.js';
 import { showAppToast } from './toast.js';
 import { createId } from './canvasDocument.js';
 import { isDragShape } from './drawingBoardCore.js';
+import { orderedItems } from './canvasZOrder.js';
 import { writePrefs } from './drawingBoard/prefs.js';
 import { textStyle } from './drawingBoard/text.js';
 
@@ -126,9 +127,11 @@ export function flowReroute(board, movedShapeIds) {
 /** Topmost shape/connector under the pointer. */
 export function flowHit(board, x, y) {
     const tol = 10 / Math.max(0.1, CanvasViewport.scale || 1);
-    const all = board.strokes();
-    for (let i = all.length - 1; i >= 0; i -= 1) {
-        const s = all[i];
+    // Reverse paint order, so a shape sent to the top of the stack is the one
+    // the click lands on — the same rule findTopmostItemAt applies to strokes.
+    const ordered = orderedItems({ strokes: board.strokes() });
+    for (let i = ordered.length - 1; i >= 0; i -= 1) {
+        const s = ordered[i].item;
         if (!s) continue;
         if (s.flowchartKind === 'connector') {
             if (board.flowConnectorHit(s, x, y, tol)) return s;

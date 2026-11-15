@@ -22,6 +22,8 @@ import {
     POINTER_ITEMS, SHAPE_ITEMS, GRID_BACKGROUNDS, WRITING_BACKGROUNDS,
     isDragShape, FORMAT_ITEMS
 } from './drawingBoardCore.js';
+import { Z_BOTTOM, Z_TOP } from './canvasZOrder.js';
+import { selectionState } from './drawingBoard/zLevel.js';
 
 export function updatePointerWidthLabel(board) {
         board.updateBrushSizeControls();
@@ -514,6 +516,62 @@ export function textControlsHtml(board) {
             + '</span>';
 }
 
+/**
+ * Z-level cluster. A level belongs to the item, not to the tool, so these two
+ * buttons only ever act on the current selection — hence they disable themselves
+ * whenever nothing is selected instead of staging a level for the next stroke.
+ * Both buttons off means the selection sits on the middle layer, which is also
+ * where items drawn before layers existed start out.
+ */
+export function layerControlsHtml(board) {
+        const { count, level } = selectionState(board);
+        const off = count === 0;
+        const top = !off && level === Z_TOP;
+        const bottom = !off && level === Z_BOTTOM;
+        const tip = off
+            ? 'Layer — select an item first'
+            : 'Layer — moves the selection to the front or the back';
+        const dis = off ? ' disabled' : '';
+        return '<span class="format-toolbar-sep" aria-hidden="true"></span>'
+            + '<span class="drawing-layer-group" id="draw-layer-group" role="group" aria-label="Layer" title="' + tip + '">'
+            + '<button type="button" class="btn btn--compact btn--icon' + (top ? ' active' : '') + '" id="draw-layer-top" title="Send the selection to the top layer" aria-label="Send to top layer" aria-pressed="' + (top ? 'true' : 'false') + '"' + dis + '>' + DRAWING_ICONS.layerTop + '</button>'
+            + '<button type="button" class="btn btn--compact btn--icon' + (bottom ? ' active' : '') + '" id="draw-layer-bottom" title="Send the selection to the bottom layer" aria-label="Send to bottom layer" aria-pressed="' + (bottom ? 'true' : 'false') + '"' + dis + '>' + DRAWING_ICONS.layerBottom + '</button>'
+            + '</span>';
+}
+
+/**
+ * Live refresh of the cluster after the selection changes: enabled as soon as
+ * something is selected, pressed only when the whole selection agrees.
+ */
+export function updateLayerControls(board) {
+        if (!board.toolbarEl) return;
+        const group = board.toolbarEl.querySelector('#draw-layer-group');
+        if (!group) return;
+        const { count, level } = selectionState(board);
+        const off = count === 0;
+        group.setAttribute('title', off
+            ? 'Layer — select an item first'
+            : 'Layer — moves the selection to the front or the back');
+        [['#draw-layer-top', Z_TOP], ['#draw-layer-bottom', Z_BOTTOM]].forEach(([selector, value]) => {
+            const btn = group.querySelector(selector);
+            if (!btn) return;
+            const on = !off && level === value;
+            btn.classList.toggle('active', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            btn.disabled = off;
+        });
+}
+
+/**
+ * Everything whose state depends on *which* items are selected. Selection moves
+ * on many paths (click, marquee, lasso, paste, delete, Escape, undo), so they
+ * all funnel into this one call instead of each remembering the control list.
+ */
+export function refreshSelectionControls(board) {
+        updateTextSizeControls(board);
+        updateLayerControls(board);
+}
+
 /** Step the shared grid density through the allowed sizes. */
 export function stepCanvasGrid(board, delta) {
         const steps = FLOWCHART_GRID_STEPS;
@@ -581,6 +639,7 @@ export function renderToolbar(board) {
                 </button>
                 ${shapeFillChipHtml(board)}
                 ${flowDiagramRowHtml(board)}
+                ${layerControlsHtml(board)}
             </div>
             <div class="drawing-toolbar-row drawing-toolbar-row--canvas">
                 <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
@@ -723,6 +782,17 @@ export function bindToolbar(board) {
             board.setTool('eraser');
         });
 
+        // Z-level: acts on the current selection only. Pressing the level the
+        // selection already sits on drops it back to the middle.
+        q('#draw-layer-top')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            board.setZLevel(1);
+        });
+        q('#draw-layer-bottom')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            board.setZLevel(-1);
+        });
+
         q('#draw-menu-shapes')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const selected = SHAPE_ITEMS.some((item) => item.id === board.activeTool) ? board.activeTool : 'line';
@@ -823,6 +893,7 @@ export function updateToolbarState(board) {
         board.toolbarEl.querySelector('#draw-redo')?.toggleAttribute('disabled', !board.history.canRedo);
         board.updatePointerWidthLabel();
         // Undo/redo restores both the selection and the items it points at, so
-        // the text readout has to follow.
+        // the text readout and the layer buttons have to follow.
         board.updateTextSizeControls?.();
+        board.updateLayerControls?.();
 }

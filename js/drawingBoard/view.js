@@ -26,6 +26,7 @@ import {
     activePageIndex,
     migrateNoteCanvasTextFlags
 } from '../noteCanvasTextOverlay.js';
+import { orderedItems } from '../canvasZOrder.js';
 
 export function clientToCanvas(board, clientX, clientY) {
     return CanvasViewport.screenToWorld(clientX, clientY, board.canvas);
@@ -119,21 +120,32 @@ export function redraw(board) {
     const images = board.images();
     ensureImagesLoaded(images, () => { if (board.active) board.requestRedraw(); });
     const cropTarget = board.cropState?.target;
-    images.forEach((img) => {
-        // Dimmed full-frame ghost under the live crop target only.
-        if (img === cropTarget && board.cropState) {
-            drawImageGhost(board.ctx, img, {
-                limitRect: cropLimitRect(board.cropState.metrics)
-            });
+    const texts = getActiveTexts(board.doc);
+
+    // One ordered walk for every item kind: z-level, then images → strokes →
+    // texts, then array order. Paint order doubles as hit-test order (reversed),
+    // so both go through canvasZOrder.js instead of each keeping its own loops.
+    orderedItems({ images, strokes: board.strokes(), texts }).forEach(({ kind, item }) => {
+        if (kind === 'images') {
+            // Dimmed full-frame ghost under the live crop target only.
+            if (item === cropTarget && board.cropState) {
+                drawImageGhost(board.ctx, item, {
+                    limitRect: cropLimitRect(board.cropState.metrics)
+                });
+            }
+            drawImageObject(board.ctx, item);
+            return;
         }
-        drawImageObject(board.ctx, img);
+        if (kind === 'texts') {
+            drawTextObject(board.ctx, item);
+            return;
+        }
+        if (item.tool === 'brush') drawBrushStroke(board.ctx, item);
+        else drawShapeStroke(board.ctx, item);
     });
 
-    board.strokes().forEach((stroke) => {
-        if (stroke.tool === 'brush') drawBrushStroke(board.ctx, stroke);
-        else drawShapeStroke(board.ctx, stroke);
-    });
-    getActiveTexts(board.doc).forEach((t) => drawTextObject(board.ctx, t));
+    // Uncommitted previews always paint above the document, whatever level the
+    // stroke they will become is about to land on.
     if (board.draftStroke) drawBrushStroke(board.ctx, board.draftStroke);
     if (board.shapePreview) drawShapeStroke(board.ctx, board.shapePreview);
 

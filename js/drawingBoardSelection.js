@@ -70,9 +70,10 @@ export function endBoxSelect(board) {
         board.isBoxSelecting = false;
         board.boxSelectStart = null;
         board.boxSelectCurrent = null;
-        // The text stepper shows the selection's size; refresh it as soon as the
-        // marquee commits so the readout is never stale before the first step.
-        board.updateTextSizeControls?.();
+        // The text stepper shows the selection's size and the layer buttons show
+        // its level; refresh both as soon as the marquee commits so neither
+        // readout is stale before the first click.
+        board.refreshSelectionControls?.();
 }
 
     /**
