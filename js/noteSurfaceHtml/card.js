@@ -85,6 +85,10 @@ export function renderBoardEditorCard(uiInstance, card, item, activeCategories, 
     card.innerHTML = NoteSurface.buildNoteEditorShell(item, {
         canEdit,
         richEdit: true,
+        // Cards stay visually quiet: the text field only shows its "Add note…"
+        // placeholder while the card is the active (raised/focused) one, which
+        // needs the field to exist even on empty checklist-only notes.
+        showTextShortcut: true,
         toolbarHtml: uiInstance.buildCardActionsHtml(item, false, uiInstance.getCardActionsOptions(card)),
         toplineDragZone: dragZone,
         footerDragZone: dragZone,

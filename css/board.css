@@ -993,6 +993,23 @@ body.is-file-cabinet-drag-active {
     transition: none !important;
 }
 
+/* Active note on the board: a subtle ring so it is obvious which card owns the
+   "Add note…" placeholder. Drawn as a pseudo-element because the theme layer
+   writes border colors inline and box-shadow is already the raised state. */
+#app-canvas .mini-card:is(.is-grid-front, :focus-within)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border: 1px solid var(--theme-accent-border-35, rgba(79, 70, 229, 0.35));
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+#app-canvas .mini-card.has-custom-bg:is(.is-grid-front, :focus-within)::after {
+    border-color: var(--card-focus-ring, rgba(79, 70, 229, 0.35));
+}
+
 .mini-card.is-board-pinned {
     outline: 1px solid rgba(251, 191, 36, 0.45);
     outline-offset: 1px;

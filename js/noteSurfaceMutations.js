@@ -24,6 +24,12 @@ let desktopAutoSaveTimer = null;
  */
 function syncInlineFieldToItem(el, item) {
     const field = el.dataset.field;
+    // Keep the placeholder state on the element itself: a cleared field often
+    // still holds `<br>`/`&nbsp;` residue, which `:empty` never matches. Only
+    // title/content carry a placeholder attribute, so steps are left alone.
+    if (field === 'title' || field === 'content') {
+        el.classList.toggle('is-empty', !el.textContent.replace(/\u200b/g, '').trim());
+    }
     if (el.classList.contains('rich-text--edit')) {
         const val = sanitizeRichHtml(linkifyPlainUrls(el.innerHTML));
         if (field === 'title') item.title = val;

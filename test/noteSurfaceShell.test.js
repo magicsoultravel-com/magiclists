@@ -33,6 +33,26 @@ describe('note shell · title', () => {
         assert.match(html, /class="mini-card-title" title="Plain title"/);
         assert.equal(html.includes('contenteditable'), false);
     });
+
+    it('marks an empty editable title with is-empty so the hint survives clearing', async () => {
+        const { buildNoteTitleHtml } = await load();
+
+        assert.match(
+            buildNoteTitleHtml(item({ title: '' }), true),
+            /class="mini-card-title card-inline-edit is-empty"/,
+            'a cleared title keeps its "Title…" placeholder even with <br>/&nbsp; residue'
+        );
+        assert.match(
+            buildNoteTitleHtml(item({ title: '   ' }), true),
+            /class="mini-card-title card-inline-edit is-empty"/,
+            'whitespace-only titles are empty too'
+        );
+        assert.match(
+            buildNoteTitleHtml(item(), true),
+            /class="mini-card-title card-inline-edit" contenteditable/,
+            'a filled title is not marked empty'
+        );
+    });
 });
 
 describe('note shell · formatting panel', () => {

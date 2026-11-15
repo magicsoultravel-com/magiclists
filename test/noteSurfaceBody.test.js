@@ -50,6 +50,62 @@ describe('note body · visibility rules', () => {
     });
 });
 
+describe('note body · placeholder state', () => {
+    // The "Add note…" / "Title…" hints are pure CSS (`::before` + data-placeholder)
+    // and used to key off `:empty`, which a leftover <br> or &nbsp; defeats as soon
+    // as a field is cleared in place. `is-empty` is the sanitised, render-time
+    // answer, and it is also what lets a surface decide *when* the hint shows.
+    it('marks a blank content field with is-empty', async () => {
+        const { buildNoteContentFieldHtml } = await load();
+
+        for (const blank of ['', '   ', '\u2028']) {
+            const html = buildNoteContentFieldHtml({ content: blank }, { canEdit: true });
+            assert.match(
+                html,
+                /class="card-content-preview card-inline-edit is-empty"/,
+                `"${JSON.stringify(blank)}" renders nothing, so it must be marked empty`
+            );
+        }
+
+        const filled = buildNoteContentFieldHtml({ content: 'body text' }, { canEdit: true });
+        assert.equal(filled.includes('is-empty'), false, 'a filled field never carries is-empty');
+    });
+
+    it('leaves read-only markup free of editor placeholder state', async () => {
+        const { buildNoteContentFieldHtml } = await load();
+
+        const readOnly = buildNoteContentFieldHtml({ content: '' }, { canEdit: false });
+        assert.equal(readOnly.includes('is-empty'), false, 'readers get no placeholder machinery');
+        assert.equal(readOnly.includes('card-inline-edit'), false, 'and no editable field either');
+    });
+
+    it('keeps the text field for an empty checklist-only note when a card asks for it', async () => {
+        const { resolveNoteBodyVisibility } = await load();
+        const checklistOnly = { content: '', steps: steps(2), editorBodyLayout: 'checklist' };
+
+        assert.deepEqual(
+            resolveNoteBodyVisibility(checklistOnly, { canEdit: true }),
+            { showContent: false, showChecklist: true },
+            'the default stays as-is: no empty text row on a checklist-only note'
+        );
+        assert.deepEqual(
+            resolveNoteBodyVisibility(checklistOnly, { canEdit: true, showTextShortcut: true }),
+            { showContent: true, showChecklist: true },
+            'cards opt in so "Add note…" is available on every note they render'
+        );
+    });
+
+    it('reports showContent as a boolean even when the layout says checklist', async () => {
+        const { resolveNoteBodyVisibility } = await load();
+
+        assert.deepEqual(
+            resolveNoteBodyVisibility({ content: 'text', steps: steps(1), editorBodyLayout: 'checklist' }, { canEdit: true }),
+            { showContent: true, showChecklist: true },
+            'a note that still has text keeps its field; the flag must not leak the string'
+        );
+    });
+});
+
 // These helpers hand off to richText.js, whose sanitiser parses markup through a
 // real <template> element (and a TreeWalker for linkification). There is no DOM in
 // `node --test` and no jsdom in this project, so only the paths that stay in regex

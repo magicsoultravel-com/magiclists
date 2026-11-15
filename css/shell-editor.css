@@ -461,7 +461,11 @@ body.is-checklist-dragging {
     -moz-osx-font-smoothing: grayscale !important;
 }
 
-.card-inline-edit:empty::before {
+/* Placeholder hint for blank inline fields. `is-empty` covers what the `:empty`
+   pseudo-class cannot see - a leftover `<br>`/`&nbsp;` after clearing a field -
+   and also lets a surface decide *when* the hint is shown. */
+.card-inline-edit:empty::before,
+.card-inline-edit.is-empty::before {
     content: attr(data-placeholder);
     color: var(--text-muted);
     pointer-events: none;

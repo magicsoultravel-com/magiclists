@@ -15,9 +15,13 @@ import { buildNotePlannerSectionHtml } from '../plannerUi.js';
 import { renderFocusSpawnTrayHtml, renderFocusSpawnSubTrayHtml } from '../noteFocusSpawn.js';
 import { buildExpandedChecklistHtml } from './checklistMarkup.js';
 
-export function resolveNoteBodyVisibility(item, { canEdit = false, inModalEditor = false } = {}) {
+export function resolveNoteBodyVisibility(item, {
+    canEdit = false,
+    inModalEditor = false,
+    showTextShortcut = false
+} = {}) {
     const layout = item.editorBodyLayout || 'both';
-    const hasContent = stripRichText(item.content || '').trim();
+    const hasContent = !!stripRichText(item.content || '').trim();
 
     if (inModalEditor) {
         return { showContent: true, showChecklist: true };
@@ -26,8 +30,11 @@ export function resolveNoteBodyVisibility(item, { canEdit = false, inModalEditor
         // In edit mode the checklist section (and its "+" button) must ALWAYS
         // render so users can add a first item at any time, even when the note
         // has editorBodyLayout === 'content' and zero existing steps.
+        // showTextShortcut does the same for the text field: card surfaces pass
+        // it so an empty checklist-only note still offers the "Add note…"
+        // placeholder as a one-click way into text editing.
         return {
-            showContent: hasContent || layout === 'both' || layout === 'content',
+            showContent: hasContent || layout === 'both' || layout === 'content' || !!showTextShortcut,
             showChecklist: true
         };
     }
@@ -66,7 +73,12 @@ export function appendNoteSideSections(item, html, { canEdit = false } = {}) {
     return out;
 }
 
-export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
+export function buildNoteBodyHtml(item, {
+    canEdit = false,
+    inModalEditor = false,
+    richEdit = false,
+    showTextShortcut = false
+} = {}) {
     const template = resolveNoteTemplate(item);
 
     if (template === 'sheet') {
@@ -80,7 +92,7 @@ export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false
     }
 
     let html = '';
-    const { showContent, showChecklist } = resolveNoteBodyVisibility(item, { canEdit, inModalEditor });
+    const { showContent, showChecklist } = resolveNoteBodyVisibility(item, { canEdit, inModalEditor, showTextShortcut });
     const plannerActive = !!(item?.planner && !item?.plannerHidden);
 
     if (plannerActive && (showContent || showChecklist)) {
@@ -102,6 +114,15 @@ export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false
     return appendNoteSideSections(item, html, { canEdit });
 }
 
+/**
+ * `is-empty` marks a blank inline field at render time so CSS can scope the
+ * placeholder hint (`Add note…`, `Title…`) to a specific surface instead of
+ * relying on `:empty`, which a stray `<br>` or `&nbsp;` defeats.
+ */
+function emptyFieldClass(value) {
+    return stripRichText(value || '').trim() ? '' : ' is-empty';
+}
+
 export function buildNoteContentFieldHtml(item, { canEdit = false, richEdit = false } = {}) {
     const content = item.content || '';
     const rich = hasRichMarkup(content) || content.includes('\u2028');
@@ -109,7 +130,7 @@ export function buildNoteContentFieldHtml(item, { canEdit = false, richEdit = fa
         const inner = richEdit ? sanitizeRichHtml(content) : escapeHTML(content.replace(/\u2028/g, '\n'));
         const ce = richEdit ? 'true' : 'plaintext-only';
         const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
-        return `<div class="card-content-preview card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add note…">${inner}</div>`;
+        return `<div class="card-content-preview card-inline-edit${richClasses}${emptyFieldClass(content)}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add note…">${inner}</div>`;
     }
     const richClass = rich ? ' rich-text' : '';
     return `<div class="card-content-preview${richClass}">${renderRichHtml(content)}</div>`;
@@ -314,7 +335,7 @@ export function buildMeetingBodyHtml(item, { canEdit = false, inModalEditor = fa
         const inner = richEdit ? prepareContentForEdit(content) : escapeHTML(content.replace(/\u2028/g, '\n'));
         const ce = richEdit ? 'true' : 'plaintext-only';
         const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
-        agendaHtml += `<div class="card-content-preview card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add agenda…">${inner}</div>`;
+        agendaHtml += `<div class="card-content-preview card-inline-edit${richClasses}${emptyFieldClass(content)}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add agenda…">${inner}</div>`;
     } else {
         const richClass = rich ? ' rich-text' : '';
         agendaHtml += `<div class="card-content-preview${richClass}">${renderRichHtml(content)}</div>`;

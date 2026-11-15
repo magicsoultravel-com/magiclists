@@ -496,8 +496,23 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     pointer-events: none;
 }
 
-.has-custom-bg .card-inline-edit:empty::before {
+.has-custom-bg .card-inline-edit:empty::before,
+.has-custom-bg .card-inline-edit.is-empty::before {
     color: var(--card-placeholder);
+}
+
+/* The placeholder is a click shortcut ("Add note…", "Title…"), so cards only
+   show it on the note you are working with: the raised card (`.is-grid-front`)
+   or the one the caret is inside. Popout notes are single-note windows, so they
+   keep the hint at all times. The modal editor, magic focus panes and the
+   category-name fields are not `.mini-card` descendants and keep the base rule. */
+.mini-card .card-inline-edit:is(:empty, .is-empty)::before {
+    content: none;
+}
+
+.mini-card:is(.is-grid-front, :focus-within) .card-inline-edit:is(:empty, .is-empty)::before,
+.mini-card.note-popout-card .card-inline-edit:is(:empty, .is-empty)::before {
+    content: attr(data-placeholder);
 }
 
 .has-custom-bg .card-inline-edit:focus {
@@ -621,7 +636,7 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     min-height: 0;
 }
 
-.editor-note-body:has(.expanded-checklist):not(:has(.card-content-preview)) .checklist-toolbar {
+.editor-note-body:has(.expanded-checklist):not(:has(.card-content-preview:not(.is-empty))) .checklist-toolbar {
     position: relative;
     z-index: 5;
 }

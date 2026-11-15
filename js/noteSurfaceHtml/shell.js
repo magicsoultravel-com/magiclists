@@ -20,7 +20,9 @@ export function buildNoteTitleHtml(item, canEdit, { richEdit = false } = {}) {
         const inner = richEdit ? sanitizeRichHtml(fullTitle) : escapeHTML(fullTitle);
         const ce = richEdit ? 'true' : 'plaintext-only';
         const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
-        return `<div class="mini-card-title card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="title" data-placeholder="Title…">${inner}</div>`;
+        // is-empty keeps the `Title…` hint working when the field holds `<br>`/`&nbsp;`
+        const emptyClass = stripRichText(fullTitle).trim() ? '' : ' is-empty';
+        return `<div class="mini-card-title card-inline-edit${richClasses}${emptyClass}" contenteditable="${ce}" spellcheck="false" data-field="title" data-placeholder="Title…">${inner}</div>`;
     }
 
     const richClass = hasRichMarkup(fullTitle) ? ' rich-text' : '';
@@ -116,6 +118,7 @@ export function buildNoteEditorShell(item, {
     showConfig = false,
     showFormat = false,
     richEdit = false,
+    showTextShortcut = false,
     toolbarHtml = '',
     toplineDragZone = '',
     footerDragZone = '',
@@ -130,7 +133,8 @@ export function buildNoteEditorShell(item, {
     const bodyHtml = buildNoteBodyHtml(item, {
         canEdit,
         inModalEditor,
-        richEdit
+        richEdit,
+        showTextShortcut
     });
     const formatHtml = showFormat ? buildNoteFormatPanelHtml(item) : '';
     const configHtml = showConfig
