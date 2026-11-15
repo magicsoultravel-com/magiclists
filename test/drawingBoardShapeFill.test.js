@@ -501,10 +501,19 @@ describe('toolbar layout rows 2 and 3', () => {
     it('puts objects, text, view and history in the middle row', () => {
         const middle = rowsOf(renderBoard())[1];
         for (const id of ['draw-insert-image', 'draw-crop', 'draw-lasso', 'draw-fullscreen',
-            'draw-text-tool', 'draw-text-color-btn', 'draw-pan', 'draw-zoom-in', 'draw-zoom-out',
+            'draw-text-tool', 'draw-text-color-btn', 'draw-zoom-in', 'draw-zoom-out',
             'draw-undo', 'draw-redo', 'draw-clear']) {
             assert.ok(middle.includes(`id="${id}"`), `${id} belongs to the canvas row`);
         }
+    });
+
+    // The Hand tool is gone: canvases pan with wheel/middle-drag/Space+drag and a
+    // two-finger touch pan, so a dedicated mode only cost a click.
+    it('renders no hand tool anywhere in the toolbar', () => {
+        const html = renderBoard();
+        assert.equal(html.includes('draw-pan'), false);
+        assert.equal(html.includes('Hand tool'), false);
+        assert.equal(html.includes('>Hand<'), false);
     });
 
     it('puts page controls and the exit affordances in the last row', () => {

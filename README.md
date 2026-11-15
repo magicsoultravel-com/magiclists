@@ -123,7 +123,7 @@ What deliberately stays in the facade: `init`, the tool and preference setters,
 and the toolbar/DOM orchestration that every entry path needs — the seam the
 sessions call back into. `activate` and `activateForNote` still share an
 identical entry tail (chrome → toolbar mount → brand → aria →
-`loadFromDoc` → hand mode → `dataset.tool` → `shrinkInfiniteIfNeeded` →
+`loadFromDoc` → `dataset.tool` → `shrinkInfiniteIfNeeded` →
 `renderToolbar` → `updateZoomLevel` → `resize` → `redraw`); deduping it is its
 own commit, with the lifecycle tests as the safety net.
 

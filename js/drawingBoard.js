@@ -399,7 +399,6 @@ export const DrawingBoard = {
         this.activeTool = 'brush';
         this.prefs.activeStyle = style;
         this.prefs.activeTool = 'brush';
-        CanvasViewport.setHandMode(false);
         if (this.isLassoActive) this.isLassoActive = false;
         if (this.canvas) this.canvas.dataset.tool = 'brush';
         writePrefs(this.prefs);
@@ -415,8 +414,7 @@ export const DrawingBoard = {
         }
         this.prefs.activeTool = tool;
         this.cropState = null;
-        CanvasViewport.setHandMode(tool === 'pan');
-        // setTool is used by V / shapes / eraser / pan — leave dedicated marquee mode
+        // setTool is used by V / shapes / eraser — leave dedicated marquee mode
         if (this.isLassoActive) this.isLassoActive = false;
         if (this.canvas) {
             this.canvas.dataset.tool = tool;
@@ -591,6 +589,9 @@ export const DrawingBoard = {
     onPointerMove(e) { return InputSession.onPointerMove(this, e); },
 
     onPointerUp(e) { return InputSession.onPointerUp(this, e); },
+
+    /** A two-finger pan/pinch took over: drop whatever the first finger began. */
+    abortCanvasGesture() { return InputSession.abortGesture(this); },
 
     // Pointer / lasso shared rectangle marquee methods
 

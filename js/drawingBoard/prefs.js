@@ -58,7 +58,9 @@ export function readPrefs() {
         });
         return {
             activeStyle: BRUSH_STYLES.includes(raw?.activeStyle) ? raw.activeStyle : 'pen',
-            activeTool: ['pointer', 'brush', 'eraser', 'pan', 'text', 'crop', ...DRAG_SHAPE_TOOLS].includes(raw?.activeTool) ? raw.activeTool : 'pointer',
+            // 'pan' (the old Hand tool) is deliberately absent: a stored value
+            // falls back to 'pointer' on upgrade.
+            activeTool: ['pointer', 'brush', 'eraser', 'text', 'crop', ...DRAG_SHAPE_TOOLS].includes(raw?.activeTool) ? raw.activeTool : 'pointer',
             styles,
             // Canvas grid + connector routing: one pref shared by the visible
             // background, shape snapping and connector snapping.

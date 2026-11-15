@@ -85,6 +85,13 @@ describe('drawing board prefs', () => {
         });
     });
 
+    it('rewrites the retired hand tool to the pointer instead of resurrecting it', () => {
+        withStorage((store) => {
+            store.set(PREFS_KEY, JSON.stringify({ activeTool: 'pan' }));
+            assert.equal(readPrefs().activeTool, 'pointer', 'pan was removed from the tool set');
+        });
+    });
+
     it('ignores non-finite widths rather than propagating NaN into the brush', () => {
         withStorage((store) => {
             store.set(PREFS_KEY, JSON.stringify({ styles: { pen: { width: 'thick', color: '#123456' } } }));

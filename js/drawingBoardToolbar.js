@@ -189,9 +189,6 @@ export function currentToolEcho(board) {
             return { id: 'lasso', label: 'Select', icon: DRAWING_ICONS.lasso };
         }
         const tool = board.activeTool;
-        if (tool === 'pan') {
-            return { id: 'pan', label: 'Hand', icon: DRAWING_ICONS.hand };
-        }
         if (tool === 'eraser') {
             return { id: 'eraser', label: 'Eraser', icon: DRAWING_ICONS.eraser };
         }
@@ -550,7 +547,6 @@ export function renderToolbar(board) {
         const isBrushActive = board.activeTool === 'brush';
         const isEraserActive = board.activeTool === 'eraser';
         const brushLabel = POINTER_ITEMS.find((item) => item.id === board.activeStyle)?.label || 'Brush';
-        const isPanActive = board.activeTool === 'pan';
         const isCropActive = board.activeTool === 'crop';
         const pageIdx = board.doc.pages.findIndex((p) => p.id === board.doc.activePageId);
         const pageCount = board.doc.pages.length;
@@ -593,7 +589,6 @@ export function renderToolbar(board) {
                 <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
                 ${textControlsHtml(board)}
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" class="btn btn--compact btn--icon ${isPanActive ? 'active' : ''}" id="draw-pan" title="Hand tool — pan canvas. Scroll also pans; Ctrl+scroll zooms; Space+drag pans." aria-label="Hand tool" aria-pressed="${isPanActive ? 'true' : 'false'}">${DRAWING_ICONS.hand}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-out" title="Zoom out" aria-label="Zoom out">${DRAWING_ICONS.zoomOut}</button>
                 <span class="drawing-zoom-level" id="draw-zoom-level" title="Zoom level" aria-label="Zoom level">100%</span>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-in" title="Zoom in" aria-label="Zoom in">${DRAWING_ICONS.zoomIn}</button>
@@ -681,8 +676,8 @@ export function bindToolbar(board) {
             e.stopPropagation();
             board.openShapeFillPicker(e.currentTarget);
         });
-        // Split button: one click arms the remembered brush style (same idiom as
-        // the hand tool), while the chevron keeps the full style menu.
+        // Split button: one click arms the remembered brush style, while the
+        // chevron keeps the full style menu.
         q('#draw-brush-tool')?.addEventListener('click', (e) => {
             e.stopPropagation();
             if (board.activeTool === 'brush') board.setTool('pointer');
@@ -707,10 +702,6 @@ export function bindToolbar(board) {
         });
         q('#draw-zoom-in')?.addEventListener('click', () => { CanvasViewport.stepZoom(0.1); board.persistViewport(); });
         q('#draw-zoom-out')?.addEventListener('click', () => { CanvasViewport.stepZoom(-0.1); board.persistViewport(); });
-        q('#draw-pan')?.addEventListener('click', () => {
-            if (board.activeTool === 'pan') board.setStyle(board.activeStyle || 'pen');
-            else board.setTool('pan');
-        });
         const fsBtn = q('#draw-fullscreen');
         if (fsBtn) Fullscreen.registerButton(fsBtn);
 

@@ -54,6 +54,9 @@ export function init(board, app) {
         board.persistViewport();
         CanvasViewport.syncScrollbars();
     });
+    // A second finger turns the first one's press into a pan/pinch; the board
+    // has to drop the stroke, shape or eraser dab it already started.
+    board.viewportEl?.addEventListener('canvas:panstart', () => board.abortCanvasGesture?.());
 
     board.canvas.addEventListener('pointerdown', (e) => board.onPointerDown(e));
     // Double-click any shape or connector to edit its label. There is no
@@ -97,7 +100,6 @@ export async function activate(board) {
     board.boardEl.setAttribute('aria-hidden', 'false');
 
     CanvasViewport.loadFromDoc(board.doc.viewport);
-    CanvasViewport.setHandMode(board.activeTool === 'pan');
     if (board.canvas) board.canvas.dataset.tool = board.activeTool;
     board.shrinkInfiniteIfNeeded();
     board.renderToolbar();
@@ -132,7 +134,6 @@ export async function activateForNote(board, item) {
     board.boardEl.setAttribute('aria-hidden', 'false');
 
     CanvasViewport.loadFromDoc(board.doc.viewport || { scale: 1, offsetX: 0, offsetY: 0 });
-    CanvasViewport.setHandMode(board.activeTool === 'pan');
     if (board.canvas) board.canvas.dataset.tool = board.activeTool;
     board.shrinkInfiniteIfNeeded();
     if (noteHasTextOverlayEnabled(item)) {
@@ -180,7 +181,6 @@ export async function deactivate(board) {
     board.cropState = null;
     board.hoverHandle = null;
     board.selectedStrokes.clear();
-    CanvasViewport.setHandMode(false);
     clearImageCache();
     board.isNoteCanvasMode = false;
     board.activeNoteId = null;

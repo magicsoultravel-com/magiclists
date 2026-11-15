@@ -110,15 +110,14 @@ function makeBoard(overrides = {}) {
 
 /** Chrome + viewport stubs shared by every entry path. */
 function entryStubs(mount = { id: 'toolbar-mount' }) {
-    const seen = { show: 0, hide: 0, handMode: null, loadedViewport: null };
+    const seen = { show: 0, hide: 0, loadedViewport: null };
     return {
         seen,
         patches: [
             [DrawingToolbarChrome, 'show', () => { seen.show += 1; }],
             [DrawingToolbarChrome, 'getToolbarMount', () => mount],
             [DrawingToolbarChrome, 'hide', () => { seen.hide += 1; }],
-            [CanvasViewport, 'loadFromDoc', (vp) => { seen.loadedViewport = vp; }],
-            [CanvasViewport, 'setHandMode', (on) => { seen.handMode = on; }]
+            [CanvasViewport, 'loadFromDoc', (vp) => { seen.loadedViewport = vp; }]
         ]
     };
 }
@@ -175,7 +174,7 @@ describe('drawingBoard lifecycle — init', () => {
 
         assert.equal(board.ctx.id, 'ctx');
         const types = listeners.map((l) => l.type);
-        for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'contextmenu', 'dblclick', 'canvas:zoom', 'canvas:pan']) {
+        for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'contextmenu', 'dblclick', 'canvas:zoom', 'canvas:pan', 'canvas:panstart']) {
             assert.ok(types.includes(type), `expected a ${type} listener`);
         }
 
@@ -185,6 +184,15 @@ describe('drawingBoard lifecycle — init', () => {
         listeners.find((l) => l.type === 'canvas:zoom').handler();
         assert.equal(called(board, 'updateZoomLevel'), 1);
         assert.equal(called(board, 'persistViewport'), 1);
+
+        // canvas:panstart means a second finger took over: the stroke the first
+        // one began has to be dropped, and nothing is persisted from here.
+        let aborted = 0;
+        board.abortCanvasGesture = () => { aborted += 1; };
+        board.calls.length = 0;
+        listeners.find((l) => l.type === 'canvas:panstart').handler();
+        assert.equal(aborted, 1, 'the press gesture is aborted');
+        assert.equal(called(board, 'persistViewport'), 0, 'the pan start itself is not persisted');
     });
 });
 
@@ -201,7 +209,6 @@ describe('drawingBoard lifecycle — activate', () => {
         assert.ok(Array.isArray(board.doc.pages) && board.doc.pages.length > 0, 'a document is loaded');
         assert.equal(board.toolbarEl.id, 'toolbar-mount');
         assert.equal(seen.show, 1);
-        assert.equal(seen.handMode, false, 'pointer tool does not start in pan mode');
 
         // Note / flowchart session state must be cleared, not inherited.
         assert.equal(board.isNoteCanvasMode, false);
@@ -228,7 +235,7 @@ describe('drawingBoard lifecycle — activate', () => {
 
         assert.equal(board.activeTool, 'pointer');
         assert.equal(board.activeStyle, 'pen');
-        assert.equal(seen.handMode, false);
+        assert.equal(seen.loadedViewport, board.doc.viewport, 'the stored viewport is loaded as-is');
     });
 });
 
@@ -303,14 +310,13 @@ describe('drawingBoard lifecycle — deactivate', () => {
         const board = makeBoard({ active: true, docOwner: 'note', isNoteCanvasMode: true, textLayer: makeEl() });
         const textLayer = board.textLayer;
         const { seen, patches } = entryStubs();
-        const closed = { color: 0, menu: 0, hand: null };
+        const closed = { color: 0, menu: 0 };
         const timer = setTimeout(() => {}, 0);
 
         await withStubs([
             ...patches,
             [ColorPicker, 'close', () => { closed.color += 1; }],
-            [DrawingToolbarMenu, 'close', () => { closed.menu += 1; }],
-            [CanvasViewport, 'setHandMode', (on) => { closed.hand = on; }]
+            [DrawingToolbarMenu, 'close', () => { closed.menu += 1; }]
         ], async () => {
             board.saveTimer = timer;
             await LifecycleSession.deactivate(board);
@@ -322,7 +328,6 @@ describe('drawingBoard lifecycle — deactivate', () => {
         assert.equal(closed.color, 1);
         assert.equal(closed.menu, 1);
         assert.equal(seen.hide, 1, 'the floating chrome is hidden');
-        assert.equal(closed.hand, false, 'hand mode is released');
         assert.equal(board.colorRolloutOpen, false);
         assert.equal(board.bgColorRolloutOpen, false);
         assert.equal(board.brandEl.textContent, 'magicNotes');

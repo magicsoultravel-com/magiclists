@@ -10,7 +10,7 @@
 // Run with: npm test
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { handleKeydown, onPointerDown, onPointerUp } from '../js/drawingBoard/input.js';
+import { abortGesture, handleKeydown, onPointerDown, onPointerUp } from '../js/drawingBoard/input.js';
 import { CanvasViewport } from '../js/canvasViewport.js';
 
 function withDocument(activeElement, fn) {
@@ -345,4 +345,85 @@ describe('handleKeydown', () => {
     });
 });
 
+// A second finger turns the press into a pan/pinch, so whatever the first
+// finger started must not survive: ink, a previewed shape, or — the one that
+// bites — an eraser dab the press already committed to the document.
+describe('abortGesture (two-finger pan takeover)', () => {
+    it('drops the brush draft and pops the history entry the press pushed', () => {
+        const { board, calls } = makeBoard();
+        onPointerDown(board, pointerEvent());
+        assert.ok(board.draftStroke, 'the press opened a draft');
+        assert.equal(calls.pushLayerHistory, 1);
+
+        assert.equal(abortGesture(board), true);
+
+        assert.equal(board.draftStroke, null, 'the draft never lands');
+        assert.equal(calls.undo, 1, 'the orphan history entry is rolled back');
+        assert.deepEqual(calls.setStrokes, [], 'nothing is committed');
+        assert.equal(calls.redraw, 1, 'one repaint puts the canvas back');
+    });
+
+    it('rolls the eraser dab back exactly once and clears the press flag', () => {
+        const { board, calls } = makeBoard({ activeTool: 'eraser', eraseHistoryPushed: true });
+
+        abortGesture(board);
+        assert.equal(calls.undo, 1, 'the dab is undone, not merely repainted');
+        assert.equal(board.eraseHistoryPushed, false, 'the press scope is closed');
+
+        // A leftover finger finishing the gesture must not undo anything else.
+        abortGesture(board);
+        assert.equal(calls.undo, 1);
+    });
+
+    it('drops previews and drags that never reached the document', () => {
+        const preview = makeBoard({ shapePreview: { tool: 'rect', x0: 0, y0: 0, x1: 5, y1: 5 } });
+        abortGesture(preview.board);
+        assert.equal(preview.board.shapePreview, null);
+        assert.equal(preview.calls.undo, 0);
+        assert.equal(preview.calls.pushLayerHistory, 0);
+
+        const flow = makeBoard({ flowConnect: { x: 1, y: 2 } });
+        abortGesture(flow.board);
+        assert.equal(flow.board.flowConnect, null);
+
+        const marquee = makeBoard({ isBoxSelecting: true });
+        marquee.board.boxSelectStart = { x: 1, y: 1 };
+        abortGesture(marquee.board);
+        assert.equal(marquee.board.isBoxSelecting, false);
+        assert.equal(marquee.board.boxSelectStart, null);
+    });
+
+    it('commits a resize or selection drag rather than losing the work', () => {
+        const resize = makeBoard({ resizeHandle: 'se' });
+        abortGesture(resize.board);
+        assert.equal(resize.calls.finishResize, 1);
+
+        const lasso = makeBoard({ isDraggingLasso: true });
+        abortGesture(lasso.board);
+        assert.equal(lasso.calls.finishLassoDrag, 1);
+    });
+
+    it('is a no-op when no gesture was in flight', () => {
+        const { board, calls } = makeBoard();
+        assert.equal(abortGesture(board), false);
+        assert.equal(calls.redraw, 0, 'no repaint for nothing');
+        assert.equal(calls.undo, 0);
+    });
+});
+
+describe('onPointerUp while the viewport pans', () => {
+    it('releases the pointer but commits nothing', () => {
+        const { board, calls } = makeBoard();
+        onPointerDown(board, pointerEvent({ pointerId: 9 }));
+        assert.ok(board.draftStroke);
+
+        withViewport({ panning: true }, () => {
+            onPointerUp(board, pointerEvent({ pointerId: 9 }));
+        });
+
+        assert.deepEqual(calls.release, [9], 'capture is still released');
+        assert.deepEqual(calls.setStrokes, [], 'the aborted stroke must not land');
+        assert.equal(calls.scheduleSave, 0);
+    });
+});
 

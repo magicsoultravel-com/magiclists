@@ -747,8 +747,7 @@
 
 /* Pointer/Select button active state */
 #draw-menu-pointer.active,
-#draw-eraser.active,
-#draw-pan.active {
+#draw-eraser.active {
     background: color-mix(in srgb, var(--accent) 35%, transparent);
     color: var(--text-main);
 }
@@ -783,22 +782,18 @@
 
 /* Viewport panning cursor */
 .canvas-viewport.is-panning,
-.canvas-viewport.is-hand-mode.is-panning,
 .canvas-viewport:has(.canvas-viewport-inner.is-panning) {
     cursor: grabbing;
 }
 
-.canvas-viewport.is-hand-mode,
 .canvas-viewport.is-space-pan {
     cursor: grab;
 }
 
-.canvas-viewport.is-hand-mode .drawing-canvas,
 .canvas-viewport.is-space-pan .drawing-canvas {
     cursor: grab !important;
 }
 
-.canvas-viewport.is-hand-mode.is-panning .drawing-canvas,
 .canvas-viewport.is-space-pan.is-panning .drawing-canvas,
 .canvas-viewport.is-panning .drawing-canvas {
     cursor: grabbing !important;
@@ -821,10 +816,6 @@
 
 .drawing-canvas[data-tool="text"] {
     cursor: text;
-}
-
-.drawing-canvas[data-tool="pan"] {
-    cursor: grab;
 }
 
 .drawing-canvas[data-tool="brush"],

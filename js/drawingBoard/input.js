@@ -17,7 +17,7 @@ import {
 
 export function onPointerDown(board, e) {
     if (!board.active || e.button > 0) return;
-    if (CanvasViewport.panning || CanvasViewport.spaceHeld || CanvasViewport.handMode || board.activeTool === 'pan') return;
+    if (CanvasViewport.panning || CanvasViewport.spaceHeld) return;
     if (e.pointerType === 'touch' && board.penPointerActive) return;
     if (e.pointerType === 'pen') board.penPointerActive = true;
 
@@ -262,9 +262,64 @@ export function onPointerMove(board, e) {
     }
 }
 
+/**
+ * Cancel whatever the first finger started, when a second finger turns the
+ * press into a two-finger pan/pinch. Drafts are dropped without ever reaching
+ * the document, but the two press-time writers need an explicit rollback: the
+ * brush pushes its history entry on press (dropping the draft alone would leave
+ * a dead undo step) and the eraser writes on contact (the dab would stay).
+ */
+export function abortGesture(board) {
+    let touched = false;
+
+    // Crop: restore the frame geometry captured at press time, keep the session.
+    if (board.revertCropGesture?.()) touched = true;
+
+    if (board.draftStroke) {
+        board.draftStroke = null;
+        // Pops the snapshot the brush press pushed; the stroke never landed, so
+        // the restore is visually a no-op and only the orphan entry goes away.
+        board.undo();
+        touched = true;
+    }
+
+    if (board.eraseHistoryPushed) {
+        // The flag is press-scoped: reset at every eraser press, set only when
+        // eraseAt actually removed something. One undo drops that single entry.
+        board.eraseHistoryPushed = false;
+        board.undo();
+        touched = true;
+    }
+
+    // Live previews and drags never reached the document — drop the state.
+    if (board.shapePreview) { board.shapePreview = null; touched = true; }
+    if (board.flowConnect) { board.flowConnect = null; touched = true; }
+    if (board.flowEndpointDrag) { board.flowEndpointDrag = null; touched = true; }
+    if (board.flowBendDrag) { board.flowBendDrag = null; touched = true; }
+
+    // A resize, selection drag or marquee under the pan is committed rather than
+    // rewound: the geometry on screen is what the user built before adding the
+    // second finger, and committing is what Escape does with the same gestures.
+    if (board.resizeHandle) { board.finishResize(); touched = true; }
+    if (board.isDraggingLasso) { board.finishLassoDrag(); touched = true; }
+    if (board.isBoxSelecting) {
+        board.isBoxSelecting = false;
+        board.boxSelectStart = null;
+        board.boxSelectCurrent = null;
+        touched = true;
+    }
+
+    if (touched) board.redraw();
+    return touched;
+}
+
 export function onPointerUp(board, e) {
     if (e.pointerType === 'pen') board.penPointerActive = false;
     try { board.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    // Capture is released first, then the pan wins: a two-finger pan must not
+    // commit the crop/resize/marquee the first finger started (abortGesture has
+    // already cleared them, this just stops the up handler from re-reading).
+    if (CanvasViewport.panning) return;
 
     // End a live crop gesture (persisted only when the frame moved)
     if (board.cropState?.mode) {
