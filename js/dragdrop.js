@@ -23,6 +23,7 @@ import {
 import { CANVAS_COL_GAP, CANVAS_LAYOUT_ORIGIN, getGridMetrics } from './gridDensity.js';
 import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem, fileBoardItemToCabinet, resolveCrossSurfaceDropTarget, clearFileCabinetSurfaceHighlights, applyFileCabinetDropHighlight, beginBoardFilingGhost, moveBoardFilingGhost, endBoardFilingGhost, previewFileCabinetTabDrop, clearFileCabinetFilingPreview, DRAG_THRESHOLD } from './fileCabinet.js';
 import { isChecklistInteraction } from './noteSurfaceChecklist.js';
+import { PRESS_INTENT, resolvePressIntent, longPressCancelled } from './board/dragIntent.js';
 import { DesktopManager } from './desktopManager.js';
 import { getLabelRect } from './tileGeometry.js';
 import {
@@ -221,23 +222,6 @@ function shouldStartCardDrag(target) {
     return true;
 }
 
-function bindPointerSession({ onKeyDown, onCancel }) {
-    const onEsc = (e) => {
-        if (e.key === 'Escape') {
-            onCancel();
-            cleanup();
-        }
-    };
-    const cleanup = () => {
-        document.removeEventListener('keydown', onEsc);
-        document.removeEventListener('pointercancel', onCancel);
-    };
-    document.addEventListener('keydown', onEsc);
-    document.addEventListener('pointercancel', onCancel);
-    if (onKeyDown) document.addEventListener('keydown', onKeyDown);
-    return cleanup;
-}
-
 export const DragDropEngine = {
     init(userState, currentItems, onMutationComplete) {
         if (!userState || !userState.isLoggedIn) return;
@@ -270,6 +254,124 @@ export const DragDropEngine = {
         const cards = canvas.querySelectorAll(getCardSelector());
         let dragActive = null;
         let resizeActive = null;
+
+        // Board move/resize is driven by one pointer session for mouse, pen and
+        // touch. It used to listen for `mousemove`/`mouseup`, which a finger never
+        // produces (and `mousedown` only arrives once a tap has resolved), so
+        // grabbing a card on an iPad did nothing. `pointercancel` -- the browser
+        // claiming the gesture for a scroll -- unwinds through the same "up" path
+        // as a normal release so the filing ghost, layout preview and extents
+        // bookkeeping all settle.
+        const pointerSessions = { drag: null, resize: null };
+
+        const startPointerSession = (kind, { move, up, pointerId }) => {
+            endPointerSession(kind);
+            document.addEventListener('pointermove', move);
+            document.addEventListener('pointerup', up);
+            document.addEventListener('pointercancel', up);
+            pointerSessions[kind] = { move, up, pointerId };
+        };
+
+        const endPointerSession = (kind) => {
+            const session = pointerSessions[kind];
+            if (!session) return;
+            document.removeEventListener('pointermove', session.move);
+            document.removeEventListener('pointerup', session.up);
+            document.removeEventListener('pointercancel', session.up);
+            pointerSessions[kind] = null;
+            if (kind === 'drag') unlatchTouchDrag();
+        };
+
+        // A second finger (pinch, stray palm) must never feed a session that a
+        // first finger is already driving.
+        const sessionOwnsPointer = (kind, e) => {
+            const session = pointerSessions[kind];
+            if (!session) return false;
+            if (e?.pointerId === undefined || session.pointerId === undefined) return true;
+            return e.pointerId === session.pointerId;
+        };
+
+        // A board card header/gutter keeps `touch-action: pan-y` so a swipe there
+        // still scrolls the board; once a hold has become a move, the scroll has
+        // to be called off. These listeners are non-passive (and installed only
+        // after the hold fired) so `preventDefault` is allowed to cancel it.
+        const preventTouchScroll = (e) => {
+            if (dragActive) e.preventDefault();
+        };
+        const suppressTouchCallout = (e) => {
+            if (dragActive) e.preventDefault();
+        };
+        const latchTouchDrag = () => {
+            document.addEventListener('touchmove', preventTouchScroll, { passive: false, capture: true });
+            document.addEventListener('contextmenu', suppressTouchCallout, { capture: true });
+        };
+        const unlatchTouchDrag = () => {
+            document.removeEventListener('touchmove', preventTouchScroll, { passive: false, capture: true });
+            document.removeEventListener('contextmenu', suppressTouchCallout, { capture: true });
+        };
+
+        // Deferred (long-press) moves: armed for touch presses on the header and
+        // gutter, dropped as soon as the finger travels far enough to be a scroll.
+        let pendingLongPress = null;
+
+        const cancelPendingLongPress = () => {
+            const pending = pendingLongPress;
+            if (!pending) return;
+            pendingLongPress = null;
+            clearTimeout(pending.timer);
+            document.removeEventListener('pointermove', pending.onMove);
+            document.removeEventListener('pointerup', pending.onUp);
+            document.removeEventListener('pointercancel', pending.onUp);
+        };
+
+        const armLongPress = (e, { holdMs, slop }, onFire) => {
+            cancelPendingLongPress();
+            const pointerId = e.pointerId;
+            const origin = { x: e.clientX, y: e.clientY };
+            const pending = {
+                timer: 0,
+                onMove: (ev) => {
+                    if (ev.pointerId !== pointerId) return;
+                    if (longPressCancelled(origin, { x: ev.clientX, y: ev.clientY }, slop)) {
+                        cancelPendingLongPress();
+                    }
+                },
+                onUp: (ev) => {
+                    if (ev.pointerId !== pointerId) return;
+                    cancelPendingLongPress();
+                }
+            };
+            pendingLongPress = pending;
+            document.addEventListener('pointermove', pending.onMove);
+            document.addEventListener('pointerup', pending.onUp);
+            document.addEventListener('pointercancel', pending.onUp);
+            pending.timer = setTimeout(() => {
+                if (pendingLongPress !== pending) return;
+                cancelPendingLongPress();
+                latchTouchDrag();
+                onFire();
+            }, holdMs);
+        };
+
+        // A finished touch drag must not also read as a tap on the card (which
+        // would open the inline editor). Mouse drops rely on `skipExpand`, but a
+        // finger still gets a synthesized click, so swallow the one click that
+        // targets the card that just moved.
+        const swallowClickOn = (card) => {
+            const cleanup = () => {
+                clearTimeout(timer);
+                document.removeEventListener('click', kill, true);
+            };
+            const kill = (ev) => {
+                if (card?.contains?.(ev.target)) {
+                    ev.stopPropagation();
+                    ev.preventDefault();
+                }
+                cleanup();
+            };
+            const timer = setTimeout(cleanup, 500);
+            document.addEventListener('click', kill, true);
+        };
         let previewFrame = null;
         let previewBaseline = null;
         let extentsFrame = null;
@@ -372,6 +474,7 @@ export const DragDropEngine = {
 
         const onDragMove = (e) => {
             if (!dragActive) return;
+            if (!sessionOwnsPointer('drag', e)) return;
             const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, dragActive.startX, dragActive.startY);
             if (!dragActive.moved) {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
@@ -534,6 +637,7 @@ export const DragDropEngine = {
 
         const onDragUp = (e) => {
             if (!dragActive) return;
+            if (!sessionOwnsPointer('drag', e)) return;
             const { card, moved } = dragActive;
             card.classList.remove('is-grid-dragging', 'is-freeform-dragging');
 
@@ -553,6 +657,7 @@ export const DragDropEngine = {
 
             if (moved) {
                 card.dataset.skipExpand = '1';
+                if (dragActive.pointerType === 'touch') swallowClickOn(card);
 
                 const dropX = e?.clientX ?? dragActive.startX;
                 const dropY = e?.clientY ?? dragActive.startY;
@@ -583,8 +688,7 @@ export const DragDropEngine = {
                             extentsFrame = null;
                         }
                         dragActive = null;
-                        document.removeEventListener('mousemove', onDragMove);
-                        document.removeEventListener('mouseup', onDragUp);
+                        endPointerSession('drag');
                         window.dispatchEvent(new CustomEvent('desktop:changed', {
                             detail: { desktopId: DesktopManager.getActiveDesktop() }
                         }));
@@ -647,8 +751,7 @@ export const DragDropEngine = {
                                 sourceRect
                             });
                             dragActive = null;
-                            document.removeEventListener('mousemove', onDragMove);
-                            document.removeEventListener('mouseup', onDragUp);
+                            endPointerSession('drag');
                             return;
                         }
                     }
@@ -680,12 +783,12 @@ export const DragDropEngine = {
                 extentsFrame = null;
             }
             dragActive = null;
-            document.removeEventListener('mousemove', onDragMove);
-            document.removeEventListener('mouseup', onDragUp);
+            endPointerSession('drag');
         };
 
         const onResizeMove = (e) => {
             if (!resizeActive) return;
+            if (!sessionOwnsPointer('resize', e)) return;
             e.preventDefault();
             const { card, axis, startX, startY, origX, origY, origW, origH, tierResizeState } = resizeActive;
             const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, startX, startY);
@@ -764,8 +867,9 @@ export const DragDropEngine = {
             }
         };
 
-        const onResizeUp = () => {
+        const onResizeUp = (e) => {
             if (!resizeActive) return;
+            if (!sessionOwnsPointer('resize', e)) return;
             const { card, moved, tierResizeState } = resizeActive;
             const item = currentItems.find((i) => i.id === card.dataset.id);
             card.classList.remove('is-grid-resizing', 'is-freeform-resizing');
@@ -824,13 +928,18 @@ export const DragDropEngine = {
                 extentsFrame = null;
             }
             resizeActive = null;
-            document.removeEventListener('mousemove', onResizeMove);
-            document.removeEventListener('mouseup', onResizeUp);
+            endPointerSession('resize');
         };
 
         cards.forEach((card) => {
-            card.addEventListener('mousedown', (e) => {
+            // Pointer events, not mouse events: a finger never emits `mousemove`,
+            // and iOS only synthesizes `mousedown` once a tap has resolved, so a
+            // mouse-only session left the grip and every resize handle dead on a
+            // touch screen.
+            card.addEventListener('pointerdown', (e) => {
                 if (e.button !== 0) return;
+                if (!e.isPrimary) return;
+                cancelPendingLongPress();
 
                 const resizeHandle = e.target.closest('.ff-resize');
                 if (resizeHandle) {
@@ -857,35 +966,46 @@ export const DragDropEngine = {
                     };
                     card.classList.add(snapEnabled ? 'is-grid-resizing' : 'is-freeform-resizing');
                     card.dataset.skipExpand = '1';
-                    document.addEventListener('mousemove', onResizeMove);
-                    document.addEventListener('mouseup', onResizeUp);
+                    startPointerSession('resize', { move: onResizeMove, up: onResizeUp, pointerId: e.pointerId });
                     return;
                 }
 
-                if (shouldYieldToNoteEditor(e, card)) return;
-
-                const wantsDrag = shouldStartCardDrag(e.target);
-                if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
-                if (!wantsDrag) return;
-                if (cardIsPinned(card)) return;
-
                 const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
-                if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
+                const intent = resolvePressIntent({
+                    pointerType: e.pointerType,
+                    pinned: cardIsPinned(card),
+                    yieldsToEditor: shouldYieldToNoteEditor(e, card),
+                    dragSurface: shouldStartCardDrag(e.target),
+                    grip: !!e.target.closest('.card-act--drag'),
+                    overStepGrab: pointerHitsStepGrab(e.clientX, e.clientY),
+                    overScrollbarGrip: !!scrollHost && isScrollbarGrip(scrollHost, e.clientX)
+                });
+                if (intent.kind === PRESS_INTENT.NONE) return;
 
                 e.stopPropagation();
-                const startRect = UI.readNoteRect(card);
-                dragActive = {
-                    card,
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    origX: startRect.x,
-                    origY: startRect.y,
-                    origW: startRect.w,
-                    origH: startRect.h,
-                    moved: false
+                const beginMove = () => {
+                    const startRect = UI.readNoteRect(card);
+                    dragActive = {
+                        card,
+                        pointerType: e.pointerType,
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        origX: startRect.x,
+                        origY: startRect.y,
+                        origW: startRect.w,
+                        origH: startRect.h,
+                        moved: false
+                    };
+                    startPointerSession('drag', { move: onDragMove, up: onDragUp, pointerId: e.pointerId });
                 };
-                document.addEventListener('mousemove', onDragMove);
-                document.addEventListener('mouseup', onDragUp);
+
+                if (intent.kind === PRESS_INTENT.LONG_PRESS) {
+                    // Header/gutter on touch keeps `touch-action: pan-y`, so the
+                    // press must prove it is a hold before it claims the pointer.
+                    armLongPress(e, intent, beginMove);
+                    return;
+                }
+                beginMove();
             }, { signal });
         });
     },

@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-25T21:00:07.982Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-11-25T21:33:44.825Z
 
 ## CSS load order
 
@@ -65,6 +65,7 @@ alwaysApply: true
 | js/backup.js | local backup export/import, encrypted packages, notes content/layout streams | cloudBackup.js, api.js, backupDelta.js | — | — |
 | js/backupClaim.js | cross-tab scheduled-backup claim/lease coordination | scheduledBackup.js, backup.js, mediaBackup.js | — | — |
 | js/backupDelta.js | pure incremental-backup helpers (export fingerprint hash, note revision snapshots, notes patch build/merge) | backup.js, scheduledBackup.js | — | — |
+| js/board/dragIntent.js | the press-intent decision for board cards - resize, immediate move, deferred long-press move, or nothing | dragdrop.js, noteSurfaceHtml/card.js | — | — |
 | js/board/gridEngine.js | grid board layout engine, push resolution | board/noteGeometry.js, layoutStorage.js, gridDensity.js | — | — |
 | js/board/noteGeometry.js | grid note geometry, push layout, tile bounds | board/gridEngine.js, tileGeometry.js | — | — |
 | js/boardOperations.js | item visibility, archiving, calendar integration, card actions | noteSurface.js, noteQuickActions.js, desktopManager.js | — | — |

@@ -881,6 +881,10 @@ body.is-file-cabinet-drag-active {
 
 #app-canvas.view-grid .card-drag-zone {
     cursor: grab;
+    /* A swipe on a card header must still scroll the board; only a held press
+       becomes a move (js/dragdrop.js arms a long press for touch). */
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
 }
 
 #app-canvas.view-grid .card-drag-zone:active {
@@ -948,11 +952,16 @@ body.is-file-cabinet-drag-active {
 #app-canvas.view-grid .mini-card .ff-drag-gutter {
     z-index: 5;
     pointer-events: auto;
+    /* Same deal as the header drag zone: scroll with a swipe, move on a hold. */
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
 }
 
 #app-canvas.view-grid .mini-card .ff-resize {
     pointer-events: auto;
     z-index: 14;
+    /* A handle owns the finger outright -- no scrolling while resizing. */
+    touch-action: none;
 }
 
 #app-canvas.view-grid .ff-resize-n,

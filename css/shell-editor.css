@@ -406,6 +406,10 @@ body.is-checklist-dragging {
 
 .card-act--drag {
     cursor: grab;
+    /* The grip is an explicit "move me" handle: claim the finger so a press
+       starts a drag instead of a board scroll or a long-press callout. */
+    touch-action: none;
+    -webkit-touch-callout: none;
 }
 
 .card-act--drag:active {

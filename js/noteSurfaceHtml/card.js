@@ -61,7 +61,10 @@ export function createCardComponent(uiInstance, item, activeCategories) {
     renderBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor);
     applyItemCardTheme(card, item);
     applyCardCategoryBand(card, categoryColor);
-    card.addEventListener('mousedown', () => uiInstance.raiseDesktopCard(card), true);
+    // Raise on press, for every pointer kind: `mousedown` never fires until a
+    // tap has resolved on touch screens, so cards stayed stacked in the old
+    // order while the finger was on them.
+    card.addEventListener('pointerdown', () => uiInstance.raiseDesktopCard(card), true);
     uiInstance.syncBoardPinClass(card);
     return card;
 }

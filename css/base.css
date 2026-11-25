@@ -87,6 +87,16 @@ html, body {
     }
 }
 
+/* Resize handles (board cards, tool panels, media/category panels -- all built
+   from the shared ff-* chrome in js/desktopFloatChrome.js) claim the finger
+   outright: without `none` the browser turns the first move into a scroll and
+   fires `pointercancel`, which killed touch resizing even though the handles
+   already spoke pointer events. Board-specific rules may narrow this further,
+   but nothing may widen it. */
+.ff-resize {
+    touch-action: none;
+}
+
 html[data-tile-small-footprint="card"] {
     --tile-small-w: var(--tile-small-w-card);
     --tile-small-h: var(--tile-small-h-card);
