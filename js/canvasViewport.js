@@ -379,6 +379,10 @@ export const CanvasViewport = {
             this.panBy(-e.deltaX * factor, -e.deltaY * factor);
         }, { passive: false });
 
+        // Capture phase: the gesture owner has to claim a touch BEFORE the
+        // board's canvas-level pointerdown (target phase) runs. Otherwise the
+        // second finger of a pinch starts a press of its own — a throwaway draft,
+        // or an eraser dab that the abort can no longer rewind.
         this.viewportEl?.addEventListener('pointerdown', (e) => {
             if (e.target?.closest?.('.canvas-scrollbar')) return;
             if (e.pointerType === 'touch') {
@@ -392,7 +396,7 @@ export const CanvasViewport = {
             this.panStart = { x: e.clientX - this.offsetX, y: e.clientY - this.offsetY, id: e.pointerId };
             this.viewportEl.setPointerCapture(e.pointerId);
             e.preventDefault();
-        });
+        }, { capture: true });
 
         this.viewportEl?.addEventListener('pointermove', (e) => {
             if (e.pointerType === 'touch') {

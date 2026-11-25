@@ -37,6 +37,7 @@ after(() => {
 
 function makeViewport({ viewportW = 800, viewportH = 600 } = {}) {
     const listeners = new Map();
+    const listenerOptions = [];
     const classes = new Set();
     const events = [];
     const el = {
@@ -48,16 +49,17 @@ function makeViewport({ viewportW = 800, viewportH = 600 } = {}) {
             toggle: (c, on) => { if (on) classes.add(c); else classes.delete(c); }
         },
         getBoundingClientRect: () => ({ left: 0, top: 0 }),
-        addEventListener(type, fn) {
+        addEventListener(type, fn, options) {
             if (!listeners.has(type)) listeners.set(type, []);
             listeners.get(type).push(fn);
+            listenerOptions.push([type, options]);
         },
         dispatchEvent(ev) { events.push(ev); return true; },
         emit(type, e) { for (const fn of listeners.get(type) || []) fn(e); },
         setPointerCapture() {},
         releasePointerCapture() {}
     };
-    return { el, events, classes };
+    return { el, events, classes, listenerOptions };
 }
 
 /** Fresh singleton state + a fresh fake viewport, wired through bindEvents(). */
@@ -221,6 +223,16 @@ describe('two-finger touch transform', () => {
         });
         assert.equal(CanvasViewport.panning, false);
         assert.equal(CanvasViewport.touchPoints.size, 0, 'the scrollbar keeps owning that finger');
+    });
+
+    it('claims pointerdown in the capture phase, before the board sees the finger', () => {
+        // The board listens on the canvas itself (target phase) and turns every
+        // pointerdown into a press. Without capture phase the second finger of a
+        // pinch would push a history entry and, with the eraser, a dab the abort
+        // cannot rewind — so the binding order is part of the contract.
+        const vp = setup();
+        const binding = vp.listenerOptions.find(([type]) => type === 'pointerdown');
+        assert.deepEqual(binding?.[1], { capture: true });
     });
 });
 

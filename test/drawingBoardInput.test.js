@@ -133,6 +133,17 @@ describe('onPointerDown', () => {
         });
     });
 
+    it('leaves the press to the viewport when a touch pan/pinch owns the pointers', () => {
+        // bindEvents() claims touch pointerdown in the CAPTURE phase, so by the
+        // time the second finger reaches the canvas the gesture already owns it.
+        const { board, calls } = makeBoard();
+        withViewport({ panning: true }, () => onPointerDown(board, pointerEvent({ pointerType: 'touch' })));
+
+        assert.equal(calls.pushLayerHistory, 0, 'a second finger must not push its own history entry');
+        assert.equal(board.draftStroke, null, 'and must not open a draft');
+        assert.deepEqual(calls.capture, [], 'nor capture a pointer the gesture needs');
+    });
+
     it('captures the pointer before routing the press', () => {
         const { board, calls } = makeBoard();
         onPointerDown(board, pointerEvent({ pointerId: 42 }));
@@ -373,6 +384,33 @@ describe('abortGesture (two-finger pan takeover)', () => {
         // A leftover finger finishing the gesture must not undo anything else.
         abortGesture(board);
         assert.equal(calls.undo, 1);
+    });
+
+    it('closes the eraser press scope at pointerup so a later pinch undoes once', () => {
+        // A finished eraser gesture used to leave eraseHistoryPushed armed, so the
+        // next brush press + pinch spent a second undo and popped the stroke the
+        // user had just drawn.
+        const { board, calls } = makeBoard({ activeTool: 'eraser', eraseHistoryPushed: true });
+        onPointerUp(board, pointerEvent({ pointerType: 'touch' }));
+        assert.equal(board.eraseHistoryPushed, false, 'the press ended with the finger');
+
+        board.activeTool = 'brush';
+        onPointerDown(board, pointerEvent({ pointerType: 'touch' }));
+        assert.equal(calls.pushLayerHistory, 1, 'the brush press pushed exactly one entry');
+
+        abortGesture(board);
+        assert.equal(calls.undo, 1, 'and the abort rolls back exactly that one');
+        assert.equal(board.draftStroke, null);
+    });
+
+    it('never spends an undo on a stale eraser flag under another tool', () => {
+        const { board, calls } = makeBoard();
+        onPointerDown(board, pointerEvent());
+        board.eraseHistoryPushed = true; // e.g. a pointerup the OS swallowed
+
+        abortGesture(board);
+        assert.equal(calls.undo, 1, 'only the draft entry goes, not a committed change');
+        assert.equal(board.eraseHistoryPushed, false, 'and the stale flag is cleared');
     });
 
     it('drops previews and drags that never reached the document', () => {

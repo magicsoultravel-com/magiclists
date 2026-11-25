@@ -286,9 +286,14 @@ export function abortGesture(board) {
     if (board.eraseHistoryPushed) {
         // The flag is press-scoped: reset at every eraser press, set only when
         // eraseAt actually removed something. One undo drops that single entry.
+        // Only an eraser press may spend that undo: a stale `true` (a pointerup
+        // that never arrived, say) would otherwise pop a real, committed change
+        // instead of a dab.
         board.eraseHistoryPushed = false;
-        board.undo();
-        touched = true;
+        if (board.activeTool === 'eraser') {
+            board.undo();
+            touched = true;
+        }
     }
 
     // Live previews and drags never reached the document — drop the state.
@@ -325,6 +330,10 @@ export function onPointerUp(board, e) {
 function handlePointerUp(board, e) {
     if (e.pointerType === 'pen') board.penPointerActive = false;
     try { board.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    // The eraser's history flag is press-scoped (eraseAt pushes at most one entry
+    // per press), so the press ends here: closing it at pointerup keeps a
+    // finished eraser gesture from arming a second undo on the next pinch-abort.
+    board.eraseHistoryPushed = false;
     // Capture is released first, then the pan wins: a two-finger pan must not
     // commit the crop/resize/marquee the first finger started (abortGesture has
     // already cleared them, this just stops the up handler from re-reading).
