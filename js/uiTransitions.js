@@ -14,6 +14,7 @@ export const UI_TRANSITION_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 const MORPH_CLASS = 'ui-morph-hidden';
 const FLY_CLASS = 'ui-transition-fly';
 const FC_PENDING_CLASS = 'ui-fc-expand-pending';
+const FC_COLLAPSE_PENDING_CLASS = 'ui-fc-collapse-pending';
 const FC_BODY_CLASS = 'is-fc-transitioning';
 const FOCUS_MORPH_BODY = 'is-focus-morphing';
 
@@ -221,11 +222,11 @@ export function flyFromTo(opts) {
 }
 
 /**
- * Mark FC expand in flight. Always advances fcGen for cancel safety;
- * body chrome only when Smooth fly is enabled.
+ * Mark an FC transition (expand or collapse) in flight. Always advances fcGen for
+ * cancel safety; body chrome is only added when Smooth fly is enabled.
  * @param {string} itemId
  */
-export function beginFcExpandTransition(itemId) {
+export function beginFcTransition(itemId) {
     if (!itemId) return;
     fcGen += 1;
     if (!isUiTransitionsEnabled()) return;
@@ -233,11 +234,11 @@ export function beginFcExpandTransition(itemId) {
     document.body.dataset.fcTransitionId = itemId;
 }
 
-export function clearFcExpandTransition() {
+export function clearFcTransition() {
     document.body.classList.remove(FC_BODY_CLASS);
     delete document.body.dataset.fcTransitionId;
-    document.querySelectorAll(`.${FC_PENDING_CLASS}`).forEach((el) => {
-        el.classList.remove(FC_PENDING_CLASS);
+    document.querySelectorAll(`.${FC_PENDING_CLASS}, .${FC_COLLAPSE_PENDING_CLASS}`).forEach((el) => {
+        el.classList.remove(FC_PENDING_CLASS, FC_COLLAPSE_PENDING_CLASS);
     });
 }
 
@@ -262,7 +263,7 @@ function scheduleFcExpandPushIfBento({ itemId, UI, actorRect = null, gen }) {
 }
 
 /**
- * Post-render FC expand: hide flash → fly small → expand with layout-settling.
+ * Post-render FC expand: raise + reveal → hide flash → fly small → expand with layout-settling.
  * UI.render must already have completed at full size.
  * When Smooth is off, skip the fly and still schedule bento push if needed.
  * @param {{ itemId: string, sourceRect: object, UI: object }} opts
@@ -270,7 +271,7 @@ function scheduleFcExpandPushIfBento({ itemId, UI, actorRect = null, gen }) {
 export async function runFcExpandAfterRender({ itemId, sourceRect, UI }) {
     const gen = fcGen;
     const clear = () => {
-        if (fcGen === gen) clearFcExpandTransition();
+        if (fcGen === gen) clearFcTransition();
     };
 
     if (!itemId || !UI) {
@@ -278,15 +279,22 @@ export async function runFcExpandAfterRender({ itemId, sourceRect, UI }) {
         return;
     }
 
-    if (!isUiTransitionsEnabled()) {
-        scheduleFcExpandPushIfBento({ itemId, UI, gen });
-        clear();
-        return;
-    }
-
     const canvas = document.getElementById('app-canvas');
     const card = canvas?.querySelector(`.mini-card[data-id="${CSS.escape(itemId)}"]`);
-    if (!card || !sourceRect) {
+
+    if (card) {
+        // Raise here, never from the settle timer below: the pending class hides the card,
+        // so the ring cannot paint early, while a deferred raise lets a click during the
+        // fly steal .is-grid-front. Raise first also because .is-grid-front sets
+        // transition:none — it must never land on a card whose rect transition is pending.
+        UI.raiseDesktopCard?.(card);
+        // Instant scroll on purpose: the fly target is measured immediately below, so a
+        // smooth scroll would hand flyFromTo a mid-scroll rect. `inline` matters because
+        // #app-canvas scrolls horizontally too.
+        card.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }
+
+    if (!isUiTransitionsEnabled() || !card || !sourceRect) {
         scheduleFcExpandPushIfBento({ itemId, UI, gen });
         clear();
         return;
@@ -311,21 +319,81 @@ export async function runFcExpandAfterRender({ itemId, sourceRect, UI }) {
 
     const targetBox = card.getBoundingClientRect();
 
-    await flyFromTo({ fromRect: sourceRect, toRect: targetBox });
+    try {
+        await flyFromTo({ fromRect: sourceRect, toRect: targetBox });
+    } finally {
+        // Supersede: clear() is gen-guarded and cannot strip this run's own pending class.
+        card.classList.remove(FC_PENDING_CLASS);
+    }
     if (fcGen !== gen || !card.isConnected) {
         clear();
         return;
     }
 
-    card.classList.remove(FC_PENDING_CLASS);
     UI.applyNoteRect(card, full, { settling: true });
     UI.finalizeDesktopCard?.(card);
 
     window.setTimeout(() => {
+        if (fcGen !== gen || !card.isConnected) return;
         card.classList.remove('layout-settling');
     }, 160);
 
     scheduleFcExpandPushIfBento({ itemId, UI, actorRect: full, gen });
+    clear();
+}
+
+/**
+ * Where a collapsed note should land in the cabinet.
+ * Tabs are filtered by laid-out width so a rebuilt rail cannot yield a zero-size target.
+ * Folded categories render no tabs at all, so their chip is the normal target there.
+ * @param {string} itemId
+ * @param {string} [category]
+ * @returns {{ el: Element, hide: boolean } | null}
+ */
+export function resolveFileCabinetCollapseTarget(itemId, category) {
+    const cabinet = document.getElementById('file-cabinet');
+    if (!cabinet || !itemId) return null;
+    const tab = [...cabinet.querySelectorAll('.file-cabinet-tab')]
+        .find((el) => el.dataset.id === itemId && el.getBoundingClientRect().width > 0);
+    if (tab) return { el: tab, hide: true };
+    if (!category) return null;
+    const chip = [...cabinet.querySelectorAll('.file-cabinet-filed-chip')]
+        .find((el) => el.dataset.category === category && el.getBoundingClientRect().width > 0);
+    return chip ? { el: chip, hide: false } : null;
+}
+
+/**
+ * Post-render FC collapse: fly the note into its drawer tab — the mirror of expand.
+ * The destination tab stays hidden until the fly lands; a folded-category chip is left
+ * visible because it carries the category name and count.
+ * @param {{ itemId: string, category?: string, sourceRect: object|null }} opts
+ */
+export async function runFcCollapseAfterRender({ itemId, category, sourceRect }) {
+    const gen = fcGen;
+    const clear = () => {
+        if (fcGen === gen) clearFcTransition();
+    };
+
+    if (!itemId || !sourceRect || !isUiTransitionsEnabled()) {
+        clear();
+        return;
+    }
+
+    const target = resolveFileCabinetCollapseTarget(itemId, category);
+    if (!target) {
+        clear();
+        return;
+    }
+
+    const { el, hide } = target;
+    // Hidden (visibility) targets keep their box, so measuring after adding is safe.
+    if (hide) el.classList.add(FC_COLLAPSE_PENDING_CLASS);
+    try {
+        await flyFromTo({ fromRect: sourceRect, toRect: el.getBoundingClientRect() });
+    } finally {
+        // Supersede: clear() is gen-guarded, so the tab must be revealed here.
+        if (hide) el.classList.remove(FC_COLLAPSE_PENDING_CLASS);
+    }
     clear();
 }
 
@@ -336,7 +404,7 @@ export function cancelAll() {
     clearMorphTimer();
     removeFlyOverlay();
     fcGen += 1;
-    clearFcExpandTransition();
+    clearFcTransition();
     document.body.classList.remove(FOCUS_MORPH_BODY);
 
     document.querySelectorAll(`.${MORPH_CLASS}`).forEach((el) => {

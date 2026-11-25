@@ -89,6 +89,14 @@ function makeCard({ desktop = ACTIVE_DESKTOP, id = 'n1', classes = [], rect = { 
         dataset: { desktop, id },
         attributes: {},
         rect,
+        style: {
+            props: {},
+            priorities: {},
+            setProperty(name, value, priority = '') {
+                this.props[name] = value;
+                this.priorities[name] = priority;
+            }
+        },
         classList: {
             add: (...names) => names.forEach((n) => set.add(n)),
             remove: (...names) => names.forEach((n) => set.delete(n)),
@@ -482,5 +490,56 @@ describe('spatial · applyTileZoneToggle', () => {
         assert.equal(ui.calls.raise.length, 0);
         assert.deepEqual(ui.calls.noteRect, [{ x: 10, y: 20, w: SMALL.w, h: SMALL.h }]);
         assert.deepEqual(ui.calls.toggle, [false]);
+    });
+});
+
+describe('spatial · desktop stacking', () => {
+    function makeCanvasStub(cards) {
+        return {
+            cards,
+            classList: { contains: () => false },
+            dataset: {},
+            querySelector: () => null,
+            querySelectorAll: (selector) => {
+                const cls = selector.split('.').pop();
+                return cards.filter((c) => c.classList.contains(cls));
+            }
+        };
+    }
+
+    it('renders z-index from the card order', () => {
+        const card = makeCard({ id: 'a' });
+
+        spatial.initDesktopCardStack(makeUi(), card, 3);
+
+        assert.equal(card.style.props['z-index'], '4');
+        assert.equal(card.style.priorities['z-index'], 'important');
+    });
+
+    it('a raise beats the render-order z-index so an expanded note sits on top', () => {
+        const card = makeCard({ id: 'a' });
+        spatial.initDesktopCardStack(makeUi(), card, 3);
+
+        spatial.raiseDesktopCard(makeUi(), card);
+
+        const raised = Number(card.style.props['z-index']);
+        assert.ok(raised > 4, `raised z-index ${raised} must clear the render-order 4`);
+        assert.equal(card.style.priorities['z-index'], 'important');
+    });
+
+    it('leaves exactly one front ring on the canvas', () => {
+        const a = makeCard({ id: 'a' });
+        const b = makeCard({ id: 'b' });
+        b.classList.add('is-grid-front');
+        const canvasStub = makeCanvasStub([a, b]);
+        for (const c of [a, b]) {
+            c.closest = (selector) => (selector === '#app-canvas' ? canvasStub : null);
+        }
+
+        spatial.raiseDesktopCard(makeUi(), a);
+
+        assert.equal(a.classList.contains('is-grid-front'), true);
+        assert.equal(b.classList.contains('is-grid-front'), false);
+        assert.deepEqual(canvasStub.querySelectorAll('.mini-card.is-grid-front'), [a]);
     });
 });

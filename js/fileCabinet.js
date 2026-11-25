@@ -202,12 +202,23 @@ export function applyFileCabinetZoneToggle(card, item, ctx = {}, UI) {
         }
     } else {
         const pos = UI.readNoteRect(card);
+        // Capture the visual start before the note leaves the board for the collapse fly.
+        const sourceRect = captureClientRect(card);
         fileItemToCabinet(item, UI.activeBoardViewMode, UI, {
             x: pos.x ?? 8,
             y: pos.y ?? 8,
             rememberW: pos.w,
             rememberH: pos.h
         });
+        if (sourceRect && item?.id) {
+            // Category after filing: an uncategorized note lands in "Uncategorized".
+            transition = {
+                kind: 'fc-collapse',
+                itemId: item.id,
+                category: getItemCategoryName(item),
+                sourceRect
+            };
+        }
     }
 
     dispatchBoardVisibility({ flushLayout: false, transition });

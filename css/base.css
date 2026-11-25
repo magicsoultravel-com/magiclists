@@ -75,6 +75,18 @@ html, body {
     min-height: 0; /* SAFETY NET: Allows flex items to shrink below intrinsic size */
 }
 
+/* Touch devices: a tap must never become a browser double-tap zoom.
+   `manipulation` keeps pan + pinch but drops double-tap-zoom, so tapping the
+   canvas zoom steppers (+ / -) or any other button row twice in a row zooms
+   nothing. The canvas keeps its own `touch-action: none` (css/drawing.css) --
+   touch-action intersects down the ancestor chain, so this cannot weaken it.
+   `any-pointer` covers tablets that also expose a trackpad as a fine pointer. */
+@media (any-pointer: coarse) {
+    html {
+        touch-action: manipulation;
+    }
+}
+
 html[data-tile-small-footprint="card"] {
     --tile-small-w: var(--tile-small-w-card);
     --tile-small-h: var(--tile-small-h-card);

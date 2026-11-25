@@ -1,7 +1,7 @@
 /** @module {"owns":"file cabinet item transfers - filing a board note into a drawer, expanding a drawer note back onto the board, and moving a note between categories", "related":["fileCabinet.js","fileCabinet/order.js","noteSurface.js","uiTransitions.js"]} */
 import { getItemCategoryName } from '../focusFilter.js';
 import { NoteSurface } from '../noteSurface.js';
-import { beginFcExpandTransition } from '../uiTransitions.js';
+import { beginFcTransition } from '../uiTransitions.js';
 import {
     getFileCabinetOrder,
     saveFileCabinetOrder,
@@ -57,8 +57,9 @@ export function captureClientRect(el) {
 
 export function dispatchBoardVisibility({ flushLayout = false, transition = null } = {}) {
     // Always bump fcGen (Smooth on or off) so post-expand bento push can cancel safely.
-    if (transition?.kind === 'fc-expand' && transition.itemId) {
-        beginFcExpandTransition(transition.itemId);
+    const isFc = transition?.kind === 'fc-expand' || transition?.kind === 'fc-collapse';
+    if (isFc && transition.itemId) {
+        beginFcTransition(transition.itemId);
     }
     window.dispatchEvent(new CustomEvent('board:visibility_changed', {
         detail: { flushLayout, ...(transition ? { transition } : {}) }
@@ -145,13 +146,16 @@ export function expandFileCabinetCategoryToBoard(categoryName, UI) {
  * File a board note into the cabinet. Optionally switch category on drop.
  * Updates live item.categories synchronously before visibility render so reconcile
  * does not rewrite order back to the old category.
+ * `sourceRect` is the card's client rect captured before the drop teardown wipes
+ * its inline position; it drives the collapse fly.
  */
 export function fileBoardItemToCabinet({
     item,
     UI,
     card = null,
     targetCategory = null,
-    insertIndex = null
+    insertIndex = null,
+    sourceRect = null
 } = {}) {
     if (!item?.id || !UI) return false;
     const rect = card ? UI.readNoteRect(card) : { x: 8, y: 8, w: 0, h: 0 };
@@ -184,6 +188,9 @@ export function fileBoardItemToCabinet({
         }
     }
 
-    window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+    const transition = sourceRect
+        ? { kind: 'fc-collapse', itemId: item.id, category: toCat, sourceRect }
+        : null;
+    dispatchBoardVisibility({ flushLayout: false, transition });
     return true;
 }

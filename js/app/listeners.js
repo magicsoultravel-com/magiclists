@@ -693,8 +693,10 @@ export function setupCoreListeners(app) {
         const skipFlush = e.detail?.flushLayout === false;
         const transition = e.detail?.transition;
 
-        // Concurrent non-FC render while an FC expand is in flight → abort fly.
-        if (transition?.kind !== 'fc-expand' && document.body.classList.contains('is-fc-transitioning')) {
+        // A concurrent non-FC render while an FC fly is in flight → abort the fly.
+        // A second FC event is a supersede, not a cancel; the fcGen counter handles it.
+        const isFcTransition = transition?.kind === 'fc-expand' || transition?.kind === 'fc-collapse';
+        if (!isFcTransition && document.body.classList.contains('is-fc-transitioning')) {
             import('../uiTransitions.js').then(({ cancelAll }) => cancelAll()).catch(() => {});
         }
 
@@ -712,12 +714,21 @@ export function setupCoreListeners(app) {
             const pendingCard = canvas?.querySelector(`.mini-card[data-id="${CSS.escape(itemId)}"]`);
             pendingCard?.classList.add('ui-fc-expand-pending');
             requestAnimationFrame(() => {
-                import('../uiTransitions.js').then(({ runFcExpandAfterRender, clearFcExpandTransition }) => {
+                import('../uiTransitions.js').then(({ runFcExpandAfterRender, clearFcTransition }) => {
                     runFcExpandAfterRender({
                         itemId,
                         sourceRect: transition.sourceRect,
                         UI
-                    }).catch(() => clearFcExpandTransition());
+                    }).catch(() => clearFcTransition());
+                }).catch(() => {});
+            });
+        }
+
+        if (transition?.kind === 'fc-collapse' && transition.itemId && transition.sourceRect) {
+            const { itemId, category, sourceRect } = transition;
+            requestAnimationFrame(() => {
+                import('../uiTransitions.js').then(({ runFcCollapseAfterRender, clearFcTransition }) => {
+                    runFcCollapseAfterRender({ itemId, category, sourceRect }).catch(() => clearFcTransition());
                 }).catch(() => {});
             });
         }

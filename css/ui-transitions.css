@@ -57,6 +57,15 @@ html[data-ui-transitions="smooth"] .mini-card.ui-fc-expand-pending {
     pointer-events: none !important;
 }
 
+/* FC collapse: the destination drawer tab stays out of sight until the fly lands
+   (mirror of expand). Folded-category chips are never hidden — they carry the
+   category name and count. */
+html[data-ui-transitions="smooth"] #file-cabinet .file-cabinet-tab.ui-fc-collapse-pending {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
 html[data-ui-transitions="smooth"] body.is-fc-transitioning {
     /* Marker class for JS/CSS coordination */
 }

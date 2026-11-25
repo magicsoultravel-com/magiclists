@@ -105,3 +105,23 @@ describe('layout-settling supports small→large', () => {
         assert.match(block[0], /height/);
     });
 });
+
+describe('FC fly pending classes', () => {
+    it('hides the expand target card and the collapse target drawer tab', () => {
+        const css = readFileSync(join(HERE, '../css/ui-transitions.css'), 'utf8');
+
+        const expand = css.match(/\.mini-card\.ui-fc-expand-pending\s*\{[^}]+\}/);
+        assert.ok(expand, 'expected the expand pending rule');
+        assert.match(expand[0], /visibility:\s*hidden/);
+
+        const collapse = css.match(/#file-cabinet \.file-cabinet-tab\.ui-fc-collapse-pending\s*\{[^}]+\}/);
+        assert.ok(collapse, 'expected the collapse pending rule scoped to drawer tabs');
+        assert.match(collapse[0], /visibility:\s*hidden/);
+        assert.match(collapse[0], /opacity:\s*0/);
+    });
+
+    it('never hides a folded-category chip as a collapse target', () => {
+        const css = readFileSync(join(HERE, '../css/ui-transitions.css'), 'utf8');
+        assert.doesNotMatch(css, /file-cabinet-filed-chip\.ui-fc-collapse-pending/);
+    });
+});

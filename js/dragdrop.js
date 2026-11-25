@@ -606,6 +606,19 @@ export const DragDropEngine = {
                     if (target?.kind === 'file-cabinet') {
                         const item = currentItems.find((i) => i.id === card.dataset.id);
                         if (item) {
+                            // Visual start for the collapse fly: the card sits on <body> here
+                            // and its inline position is wiped just below.
+                            const dropRect = card.getBoundingClientRect();
+                            const sourceRect = dropRect.width > 0
+                                ? {
+                                    left: dropRect.left,
+                                    top: dropRect.top,
+                                    width: dropRect.width,
+                                    height: dropRect.height,
+                                    x: dropRect.x,
+                                    y: dropRect.y
+                                }
+                                : null;
                             clearLayoutPreview(false);
                             UI.updateGridScrollPolicy(canvas, { forcing: false });
                             canvas.classList.remove('is-layout-active', 'is-grid-forcing');
@@ -630,7 +643,8 @@ export const DragDropEngine = {
                                 UI,
                                 card,
                                 targetCategory: target.targetCategory || null,
-                                insertIndex: target.insertIndex
+                                insertIndex: target.insertIndex,
+                                sourceRect
                             });
                             dragActive = null;
                             document.removeEventListener('mousemove', onDragMove);

@@ -179,6 +179,64 @@ describe('file cabinet transfer · board note into a drawer', () => {
         assert.ok(!order.Office || order.Office.length === 0, 'not left behind in the old drawer');
         assert.equal(visibilityEvents().length, 1, 'exactly one board:visibility_changed');
     });
+
+    it('files the note with no transition when the drop has no source rect', async () => {
+        installGlobals({ Office: ['a1'] });
+        const fc = await load();
+        const item = { id: 'a1', categories: ['Office'] };
+
+        fc.fileBoardItemToCabinet({ item, UI: makeUI(), targetCategory: 'Office' });
+
+        const events = visibilityEvents();
+        assert.equal(events.length, 1);
+        assert.equal('transition' in events[0].detail, false, 'no fly without a captured rect');
+        assert.equal(document.body.dataset.fcTransitionId, undefined);
+    });
+
+    it('carries a collapse transition built from the drop rect', async () => {
+        installGlobals({ Office: ['a1'] });
+        const fc = await load();
+        const item = { id: 'a1', categories: ['Office'] };
+        const sourceRect = { left: 40, top: 60, width: 120, height: 70, x: 40, y: 60 };
+
+        fc.fileBoardItemToCabinet({ item, UI: makeUI(), targetCategory: 'Office', sourceRect });
+
+        const events = visibilityEvents();
+        assert.equal(events.length, 1, 'one event carries both the render and the fly');
+        const { transition } = events[0].detail;
+        assert.equal(transition.kind, 'fc-collapse');
+        assert.equal(transition.itemId, 'a1');
+        assert.equal(transition.category, 'Office');
+        assert.deepEqual(transition.sourceRect, sourceRect);
+        assert.equal(document.body.dataset.fcTransitionId, 'a1', 'the fly is registered before the render');
+        assert.deepEqual(readOrder().Office, ['a1'], 'the destination tab exists in the order map');
+    });
+});
+
+describe('file cabinet transfer · board toggle', () => {
+    it('collapses a board note with one visibility change carrying its fly transition', async () => {
+        installGlobals({ Office: ['a1'] });
+        const fc = await load();
+        const UI = makeUI({ activeBoardViewMode: 'grid' });
+        const card = {
+            getBoundingClientRect: () => ({ left: 30, top: 50, width: 140, height: 90, x: 30, y: 50 }),
+            closest: () => null
+        };
+        const item = { id: 'a1', categories: ['Office'] };
+
+        fc.applyFileCabinetZoneToggle(card, item, {}, UI);
+
+        const events = visibilityEvents();
+        assert.equal(events.length, 1, 'fileItemToCabinet is storage-only; the toggle dispatches once');
+        assert.equal(events[0].detail.flushLayout, false);
+        const { transition } = events[0].detail;
+        assert.equal(transition.kind, 'fc-collapse');
+        assert.equal(transition.itemId, 'a1');
+        assert.equal(transition.category, 'Office');
+        assert.equal(transition.sourceRect.width, 140);
+        assert.equal(document.body.dataset.fcTransitionId, 'a1');
+        assert.ok(readOrder().Office.includes('a1'), 'tab added to the drawer order');
+    });
 });
 
 describe('file cabinet transfer · drawer note back onto the board', () => {
