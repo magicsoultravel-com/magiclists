@@ -220,10 +220,21 @@ export function packGridBoard(ui, canvas, collapsedItems, expandedItems, {
  *
  * `direction` decides how that block fills the page:
  *  - horizontal → row-major: fill a row left→right, then wrap to the next row.
- *  - vertical   → column-major: fill a column top→bottom down to `columnH`
- *                 (the visible page height), then start the next column; once
- *                 the columns fill the page the block continues on a new page
- *                 below, so vertical never spills past the right edge.
+ *  - vertical   → column-major: fill a column top→bottom down to `columnH`,
+ *                 then start the next column; once the columns fill the page the
+ *                 block continues on a new page below, so vertical never spills
+ *                 past the right edge.
+ *
+ * Page geometry — `columnH` is the page bottom edge, not a free height: every
+ * position is absolute from the canvas top, so y = 0 is the page top and callers
+ * pass the measured viewport height unchanged (getLiveBoardBounds().viewportH),
+ * which is that same bottom edge. Rows start at startY = origin + edgePad, i.e.
+ * inside the page, so the count is floor((columnH - startY + gap) / rowStride):
+ * one subtraction for the padding above the first row, one addition of `gap`
+ * because the last row needs no trailing gutter. That count is tight — the last
+ * row ends exactly on `columnH` when it fits and no row ever crosses it.
+ * Subtracting `startY` twice would waste a row; dropping it (using
+ * floor((columnH + gap) / rowStride)) would push the last row below the page.
  *
  * Expanded notes always go in their own block *below* the collapsed set (both
  * directions) so they never cover collapsed notes; `direction` only orders the
@@ -278,11 +289,14 @@ export function packBoardGridRects(ui, collapsedItems, expandedItems, {
     // Fit n tiles + (n-1) gutters inside packW: n*w + (n-1)*gap <= packW.
     const pageW = Number.isFinite(packW) && packW > 0 ? packW : small.w;
     const maxCols = Math.max(1, Math.floor((pageW + gap) / colStride));
-    // Vertical sorts stop a column at the visible page bottom. Callers pass the
-    // live viewport height (getLiveBoardBounds().viewportH); maxH is the hard
-    // content bound and only serves as a fallback.
+    // Vertical sorts stop a column at the page bottom. `columnH` is that bottom
+    // edge in layout px (y = 0 is the canvas top, so it equals the measured
+    // viewport height rather than the free space below the padding); maxH is the
+    // hard content bound and only serves as a fallback.
     const pageH = [columnH, maxH]
         .find((value) => Number.isFinite(value) && value > startY) ?? null;
+    // A row r fits iff startY + r * rowStride + small.h <= pageH; solving for r
+    // and adding `gap` (no gutter after the last row) gives the tight count.
     const maxRows = pageH != null
         ? Math.max(1, Math.floor((pageH - startY + gap) / rowStride))
         : FALLBACK_PAGE_ROWS;

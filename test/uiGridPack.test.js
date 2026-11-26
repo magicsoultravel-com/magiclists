@@ -315,6 +315,42 @@ describe('grid pack · packBoardGridRects · sort direction', () => {
         ]);
     });
 
+    // Row-count boundary: with startY = 16 and one row stride ROW, two rows fit
+    // when the page bottom is startY + ROW + SMALL.h = TWO_ROW_PAGE - gap. Both
+    // sides of that edge are pinned so "one wasted row" or "one row too many"
+    // regressions (subtracting startY twice, or not subtracting it at all) fail.
+    it('uses the page fully when the second row ends exactly on the page edge', () => {
+        const pageBottom = TWO_ROW_PAGE - METRICS.gap;
+        const rects = pack.packBoardGridRects(ui, items.slice(0, 3), [], {
+            packW: 200,
+            columnH: pageBottom,
+            direction: 'vertical'
+        });
+
+        assert.deepEqual(coords(rects), [
+            [16, 16], [16, 16 + ROW],
+            [16 + COL, 16]
+        ]);
+        assert.equal(rectOf(rects, 'b').y + SMALL.h, pageBottom, 'last row missed the page edge');
+    });
+
+    it('drops back to a single row when the page is a pixel short of two', () => {
+        const pageBottom = TWO_ROW_PAGE - METRICS.gap - 1;
+        const rects = pack.packBoardGridRects(ui, items.slice(0, 3), [], {
+            packW: 200,
+            columnH: pageBottom,
+            direction: 'vertical'
+        });
+
+        assert.deepEqual(coords(rects), [
+            [16, 16], [16 + COL, 16], [16 + 2 * COL, 16]
+        ]);
+        assert.ok(
+            rects.every(({ rect }) => rect.y + rect.h <= pageBottom),
+            'a row spilled past the page bottom'
+        );
+    });
+
     it('makes vertical visibly different from horizontal on a collapsed board', () => {
         const horizontal = pack.packBoardGridRects(ui, items, [], { packW: 200, direction: 'horizontal' });
         const vertical = pack.packBoardGridRects(ui, items, [], { packW: 200, columnH: TWO_ROW_PAGE, direction: 'vertical' });
