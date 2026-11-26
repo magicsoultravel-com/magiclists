@@ -1,6 +1,7 @@
-/** @module {"owns":"the grid packer - expansion classification, item sizing, the deterministic zero-gap rect solver behind sort/reset, and the spatial sort both the packer and the legacy migration use; no DOM writes, no state","related":["ui.js","ui/spatial.js","ui/render.js"]} */
+/** @module {"owns":"the grid packer - expansion classification, item sizing, the deterministic narrow-gutter rect solver behind sort/reset, and the spatial sort both the packer and the legacy migration use; no DOM writes, no state","related":["ui.js","ui/spatial.js","ui/render.js"]} */
 
 import { GRID_LAYOUT_KEY, GRID_PINS_KEY } from '../board/layoutKeys.js';
+import { DesktopManager } from '../desktopManager.js';
 import {
     findFirstCanvasSlot as findFirstCanvasSlotCore,
     rectsOverlap as rectsOverlapCore
@@ -26,6 +27,12 @@ import { normalizeViewMode } from '../viewSession.js';
 
 /** How much of the available space the aligned expanded block should cover (tunable). */
 const ALIGN_SIZE_FACTOR = 0.8;
+
+/**
+ * Row budget used when no page height can be measured (vertical sort without a
+ * live viewport). Matches the "40 strides" convention findFirstCanvasSlot uses.
+ */
+const FALLBACK_PAGE_ROWS = 40;
 
 export function sortItemsSpatially(items, getRect) {
     return [...items].sort((a, b) => {
@@ -112,7 +119,7 @@ export function packGridBoard(ui, canvas, collapsedItems, expandedItems, {
     itemsById = null,
     alignSize = false
 } = {}) {
-    const { origin, packW, maxH, edgePad } = ui.getLiveBoardBounds(canvas);
+    const { origin, packW, maxH, edgePad, viewportH } = ui.getLiveBoardBounds(canvas);
     const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
     const placed = [];
     const layout = new Map();
@@ -126,8 +133,9 @@ export function packGridBoard(ui, canvas, collapsedItems, expandedItems, {
         : null;
     const expandedSizeFor = (item, isExp) => ui.resolveSortItemSize(item, layoutMode, isExp, alignedExpandedSize);
 
+    const activeDesktop = DesktopManager.getActiveDesktop();
     pinnedIds.forEach((id) => {
-        const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
+        const card = canvas.querySelector(`.mini-card[data-desktop="${activeDesktop}"][data-id="${CSS.escape(id)}"]`);
         const saved = ui.getGridLayout()[id];
         if (!saved || !Number.isFinite(saved.x)) return;
         const item = resolveItem(id);
@@ -145,7 +153,7 @@ export function packGridBoard(ui, canvas, collapsedItems, expandedItems, {
     const unpinnedCollapsed = collapsedItems.filter((item) => !pinnedIds.has(item.id));
     const unpinnedExpanded = expandedItems.filter((item) => !pinnedIds.has(item.id));
 
-    // Unified layout: collapsed notes form a tight zero-gap grid, then the
+    // Unified layout: collapsed notes form a narrow-gutter grid, then the
     // expanded notes fill their own block after them (never covering them).
     // With Align size ON, expanded notes share one uniform size (alignedSize);
     // otherwise each keeps its real {w,h}.
@@ -162,7 +170,11 @@ export function packGridBoard(ui, canvas, collapsedItems, expandedItems, {
         packW,
         maxH,
         edgePad,
-        direction: dir
+        direction: dir,
+        // Vertical sorts fill a column down to the visible page bottom before
+        // starting the next one; this is what makes Vertical differ from
+        // Horizontal on a board of collapsed notes.
+        columnH: viewportH ?? null
     });
     packedBoardRects.forEach(({ id, rect }) => layout.set(id, rect));
 
@@ -202,19 +214,37 @@ export function packGridBoard(ui, canvas, collapsedItems, expandedItems, {
 
 /**
  * Unified board-layout packer used whenever the board is re-arranged by
- * sort/reset. Collapsed notes are placed on a strict zero-gap compact grid
- * (adjacent tiles, rows and columns) so they read as one solid block in
- * both horizontal and vertical sort directions. Expanded notes are placed
- * in their own block after the collapsed set (below for horizontal, right
- * for vertical) so they never cover collapsed notes:
+ * sort/reset. Collapsed notes are placed on a compact grid separated by a
+ * narrow gutter (`tileGap`, defaults to the board gap) so they read as one
+ * block of tiles instead of a single fused slab.
+ *
+ * `direction` decides how that block fills the page:
+ *  - horizontal → row-major: fill a row left→right, then wrap to the next row.
+ *  - vertical   → column-major: fill a column top→bottom down to `columnH`
+ *                 (the visible page height), then start the next column; once
+ *                 the columns fill the page the block continues on a new page
+ *                 below, so vertical never spills past the right edge.
+ *
+ * Expanded notes always go in their own block *below* the collapsed set (both
+ * directions) so they never cover collapsed notes; `direction` only orders the
+ * tiles inside each block:
  *  - alignedSize provided → every expanded note gets that uniform size.
  *  - alignedSize null      → each expanded note keeps its real {w,h}.
  * Positions are computed directly on tile strides (no grid-snap drift).
  *
- * @param {Array} collapsedItems
+ * @param {Array<{id:string}>} collapsedItems
  * @param {Array<{id:string,w:number,h:number}>} expandedItems
  * @param {{w:number,h:number,cols:number}|null} alignedSize
- * @param {{placed?:Array<{x,y,w,h}>, origin?:number, packW:number, maxH?:number, edgePad?:number, direction?:string}} opts
+ * @param {{
+ *   placed?: Array<{x,y,w,h}>,
+ *   origin?: number,
+ *   packW: number,
+ *   maxH?: number,
+ *   edgePad?: number,
+ *   direction?: 'horizontal'|'vertical',
+ *   columnH?: number|null,
+ *   tileGap?: number|null
+ * }} opts
  * @returns {Array<{id:string, rect:{x,y,w,h}}>}
  */
 export function packBoardGridRects(ui, collapsedItems, expandedItems, {
@@ -224,57 +254,99 @@ export function packBoardGridRects(ui, collapsedItems, expandedItems, {
     packW,
     maxH = Infinity,
     edgePad = 0,
-    direction = 'horizontal'
+    direction = 'horizontal',
+    columnH = null,
+    tileGap = null
 } = {}) {
     const metrics = getGridMetrics();
-    const gap = metrics.gap;
+    // Narrow gutter between tiles: the board's own gap token, so the collapsed
+    // grid is not a fused slab and stays consistent with the expanded block.
+    const gap = Number.isFinite(tileGap) ? Math.max(0, tileGap) : metrics.gap;
     const startX = origin + edgePad;
     const startY = origin + edgePad;
     const small = getSmallRect(readTileSmallFootprint());
     const rects = [];
     const collapsedRects = [];
-    // Pinned rects are the only obstacles for the collapsed grid: collapsed
-    // tiles sit edge-to-edge (zero gap) and would falsely self-overlap under
-    // rectsOverlap, so they are never checked against each other.
+    // Pinned rects are the only obstacles for the collapsed grid: tiles are
+    // placed on a flow cursor and never checked against each other.
     const pinnedRects = placed.slice();
     const allPlaced = [...pinnedRects];
+    const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
 
-    // --- collapsed: strict zero-gap compact grid -------------------------
-    const maxCols = Math.max(1, Math.floor(packW / small.w));
+    const colStride = small.w + gap;
+    const rowStride = small.h + gap;
+    // Fit n tiles + (n-1) gutters inside packW: n*w + (n-1)*gap <= packW.
+    const pageW = Number.isFinite(packW) && packW > 0 ? packW : small.w;
+    const maxCols = Math.max(1, Math.floor((pageW + gap) / colStride));
+    // Vertical sorts stop a column at the visible page bottom. Callers pass the
+    // live viewport height (getLiveBoardBounds().viewportH); maxH is the hard
+    // content bound and only serves as a fallback.
+    const pageH = [columnH, maxH]
+        .find((value) => Number.isFinite(value) && value > startY) ?? null;
+    const maxRows = pageH != null
+        ? Math.max(1, Math.floor((pageH - startY + gap) / rowStride))
+        : FALLBACK_PAGE_ROWS;
+
+    // One cursor for both directions: pos() is the next cell, advance() walks
+    // the flow order (row-major when horizontal, column-major when vertical).
     let col = 0;
     let row = 0;
+    let band = 0;
+    const pos = () => ({
+        x: startX + col * colStride,
+        y: startY + (band * maxRows + row) * rowStride
+    });
+    const advance = () => {
+        if (dir === 'vertical') {
+            row += 1;
+            if (row < maxRows) return pos();
+            row = 0;
+            col += 1;
+            if (col < maxCols) return pos();
+            col = 0;
+            band += 1;
+            return pos();
+        }
+        col += 1;
+        if (col < maxCols) return pos();
+        col = 0;
+        row += 1;
+        return pos();
+    };
+    // Cells to probe before declaring a page blocked by pins: one full page
+    // plus room for the pins themselves. The note is still placed (next page).
+    const probeLimit = Math.max(
+        64,
+        maxCols * Math.min(maxRows, FALLBACK_PAGE_ROWS) + pinnedRects.length * 2 + 8
+    );
+
+    // --- collapsed: cell flow with wrap ----------------------------------
     (collapsedItems || []).forEach((item) => {
-        let guard = 0;
-        while (guard < 100000) {
-            const candidate = {
-                x: startX + col * small.w,
-                y: startY + row * small.h,
-                w: small.w,
-                h: small.h
-            };
+        let probe = 0;
+        while (probe < probeLimit) {
+            const candidate = { ...pos(), w: small.w, h: small.h };
             if (!pinnedRects.some((p) => rectsOverlapCore(candidate, p, gap))) {
                 collapsedRects.push(candidate);
                 rects.push({ id: item.id, rect: candidate });
                 allPlaced.push({ ...candidate });
-                col += 1;
-                break;
+                advance();
+                return;
             }
-            col += 1;
-            if (col >= maxCols) {
-                col = 0;
-                row += 1;
-            }
-            guard += 1;
+            advance();
+            probe += 1;
         }
+        // A whole page is blocked by pinned notes: never drop a note — land it
+        // on the next page and keep going.
+        const fallback = { ...pos(), w: small.w, h: small.h };
+        collapsedRects.push(fallback);
+        rects.push({ id: item.id, rect: fallback });
+        allPlaced.push({ ...fallback });
+        advance();
     });
 
     const collapsedBottom = collapsedRects.length
         ? collapsedRects.reduce((m, r) => Math.max(m, r.y + r.h), startY)
         : startY;
-    const collapsedRight = collapsedRects.length
-        ? collapsedRects.reduce((m, r) => Math.max(m, r.x + r.w), startX)
-        : startX;
-    const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
 
     // Expanded block always starts below the collapsed set (left-aligned)
     // regardless of sort direction — direction only affects internal ordering.
@@ -285,44 +357,39 @@ export function packBoardGridRects(ui, collapsedItems, expandedItems, {
     // --- expanded: own block after the collapsed set ----------------------
     if (alignedSize) {
         const { w, h } = alignedSize;
-        const colStride = w + gap;
-        const rowStride = h + gap;
+        const exColStride = w + gap;
+        const exRowStride = h + gap;
         // Cap columns at the computed grid width (which already fits ~80% of
         // the available space) rather than letting it fill packW edge-to-edge.
         const exMaxCols = Math.max(1, alignedSize.cols);
         let ec = 0;
         let er = 0;
         (expandedItems || []).forEach((item) => {
-            let guard = 0;
-            while (guard < 20000) {
+            let probe = 0;
+            while (probe < probeLimit) {
                 const candidate = {
-                    x: exStartX + ec * colStride,
-                    y: exStartY + er * rowStride,
+                    x: exStartX + ec * exColStride,
+                    y: exStartY + er * exRowStride,
                     w,
                     h
                 };
-                if (candidate.x + candidate.w <= startX + packW + 1
-                    && !allPlaced.some((p) => rectsOverlapCore(candidate, p, gap))) {
-                    rects.push({ id: item.id, rect: candidate });
-                    allPlaced.push({ ...candidate });
-                    ec += 1;
-                    if (ec >= exMaxCols) {
-                        ec = 0;
-                        er += 1;
-                    }
-                    break;
-                }
                 ec += 1;
                 if (ec >= exMaxCols) {
                     ec = 0;
                     er += 1;
                 }
-                guard += 1;
+                if (candidate.x + candidate.w <= startX + pageW + 1
+                    && !allPlaced.some((p) => rectsOverlapCore(candidate, p, gap))) {
+                    rects.push({ id: item.id, rect: candidate });
+                    allPlaced.push({ ...candidate });
+                    return;
+                }
+                probe += 1;
             }
         });
     } else {
         (expandedItems || []).forEach((item) => {
-            const slot = findFirstCanvasSlotCore(item.w, item.h, allPlaced, packW + origin * 2, {
+            const slot = findFirstCanvasSlotCore(item.w, item.h, allPlaced, pageW + origin * 2, {
                 origin,
                 edgePad,
                 xMin: exStartX,

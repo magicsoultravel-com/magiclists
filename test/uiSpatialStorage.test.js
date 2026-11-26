@@ -68,6 +68,8 @@ globalThis.requestAnimationFrame = (cb) => {
 };
 
 const spatial = await import('../js/ui/spatial.js');
+const pack = await import('../js/ui/gridPack.js');
+const { getGridMetrics } = await import('../js/gridDensity.js');
 const { DesktopManager } = await import('../js/desktopManager.js');
 const { getSmallRect } = await import('../js/tileGeometry.js');
 const { replaceBoardItemsMap, writeActiveBoardViewMode } = await import('../js/ui/boardState.js');
@@ -79,6 +81,7 @@ const {
 } = await import('../js/board/layoutKeys.js');
 
 const SMALL = getSmallRect();
+const METRICS = getGridMetrics();
 const ACTIVE_DESKTOP = String(DesktopManager.getActiveDesktop());
 
 beforeEach(() => {
@@ -166,6 +169,7 @@ function makeUi(overrides = {}) {
         readFreeformCardSize: () => ({ w: 100, h: 80 }),
         snapNoteRect: (rect) => ({ ...rect }),
         getLiveBoardBounds: () => ({ origin: 16, packW: 200, maxH: Infinity, edgePad: 0 }),
+        packBoardGridRects: (collapsed, expanded, opts) => pack.packBoardGridRects(ui, collapsed, expanded, opts),
         scheduleBoardCanvasExtents: () => { calls.exts += 1; },
         updateBoardCanvasExtents: () => { calls.exts += 1; },
         updateDesktopScrollPolicy: () => { calls.scroll += 1; },
@@ -403,25 +407,53 @@ describe('spatial storage · mode switch and scroll policy', () => {
 });
 
 describe('spatial storage · repackBoardLayoutStorage', () => {
-    it('lays every note out flush on the small stride', () => {
+    const COL = SMALL.w + METRICS.gap;
+    const ROW = SMALL.h + METRICS.gap;
+
+    it('lays every note out on the same gutter stride sort uses', () => {
         const ui = makeUi();
         const items = [{ id: 'a', created_at: 1 }, { id: 'b', created_at: 2 }, { id: 'c', created_at: 3 }];
 
         spatial.repackBoardLayoutStorage(ui, 'grid', items, null);
 
         assert.deepEqual(ui.calls.compact.map(([id]) => id), ['a', 'b', 'c']);
-        assert.deepEqual(ui.calls.compact.map(([, slot]) => slot.x), [3, 3 + SMALL.w, 3 + SMALL.w * 2]);
+        assert.deepEqual(ui.calls.compact.map(([, slot]) => slot.x), [3, 3 + COL, 3 + COL * 2]);
         assert.deepEqual(ui.calls.compact[0][1], { x: 3, y: 3, w: SMALL.w, h: SMALL.h });
     });
 
     it('wraps to the next row when the row is full', () => {
-        const ui = makeUi({ getLiveBoardBounds: () => ({ origin: 16, packW: SMALL.w * 2, maxH: Infinity, edgePad: 0 }) });
+        const ui = makeUi({
+            getLiveBoardBounds: () => ({
+                origin: 16,
+                packW: SMALL.w * 2 + METRICS.gap,
+                maxH: Infinity,
+                edgePad: 0
+            })
+        });
         const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
 
         spatial.repackBoardLayoutStorage(ui, 'grid', items, makeCanvas());
 
         assert.deepEqual(ui.calls.compact.map(([, slot]) => [slot.x, slot.y]),
-            [[16, 16], [16 + SMALL.w, 16], [16, 16 + SMALL.h]]);
+            [[16, 16], [16 + COL, 16], [16, 16 + ROW]]);
+    });
+
+    it('asks the shared packer for the layout instead of packing twice', () => {
+        const seen = [];
+        const ui = makeUi({
+            packBoardGridRects: (collapsed, expanded, opts) => {
+                seen.push({ ids: collapsed.map((item) => item.id), expanded, opts });
+                return [];
+            }
+        });
+
+        spatial.repackBoardLayoutStorage(ui, 'grid', [{ id: 'a' }, { id: 'b' }], makeCanvas());
+
+        assert.deepEqual(seen.map(({ ids }) => ids), [['a', 'b']]);
+        assert.deepEqual(seen[0].expanded, []);
+        assert.equal(seen[0].opts.direction, 'horizontal');
+        assert.equal(seen[0].opts.packW, 200);
+        assert.equal(ui.calls.compact.length, 0);
     });
 
     it('skips items without an id', () => {

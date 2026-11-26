@@ -7,10 +7,11 @@
 // it does so without painting - given tiles and bounds it returns rects. That is
 // exactly the seam the split created, so the arithmetic can be pinned directly
 // instead of through a DOM render. The invariants worth freezing are the ones a
-// visual regression hides: collapsed tiles are flush (zero gap), the expanded
-// block starts below the collapsed set and never covers it, pinned rects are the
-// only obstacles, and `resolveAlignedExpandedSize` always returns a whole number
-// of cells.
+// visual regression hides: collapsed tiles sit on the gutter stride and wrap at
+// the page edge (never off it), the sort direction changes the fill order, the
+// expanded block starts below the collapsed set and never covers it, pinned
+// rects are the only obstacles, and `resolveAlignedExpandedSize` always returns
+// a whole number of cells.
 //
 // Run with: npm test  (node --test test/)
 import { describe, it, beforeEach } from 'node:test';
@@ -228,15 +229,30 @@ describe('grid pack · partitionCanvasItemsByExpansion', () => {
 describe('grid pack · packBoardGridRects · collapsed grid', () => {
     const ui = makeUi();
     const rectOf = (rects, id) => rects.find((r) => r.id === id).rect;
+    const COL = SMALL.w + METRICS.gap;
+    const ROW = SMALL.h + METRICS.gap;
 
-    it('lays collapsed tiles flush on the small footprint stride', () => {
+    it('lays collapsed tiles on the small footprint stride with a narrow gutter', () => {
         const rects = pack.packBoardGridRects(ui, [{ id: 'a' }, { id: 'b' }, { id: 'c' }], [], { packW: 200 });
 
         assert.deepEqual(rects.map((r) => r.id), ['a', 'b', 'c']);
         assert.deepEqual(rectOf(rects, 'a'), { x: 16, y: 16, w: SMALL.w, h: SMALL.h });
-        assert.equal(rectOf(rects, 'b').x - rectOf(rects, 'a').x, SMALL.w, 'collapsed tiles are not flush');
-        assert.equal(rectOf(rects, 'c').x - rectOf(rects, 'b').x, SMALL.w);
+        assert.equal(rectOf(rects, 'b').x - rectOf(rects, 'a').x, COL, 'tiles are not gutter spaced');
+        assert.equal(rectOf(rects, 'c').x - rectOf(rects, 'b').x, COL);
         assert.equal(rectOf(rects, 'b').y, rectOf(rects, 'a').y);
+    });
+
+    it('wraps to the next row instead of running off the right edge', () => {
+        const items = Array.from({ length: 12 }, (_, i) => ({ id: `n${i}` }));
+        const rects = pack.packBoardGridRects(ui, items, [], { packW: 200 });
+
+        // packW 200 fits three tiles: 3*65 + 2*gap = 197 <= 200.
+        assert.equal(rects.length, 12, 'a note was dropped');
+        assert.ok(rects.every(({ rect }) => rect.x + rect.w <= 16 + 200), 'a tile ran past the page');
+        assert.equal(rectOf(rects, 'n3').x, 16, 'the fourth tile should start a new row');
+        assert.equal(rectOf(rects, 'n3').y, 16 + ROW);
+        assert.equal(rectOf(rects, 'n11').x, 16 + 2 * COL);
+        assert.equal(rectOf(rects, 'n11').y, 16 + 3 * ROW);
     });
 
     it('honours origin and edgePad', () => {
@@ -249,12 +265,78 @@ describe('grid pack · packBoardGridRects · collapsed grid', () => {
         const placed = [{ x: 3, y: 3, w: 34, h: 34 }];
         const rects = pack.packBoardGridRects(ui, [{ id: 'a' }, { id: 'b' }], [], { packW: 200, placed });
 
-        assert.equal(rectOf(rects, 'a').x, 16 + SMALL.w, 'the first free slot was not used');
-        assert.equal(rectOf(rects, 'b').x, 16 + SMALL.w * 2);
+        assert.equal(rectOf(rects, 'a').x, 16 + COL, 'the first free slot was not used');
+        assert.equal(rectOf(rects, 'b').x, 16 + COL * 2);
+    });
+
+    it('keeps every note when a pinned rect covers the whole page', () => {
+        const placed = [{ x: 0, y: 0, w: 400, h: 400 }];
+        const rects = pack.packBoardGridRects(ui, [{ id: 'a' }, { id: 'b' }], [], { packW: 200, placed });
+
+        assert.equal(rects.length, 2, 'notes were dropped around the pin');
+        assert.ok(rects.every(({ rect }) => rect.y >= 400), 'notes should clear the pin');
     });
 
     it('returns nothing for an empty board', () => {
         assert.deepEqual(pack.packBoardGridRects(ui, [], [], { packW: 200 }), []);
+    });
+});
+
+describe('grid pack · packBoardGridRects · sort direction', () => {
+    const ui = makeUi();
+    const rectOf = (rects, id) => rects.find((r) => r.id === id).rect;
+    const items = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id }));
+    const coords = (rects) => rects.map(({ rect }) => [rect.x, rect.y]);
+    const COL = SMALL.w + METRICS.gap;
+    const ROW = SMALL.h + METRICS.gap;
+    const TWO_ROW_PAGE = 16 + 2 * ROW;
+
+    it('fills rows left to right when horizontal', () => {
+        const rects = pack.packBoardGridRects(ui, items, [], { packW: 200, direction: 'horizontal' });
+
+        assert.deepEqual(coords(rects), [
+            [16, 16], [16 + COL, 16], [16 + 2 * COL, 16],
+            [16, 16 + ROW], [16 + COL, 16 + ROW]
+        ]);
+    });
+
+    it('fills columns top to bottom down to the page height when vertical', () => {
+        const rects = pack.packBoardGridRects(ui, items, [], {
+            packW: 200,
+            columnH: TWO_ROW_PAGE,
+            direction: 'vertical'
+        });
+
+        // One page holds 3 columns x 2 rows, so the band only opens on tile 7.
+        assert.deepEqual(coords(rects), [
+            [16, 16], [16, 16 + ROW],
+            [16 + COL, 16], [16 + COL, 16 + ROW],
+            [16 + 2 * COL, 16]
+        ]);
+    });
+
+    it('makes vertical visibly different from horizontal on a collapsed board', () => {
+        const horizontal = pack.packBoardGridRects(ui, items, [], { packW: 200, direction: 'horizontal' });
+        const vertical = pack.packBoardGridRects(ui, items, [], { packW: 200, columnH: TWO_ROW_PAGE, direction: 'vertical' });
+
+        assert.notDeepEqual(coords(vertical), coords(horizontal), 'direction no longer changes the layout');
+    });
+
+    it('never lets a vertical pack spill past the right edge', () => {
+        const many = Array.from({ length: 20 }, (_, i) => ({ id: `n${i}` }));
+        const rects = pack.packBoardGridRects(ui, many, [], { packW: 200, columnH: TWO_ROW_PAGE, direction: 'vertical' });
+
+        assert.equal(rects.length, 20, 'a note was dropped');
+        assert.ok(rects.every(({ rect }) => rect.x + rect.w <= 16 + 200), 'a column ran past the page');
+        // 3 columns x 2 rows fill one page; the seventh tile opens a new page below.
+        assert.equal(rectOf(rects, 'n6').x, 16);
+        assert.equal(rectOf(rects, 'n6').y, TWO_ROW_PAGE);
+    });
+
+    it('accepts an explicit tile gap override', () => {
+        const rects = pack.packBoardGridRects(ui, [{ id: 'a' }, { id: 'b' }], [], { packW: 200, tileGap: 6 });
+
+        assert.equal(rectOf(rects, 'b').x - rectOf(rects, 'a').x, SMALL.w + 6);
     });
 });
 
@@ -271,6 +353,28 @@ describe('grid pack · packBoardGridRects · expanded block', () => {
         assert.ok(expanded.y >= lastCollapsed.y + lastCollapsed.h, 'expanded block overlaps the collapsed rows');
         assert.equal(rects.every((r) => r.id === 'x' || !overlaps(expanded, r.rect)), true);
         assert.equal((expanded.w + METRICS.gap) % METRICS.strideX, 0, 'expanded width is not cell aligned');
+    });
+
+    it('never puts the expanded block on top of collapsed notes, in either direction', () => {
+        const collapsed = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
+        const expanded = [{ id: 'x', w: 66, h: 66 }];
+        const horizontal = pack.packBoardGridRects(ui, collapsed, expanded, { packW: 200, direction: 'horizontal' });
+        const vertical = pack.packBoardGridRects(ui, collapsed, expanded, {
+            packW: 200,
+            columnH: 16 + 2 * (SMALL.h + METRICS.gap),
+            direction: 'vertical'
+        });
+
+        for (const rects of [horizontal, vertical]) {
+            const rect = rects.find(({ id }) => id === 'x').rect;
+            const covered = rects
+                .filter(({ id }) => id !== 'x')
+                .map(({ rect: collapsedRect }) => collapsedRect)
+                .filter((collapsedRect) => overlaps(rect, collapsedRect));
+
+            assert.deepEqual(covered, [], 'the expanded block overlaps a collapsed note');
+            assert.ok(rect.y > 16, 'the expanded block should start below the top row');
+        }
     });
 
     it('gives every expanded note the aligned size when one is supplied', () => {

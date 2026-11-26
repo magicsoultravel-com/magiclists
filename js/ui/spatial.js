@@ -1103,37 +1103,33 @@ export function repackBoardLayoutStorage(ui, mode, items, canvas) {
         const bTime = Number(b.created_at || b.updated_at || 0);
         return aTime - bTime;
     });
+    const itemsById = new Map(sorted.filter((item) => item?.id).map((item) => [item.id, item]));
     const bounds = canvas ? ui.getLiveBoardBounds(canvas) : null;
     const metrics = getGridMetrics();
     const origin = bounds?.origin ?? metrics.origin;
     const packW = bounds?.packW ?? Math.max(metrics.canvasGridW, 640);
     const edgePad = bounds?.edgePad ?? metrics.edgePad;
+    const maxH = bounds?.maxH ?? Infinity;
 
-    // Collapse every note to the small tile and lay them out on a strict,
-    // zero-gap grid (adjacent tiles, no 8px re-snap) so all rows/columns
-    // align with no spaces between them.
-    const startX = origin + edgePad;
-    const startY = origin + edgePad;
-    const colStride = small.w;
-    const rowStride = small.h;
-    let col = 0;
-    let row = 0;
-
-    sorted.forEach((item) => {
-        if (!item?.id) return;
-        ensureSmallTile(item);
-
-        let x = startX + col * colStride;
-        let y = startY + row * rowStride;
-        if (col > 0 && x + small.w > startX + packW) {
-            col = 0;
-            row += 1;
-            x = startX;
-            y = startY + row * rowStride;
+    // Reset lays the board out with the same solver as Sort (narrow gutter,
+    // wrap to the next row, pinned obstacles) instead of a second, divergent
+    // copy of the grid math — the two paths used to disagree.
+    const layoutRects = ui.packBoardGridRects(
+        [...itemsById.keys()].map((id) => ({ id })),
+        [],
+        {
+            origin,
+            packW,
+            maxH,
+            edgePad,
+            columnH: bounds?.viewportH ?? null,
+            direction: 'horizontal'
         }
+    );
 
-        ui.saveCompactBoardLayout(item.id, { x, y, w: small.w, h: small.h }, resolvedMode);
-        col += 1;
+    layoutRects.forEach(({ id, rect }) => {
+        ensureSmallTile(itemsById.get(id));
+        ui.saveCompactBoardLayout(id, { x: rect.x, y: rect.y, w: small.w, h: small.h }, resolvedMode);
     });
 }
 

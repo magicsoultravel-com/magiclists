@@ -128,33 +128,82 @@ export function getGridViewportBounds(canvas) {
     return { origin, packW, viewportH, edgePad, scrollY, viewportBottom };
 }
 
+/** Floor for a measured page height so vertical packing always has a row. */
+const MIN_LIVE_VIEWPORT_H = 200;
+
+/**
+ * Measure the board box the user can actually see, in layout pixels.
+ *
+ * `#app-canvas` is transformed by the desktop zoom and clipped by
+ * `.desktop-surface` (overflow-x: hidden), so the usable board is the
+ * intersection of the two on-screen boxes divided by the real transform scale.
+ * That is deliberately not `window.innerWidth - sidebar`: this version follows
+ * zoom, canvas scroll, the file cabinet and the sidebar's current state.
+ *
+ * Returns zeros when there is no layout engine (unit tests, detached canvas);
+ * callers fall back to the stable layout width in that case.
+ */
+export function readVisibleBoardBox(canvas) {
+    const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
+    const rect = typeof canvas?.getBoundingClientRect === 'function' ? canvas.getBoundingClientRect() : null;
+    const hasRect = !!rect && rect.width > 0 && rect.height > 0;
+
+    if (!hasRect) {
+        return {
+            width: canvas?.clientWidth > 0 ? canvas.clientWidth / zoom : 0,
+            height: canvas?.clientHeight > 0 ? canvas.clientHeight / zoom : 0,
+            scale: zoom
+        };
+    }
+
+    let width = rect.width;
+    let height = rect.height;
+    const surfaceRect = typeof document !== 'undefined'
+        ? document.getElementById('desktop-surface')?.getBoundingClientRect?.() ?? null
+        : null;
+    if (surfaceRect && surfaceRect.width > 0 && surfaceRect.height > 0) {
+        width = Math.max(0, Math.min(rect.right, surfaceRect.right) - Math.max(rect.left, surfaceRect.left));
+        height = Math.max(0, Math.min(rect.bottom, surfaceRect.bottom) - Math.max(rect.top, surfaceRect.top));
+    }
+
+    // The canvas box is the scaled page: rect.width / offsetWidth is the real
+    // scale (works for every zoom level, independent of the CSS variable).
+    const scale = canvas.offsetWidth > 0 ? rect.width / canvas.offsetWidth : zoom;
+    const safeScale = scale > 0 ? scale : 1;
+    return { width: width / safeScale, height: height / safeScale, scale: safeScale };
+}
+
 /**
  * Live, zoom-aware board bounds used by one-shot layout actions (sort / reset).
  * Unlike getGridBoardBounds (which uses a stable, default-sidebar width so
- * continuous renders don't re-pack), this reads the actual board area from the
- * canvas: `packW` reflects the real (expanded/collapsed) sidebar width and the
- * browser zoom, while `maxH`/`viewportH` reflect the file cabinet reducing the
- * vertical space — so sorting/resetting readjust to what the user currently sees.
+ * continuous renders don't re-pack), this measures the visible board box:
+ * `packW` is what fits on screen right now (sidebar state, zoom, scroll and the
+ * file cabinet included) and `viewportH` is the page height a vertical sort
+ * fills before starting a new column.
  */
 export function getLiveBoardBounds(canvas) {
     const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
     const { origin, edgePad, canvasGridW, columnMinInnerW } = getGridMetrics();
-    const fallbackW = Math.max(
-        320,
-        (typeof window !== 'undefined' ? window.innerWidth : 1280) - (readSidebarWidth() ?? SIDEBAR_DEFAULT_WIDTH)
-    );
-    const liveW = canvas?.clientWidth && canvas.clientWidth > 0 ? canvas.clientWidth : fallbackW;
-    const rawW = Math.max(liveW / zoom, canvasGridW + origin * 2);
+    const visible = readVisibleBoardBox(canvas);
+
+    // Never exceed the stable layout width (a sidebar drag in progress would
+    // otherwise shrink the page mid-action) and never drop below the grid's
+    // minimum canvas width.
+    const stableW = getStableBoardLayoutWidth() / zoom;
+    const liveW = visible.width > 0 ? Math.min(visible.width, stableW) : stableW;
+    const rawW = Math.max(liveW, canvasGridW + origin * 2);
     const packW = Math.max(columnMinInnerW, rawW - origin * 2 - edgePad * 2);
 
-    const viewportMinH = Math.max(
-        (canvas?.clientHeight || 0) / zoom,
-        typeof window !== 'undefined' ? window.innerHeight / zoom : 800
-    );
     const { maxBottom } = getBoardContentExtent(canvas);
-    const maxH = Math.max(viewportMinH, maxBottom + origin + getCanvasColGap());
+    const viewportH = Math.max(
+        MIN_LIVE_VIEWPORT_H,
+        visible.height > 0
+            ? visible.height
+            : (typeof window !== 'undefined' ? window.innerHeight / zoom : 800)
+    );
+    const maxH = Math.max(viewportH, maxBottom + origin + getCanvasColGap());
 
-    return { origin, edgePad, packW, maxH, viewportH: Math.max(200, viewportMinH), zoom };
+    return { origin, edgePad, packW, maxH, viewportH, viewportW: rawW, zoom };
 }
 
 export function getDesktopBoardPane(canvas) {

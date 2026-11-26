@@ -6,7 +6,12 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { SIDEBAR_DEFAULT_WIDTH } from '../js/sidebarPrefs.js';
-import { getStableBoardLayoutWidth, resetStableBoardLayoutWidth } from '../js/board/boardExtents.js';
+import {
+    getLiveBoardBounds,
+    getStableBoardLayoutWidth,
+    readVisibleBoardBox,
+    resetStableBoardLayoutWidth
+} from '../js/board/boardExtents.js';
 
 const VIEWPORT_W = 1920;
 
@@ -81,5 +86,109 @@ describe('board packing width (no invisible wall on the right)', () => {
     it('never shrinks below the 320px safety floor', () => {
         installGlobals({ sidebarCollapsed: false, sidebarWidth: 9999 });
         assert.equal(getStableBoardLayoutWidth(), 320);
+    });
+});
+
+const rect = (left, top, width, height) => ({
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height
+});
+
+/**
+ * Install globals plus a canvas/surface pair so the visible-box measurement can
+ * be exercised at every zoom level. `canvasRect` null means "no layout engine".
+ */
+function installBoardGlobals({
+    sidebarCollapsed = true,
+    canvasRect = null,
+    surfaceRect = null,
+    offsetWidth = 0,
+    clientWidth = 0,
+    clientHeight = 0,
+    zoom = 1
+} = {}) {
+    installGlobals({ sidebarCollapsed });
+    const panel = {
+        classList: { contains: (name) => name === 'is-collapsed' && sidebarCollapsed }
+    };
+    const surface = surfaceRect ? { getBoundingClientRect: () => surfaceRect } : null;
+    globalThis.document = {
+        getElementById: (id) => {
+            if (id === 'side-panel') return panel;
+            if (id === 'desktop-surface') return surface;
+            return null;
+        }
+    };
+    return {
+        dataset: { desktopZoom: String(zoom) },
+        offsetWidth,
+        clientWidth,
+        clientHeight,
+        getBoundingClientRect: () => canvasRect,
+        querySelectorAll: () => []
+    };
+}
+
+describe('visible board box (zoom, clipping, page height)', () => {
+    it('divides the on-screen box by the real transform scale', () => {
+        for (const zoom of [0.5, 1, 2]) {
+            resetStableBoardLayoutWidth();
+            const canvas = installBoardGlobals({
+                canvasRect: rect(0, 0, 1000 * zoom, 700 * zoom),
+                offsetWidth: 1000,
+                surfaceRect: rect(0, 0, 4000, 4000),
+                zoom
+            });
+
+            const box = readVisibleBoardBox(canvas);
+
+            assert.equal(box.width, 1000, `width at zoom ${zoom}`);
+            assert.equal(box.height, 700, `height at zoom ${zoom}`);
+            assert.equal(box.scale, zoom);
+        }
+    });
+
+    it('clips the canvas to the surface so packing never targets hidden overflow', () => {
+        const canvas = installBoardGlobals({
+            canvasRect: rect(0, 0, 1600, 700),
+            offsetWidth: 1600,
+            surfaceRect: rect(0, 0, 1200, 700)
+        });
+
+        assert.equal(readVisibleBoardBox(canvas).width, 1200);
+
+        const bounds = getLiveBoardBounds(canvas);
+
+        assert.equal(bounds.viewportW, 1200);
+        assert.equal(bounds.packW, 1200 - bounds.origin * 2 - bounds.edgePad * 2);
+    });
+
+    it('uses the visible height as the page height instead of the window height', () => {
+        const canvas = installBoardGlobals({
+            canvasRect: rect(0, 0, 1000, 700),
+            offsetWidth: 1000,
+            // File cabinet open: only 400px of board is actually on screen.
+            surfaceRect: rect(0, 0, 1200, 400),
+            clientHeight: 700
+        });
+
+        const bounds = getLiveBoardBounds(canvas);
+
+        assert.equal(bounds.viewportH, 400, 'window.innerHeight must not inflate the page');
+        assert.ok(bounds.maxH >= bounds.viewportH);
+    });
+
+    it('falls back to the element box when there is no layout engine', () => {
+        const canvas = installBoardGlobals({ clientWidth: 900, clientHeight: 600 });
+
+        const bounds = getLiveBoardBounds(canvas);
+
+        assert.equal(bounds.viewportW, 900);
+        assert.equal(bounds.viewportH, 600);
+        assert.equal(bounds.packW, 900 - bounds.origin * 2 - bounds.edgePad * 2);
     });
 });

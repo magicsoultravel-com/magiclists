@@ -464,8 +464,8 @@ called without a mounted board.
 | module | owns | lines |
 | --- | --- | --- |
 | `ui/boardState.js` | the two module-level bindings: the id → item lookup `render()` refills and the view mode the spatial layer falls back to | 37 |
-| `ui/gridPack.js` | expansion classification, item sizing, the zero-gap rect solver behind sort/reset, the spatial sort helper | 409 |
-| `ui/spatial.js` | rect resolution, collapse/expand tiers, resize and toggle wiring, freeform/grid storage, pins, canvas extents, mode switch | 1198 |
+| `ui/gridPack.js` | expansion classification, item sizing, the narrow-gutter rect solver behind sort/reset (direction-aware wrap), the spatial sort helper | 476 |
+| `ui/spatial.js` | rect resolution, collapse/expand tiers, resize and toggle wiring, freeform/grid storage, pins, canvas extents, mode switch | 1194 |
 | `ui/render.js` | canvas prep, view state, item partition, layout and card creation, post-render finalize | 218 |
 | `js/ui.js` | the state seam plus one-line delegates into the four | 240 |
 
